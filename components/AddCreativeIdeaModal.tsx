@@ -29,6 +29,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
   const isLight = themeName === 'light';
   
   const [title, setTitle] = useState('');
+  const [author, setAuthor] = useState(''); // 作者字段
   const [prompt, setPrompt] = useState('');
   const [ideaType, setIdeaType] = useState<'standard' | 'bp'>('standard');
   const [smartPlusConfig, setSmartPlusConfig] = useState<SmartPlusConfig>(() => JSON.parse(JSON.stringify(defaultSmartPlusConfig)));
@@ -73,6 +74,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
 
   const resetState = useCallback(() => {
     setTitle('');
+    setAuthor(''); // 重置作者
     setPrompt('');
     setIdeaType('standard');
     setSmartPlusConfig(JSON.parse(JSON.stringify(defaultSmartPlusConfig)));
@@ -98,6 +100,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
         });
         
         setTitle(ideaToEdit.title);
+        setAuthor(ideaToEdit.author || ''); // 加载作者
         setPrompt(ideaToEdit.prompt);
         setPreviewUrl(ideaToEdit.imageUrl);
         setCost(ideaToEdit.cost || 0);
@@ -215,6 +218,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
           id: ideaToEdit?.id,
           order: ideaToEdit?.order,
           title: title.trim(),
+          author: author.trim() || undefined, // 保存作者
           prompt: prompt.trim(),
           imageUrl: imageUrl!,
           cost: cost,
@@ -397,8 +401,28 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
                   borderColor: theme.colors.border,
                   color: theme.colors.textPrimary
                 }}
-                placeholder="例如：赛博朋克城市夜景"
+                placeholder="创意标题"
               />
+            </div>
+            
+            {/* 作者 */}
+            <div>
+              <label className="text-[10px] font-medium mb-1 block" style={{ color: theme.colors.textMuted }}>作者</label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: theme.colors.textMuted }}>@</span>
+                <input
+                  type="text"
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  className="w-full pl-6 pr-2.5 py-1.5 border rounded-lg text-xs focus:border-blue-500 outline-none transition-all"
+                  style={{ 
+                    background: isLight ? 'rgba(248,250,252,0.95)' : 'rgba(31,41,55,0.8)',
+                    borderColor: theme.colors.border,
+                    color: theme.colors.textPrimary
+                  }}
+                  placeholder="作者名称"
+                />
+              </div>
             </div>
             
             {/* 创意模式 */}

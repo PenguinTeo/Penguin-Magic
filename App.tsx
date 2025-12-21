@@ -639,27 +639,39 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
           {/* 背景遮罩 */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           
-          {/* 弹窗内容 */}
+          {/* 弹窗内容 - BP模式和普通模式分开处理 */}
           <div 
-            className="relative w-[560px] max-w-[90vw] p-4 rounded-2xl shadow-2xl"
+            className="relative w-[560px] max-w-[90vw] max-h-[85vh] overflow-y-auto p-4 rounded-2xl shadow-2xl"
             style={{
               background: isDark 
                 ? 'linear-gradient(135deg, rgba(20,20,28,0.98) 0%, rgba(15,15,20,0.99) 100%)'
                 : 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.99) 100%)',
-              border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+              border: activeBPTemplate 
+                ? `1px solid rgba(238,209,109,0.3)` 
+                : `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
             }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 标题栏 */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-blue-500/20 flex items-center justify-center ring-1 ring-blue-500/20">
-                  <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
+                <div 
+                  className="w-6 h-6 rounded-lg flex items-center justify-center ring-1"
+                  style={{
+                    backgroundColor: activeBPTemplate ? 'rgba(238,209,109,0.2)' : 'rgba(59,130,246,0.2)',
+                    ringColor: activeBPTemplate ? 'rgba(238,209,109,0.2)' : 'rgba(59,130,246,0.2)',
+                  }}
+                >
+                  {activeBPTemplate ? (
+                    <BoltIcon className="w-3.5 h-3.5" style={{ color: '#eed16d' }} />
+                  ) : (
+                    <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  )}
                 </div>
                 <h3 className="text-sm font-semibold" style={{ color: isDark ? '#fff' : '#0f172a' }}>
-                  编辑提示词
+                  {activeBPTemplate ? `BP 模式 - ${activeBPTemplate.title}` : '编辑提示词'}
                 </h3>
               </div>
               <button
@@ -674,19 +686,115 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
               </button>
             </div>
             
-            {/* 放大的提示词输入框 */}
-            <textarea
-              ref={expandedPromptRef}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="描述想生成的画面..."
-              className="w-full h-[300px] p-4 rounded-xl resize-none text-sm leading-relaxed"
-              style={{
-                background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
-                color: isDark ? '#fff' : '#0f172a',
-              }}
-            />
+            {/* BP模式：变量配置 + 只读提示词 */}
+            {activeBPTemplate ? (
+              <>
+                {/* BP变量配置区域 - 放大版 */}
+                <div 
+                  className="p-4 mb-4 rounded-xl"
+                  style={{
+                    background: isDark 
+                      ? 'linear-gradient(135deg, rgba(238,209,109,0.12) 0%, rgba(238,209,109,0.06) 100%)'
+                      : 'rgba(238,209,109,0.1)',
+                    border: `1px solid ${isDark ? 'rgba(238,209,109,0.2)' : 'rgba(238,209,109,0.15)'}`,
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-xs font-semibold" style={{ color: '#eed16d' }}>变量配置</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(238,209,109,0.2)', color: '#eed16d' }}>
+                      填写变量后生成提示词
+                    </span>
+                  </div>
+                  
+                  {/* 变量输入列表 */}
+                  <div className="space-y-4">
+                    {(activeBPTemplate.bpFields?.filter(f => f.type === 'input') || []).map(field => (
+                      <div key={field.id}>
+                        <label 
+                          className="text-xs font-medium mb-2 flex justify-between"
+                          style={{ color: isDark ? '#d1d5db' : '#4b5563' }}
+                        >
+                          <span>{field.label}</span>
+                          <span className="text-[10px] font-mono" style={{ color: 'rgba(238,209,109,0.7)' }}>/{field.name}</span>
+                        </label>
+                        <input 
+                          type="text"
+                          value={bpInputs[field.id] || ''}
+                          onChange={(e) => setBpInput(field.id, e.target.value)}
+                          className="w-full text-sm p-3 rounded-lg transition-all"
+                          style={{
+                            background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                            border: `1px solid ${isDark ? 'rgba(238,209,109,0.25)' : 'rgba(238,209,109,0.2)'}`,
+                            color: isDark ? '#fff' : '#0f172a',
+                          }}
+                          placeholder={`输入 ${field.label}...`}
+                        />
+                      </div>
+                    ))}
+                    
+                    {/* 智能体提示 */}
+                    {(activeBPTemplate.bpFields?.filter(f => f.type === 'agent') || []).length > 0 && (
+                      <div 
+                        className="p-3 rounded-lg text-center"
+                        style={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}
+                      >
+                        <span className="text-[11px]" style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>
+                          🤖 包含 {activeBPTemplate.bpFields?.filter(f => f.type === 'agent').length} 个智能体变量，点击生成时自动处理
+                        </span>
+                      </div>
+                    )}
+                    
+                    {(activeBPTemplate.bpFields?.filter(f => f.type === 'input') || []).length === 0 && (
+                      <p 
+                        className="text-xs italic p-3 rounded text-center"
+                        style={{ 
+                          background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                          color: isDark ? '#6b7280' : '#9ca3af',
+                        }}
+                      >
+                        此模板仅含智能体变量，点击生成自动运行
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                {/* 生成的提示词预览（只读） */}
+                {canViewPrompt && prompt && (
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-medium" style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>生成的提示词</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', color: isDark ? '#6b7280' : '#9ca3af' }}>
+                        只读
+                      </span>
+                    </div>
+                    <div 
+                      className="w-full min-h-[120px] max-h-[200px] overflow-y-auto p-4 rounded-xl text-sm leading-relaxed"
+                      style={{
+                        background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+                        color: isDark ? '#d1d5db' : '#374151',
+                      }}
+                    >
+                      {prompt || <span style={{ color: isDark ? '#4b5563' : '#9ca3af' }}>填写变量后，点击生成查看结果</span>}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* 普通模式：可编辑的提示词输入框 */
+              <textarea
+                ref={expandedPromptRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="描述想生成的画面..."
+                className="w-full h-[300px] p-4 rounded-xl resize-none text-sm leading-relaxed"
+                style={{
+                  background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+                  color: isDark ? '#fff' : '#0f172a',
+                }}
+              />
+            )}
             
             {/* 底部提示 */}
             <div className="flex items-center justify-between mt-3">
@@ -695,7 +803,12 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
               </p>
               <button
                 onClick={() => setIsPromptExpanded(false)}
-                className="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-blue-500 shadow-lg shadow-blue-500/25 hover:bg-blue-400 hover:scale-105 active:scale-95 transition-all"
+                className="px-4 py-2 rounded-lg text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+                style={{
+                  backgroundColor: activeBPTemplate ? '#eed16d' : '#3b82f6',
+                  color: activeBPTemplate ? '#1a1a2e' : '#fff',
+                  boxShadow: activeBPTemplate ? '0 10px 25px -5px rgba(238,209,109,0.25)' : '0 10px 25px -5px rgba(59,130,246,0.25)',
+                }}
               >
                 完成
               </button>
@@ -962,6 +1075,15 @@ const BPModePanel: React.FC<{
                     <BoltIcon className="w-3 h-3" style={{ color: '#eed16d' }}/>
                   </div>
                   <h3 className="text-xs font-semibold" style={{ color: isDark ? '#fff' : '#0f172a' }}>BP 模式</h3>
+                  {/* 作者显示 */}
+                  {template.author && (
+                    <span 
+                      className="text-[10px] font-medium"
+                      style={{ color: '#eed16d' }}
+                    >
+                      @{template.author}
+                    </span>
+                  )}
                 </div>
                 {agentFields.length > 0 && (
                   <span 
@@ -1289,7 +1411,7 @@ const Canvas: React.FC<CanvasProps> = ({
       )}
       
       {/* 顶部切换标签 */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 liquid-tabs">
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[60] liquid-tabs">
         <button
           onClick={() => setView('editor')}
           className={`liquid-tab flex items-center gap-1 ${
@@ -1321,8 +1443,9 @@ const Canvas: React.FC<CanvasProps> = ({
       </div>
       
       {view === 'local-library' ? (
-        <div className="relative z-10 w-full flex-1 p-8 pt-16 flex flex-col overflow-hidden">
-                    <CreativeLibrary
+        /* 创意库全屏显示 - 支持卡片拖拽排序 */
+        <div className="absolute inset-0 z-50 pt-12">
+          <CreativeLibrary
             ideas={localCreativeIdeas}
             onBack={onBack}
             onAdd={onAdd}
@@ -1336,9 +1459,10 @@ const Canvas: React.FC<CanvasProps> = ({
             isImporting={isImporting}
           />
         </div>
-      ) : (
-        /* 桌面模式 - 始终显示 */
-        <div className="relative z-10 flex-1 overflow-hidden">
+      ) : null}
+      
+      {/* 桌面模式 - 始终显示 */}
+      <div className="relative z-10 flex-1 overflow-hidden">
           <Desktop
             items={desktopItems}
             onItemsChange={onDesktopItemsChange}
@@ -1444,7 +1568,6 @@ const Canvas: React.FC<CanvasProps> = ({
             </>
           )}
         </div>
-      )}
    </main>
   );
 };
@@ -1968,9 +2091,12 @@ const App: React.FC = () => {
           try {
               const content = e.target?.result;
               if (typeof content !== 'string') throw new Error("File content is not a string.");
-              const ideas = JSON.parse(content);
+              let parsedData = JSON.parse(content);
+              
+              // 支持单个对象和数组两种格式
+              const ideas = Array.isArray(parsedData) ? parsedData : [parsedData];
 
-                            if (Array.isArray(ideas) && ideas.every(idea => 'id' in idea && 'title' in idea && 'prompt' in idea && 'imageUrl' in idea)) {
+                            if (ideas.length > 0 && ideas.every(idea => 'title' in idea && 'prompt' in idea && 'imageUrl' in idea)) {
                   try {
                     const ideasWithoutId = ideas.map(({ id, ...rest }) => rest);
                     const result = await creativeIdeasApi.importCreativeIdeas(ideasWithoutId as any) as any;

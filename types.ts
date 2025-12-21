@@ -49,6 +49,7 @@ export interface CreativeIdea {
   title: string;
   prompt: string; // Template string
   imageUrl: string;
+  author?: string; // 作者，显示为 @xxx
   isSmart?: boolean;
   isSmartPlus?: boolean;
   isBP?: boolean;

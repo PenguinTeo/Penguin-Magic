@@ -37,6 +37,53 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
   const dragItem = useRef<CreativeIdea | null>(null);
   const dragOverItem = useRef<CreativeIdea | null>(null);
 
+  // 单个创意导出功能
+  const handleExportSingle = async (idea: CreativeIdea) => {
+    try {
+      // 转换图片为base64
+      const convertImageToBase64 = async (url: string): Promise<string> => {
+        if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) {
+          return url;
+        }
+        try {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.warn('图片转换失败:', url, e);
+          return url;
+        }
+      };
+
+      const ideaWithBase64 = {
+        ...idea,
+        imageUrl: await convertImageToBase64(idea.imageUrl)
+      };
+
+      const dataStr = JSON.stringify(ideaWithBase64, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      // 文件名用创意标题
+      const safeTitle = idea.title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
+      link.download = `creative_${safeTitle}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('导出失败:', e);
+      alert('导出失败');
+    }
+  };
+
   const filteredIdeas = useMemo(() => {
     return ideas
       .filter(idea => {
@@ -193,12 +240,13 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
             {filteredIdeas.map(idea => (
               <div 
                 key={idea.id} 
-                className="group relative rounded-xl overflow-hidden cursor-grab aspect-square transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5"
+                className="group relative rounded-xl overflow-hidden cursor-pointer aspect-square transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5"
                 style={{ 
                   background: theme.colors.bgSecondary,
                   border: `1px solid ${theme.colors.border}`
                 }}
                 title={idea.title}
+                onClick={() => onUse(idea)}
                 draggable
                 onDragStart={() => (dragItem.current = idea)}
                 onDragEnter={() => (dragOverItem.current = idea)}
@@ -206,7 +254,6 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                 onDragOver={(e) => e.preventDefault()}
                 >
                   <img src={normalizeImageUrl(idea.imageUrl)} alt={idea.title} className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 p-0.5 pointer-events-none" />
-                  <div className="absolute inset-0" onClick={() => onUse(idea)} style={{ cursor: 'pointer' }}></div>
                   <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/90 to-transparent pointer-events-none">
                       <h3 className="font-medium text-white truncate text-xs">{idea.title}</h3>
                   </div>
@@ -241,6 +288,19 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                         style={{ cursor: 'pointer' }}
                     >
                         <EditIcon className="w-3 h-3" />
+                    </button>
+                    {/* 单个导出按钮 */}
+                    <button
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            handleExportSingle(idea);
+                        }}
+                        className="p-1 bg-black/60 text-white hover:bg-green-500 rounded-full backdrop-blur-sm transition-all duration-200"
+                        aria-label={`导出 '${idea.title}'`}
+                        title="导出该创意"
+                        style={{ cursor: 'pointer' }}
+                    >
+                        <DownloadIcon className="w-3 h-3" />
                     </button>
                     <button
                         onClick={(e) => { 
