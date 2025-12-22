@@ -2328,9 +2328,9 @@ const App: React.FC = () => {
             setBpInputs(initialInputs);
         }
     } else {
-        // 非BP模式 = 普通模式模板
+        // 非BP模式 = 普通模式模板，直接填充提示词
         setActiveSmartTemplate(idea);
-        setPrompt(''); // 清空提示词，等待用户输入关键词
+        setPrompt(idea.prompt); // 直接填充模板的提示词
     }
     setView('editor');
   };
