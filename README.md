@@ -11,8 +11,6 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 
 </div>
-![Uploading 109872b7-ba63-4584-94e8-b438730846e9(1).png…]()
-
 
 ---
 
@@ -133,7 +131,7 @@ http://127.0.0.1:8765
 **大熊** — 感谢提供视频宣传支持
 
 ---
-
+![Uploading 109872b7-ba63-4584-94e8-b438730846e9(1).png…]()
 <div align="center">
 
 **企鹅工坊** — 让 AI 创作不再凌乱
