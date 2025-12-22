@@ -1,4 +1,4 @@
-<div align="center">
+<img width="2048" height="2048" alt="109872b7-ba63-4584-94e8-b438730846e9(1)" src="https://github.com/user-attachments/assets/d1b95d11-3623-4dda-864a-c7c351f9a9ad" /><div align="center">
 
 # 🐧 企鹅工坊 Penguin Magic
 
@@ -11,6 +11,8 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 
 </div>
+![Uploading 109872b7-ba63-4584-94e8-b438730846e9(1).png…]()
+
 
 ---
 
