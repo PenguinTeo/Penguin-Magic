@@ -709,3 +709,63 @@ ${keyword}
 
   return resultText.trim();
 };
+
+/**
+ * 优化提示词 - 无创意库模式
+ * 揥收用户输入的简单描述，让模型揣测意图并扩写成更完整的提示词
+ */
+export const optimizePrompt = async (userPrompt: string): Promise<string> => {
+  // 检查API配置
+  const useThirdParty = thirdPartyConfig && thirdPartyConfig.enabled && thirdPartyConfig.apiKey;
+  
+  if (!useThirdParty && !ai) {
+    throw new Error("请先设置 Gemini API Key 或配置贞贞API");
+  }
+  
+  const model = 'gemini-2.0-flash';
+  
+  const systemInstruction = `You are an expert AI image generation prompt engineer. Your task is to take a user's brief description or keywords and expand them into a detailed, high-quality image generation prompt.
+
+Rules:
+1. Understand the user's intent from their brief input
+2. Expand the description with relevant details about:
+   - Subject details and characteristics
+   - Art style and visual aesthetic
+   - Lighting and atmosphere
+   - Composition and framing
+   - Color palette and mood
+3. Keep the expanded prompt focused and coherent
+4. Output ONLY the optimized prompt text, no explanations
+5. The output should be in the same language as the input
+6. Keep output concise but descriptive (aim for 50-150 words)`;
+
+  const userMessage = `Please optimize and expand this brief prompt into a detailed image generation prompt:
+
+"""${userPrompt}"""
+
+Output the optimized prompt directly:`;
+  
+  // 使用贞贞API - 直接复用现有函数，不传图片
+  if (useThirdParty) {
+    return chatWithThirdPartyApi(systemInstruction, userMessage);
+  }
+  
+  // 使用 Gemini API
+  const response: GenerateContentResponse = await withRetry(() => 
+    ai!.models.generateContent({
+      model: model,
+      contents: { parts: [{ text: userMessage }] },
+      config: {
+        systemInstruction: systemInstruction,
+      },
+    })
+  );
+  
+  const resultText = response.text;
+
+  if (!resultText) {
+    throw new Error("API 未返回文本响应");
+  }
+
+  return resultText.trim();
+};

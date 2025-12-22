@@ -15,6 +15,7 @@ import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { PackageIcon } from './icons/PackageIcon';
 import { MoveOutIcon } from './icons/MoveOutIcon';
 import { RenameIcon } from './icons/RenameIcon';
+import { LibraryIcon } from './icons/LibraryIcon';
 import { LayersIcon } from './icons/GridIcon';
 // JSZip 导出逻辑已迁移到 services/export/desktopExporter.ts
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
@@ -44,6 +45,8 @@ interface DesktopProps {
   creativeIdeas?: { id: number; title: string }[];
   // 拖放文件回调（从电脑拖拽图片到桌面）
   onFileDrop?: (files: FileList) => void;
+  // 从图片创建创意库
+  onCreateCreativeIdea?: (imageUrl: string, prompt?: string, aspectRatio?: string, resolution?: string) => void;
 }
 
 const GRID_SIZE = 100; // 网格大小
@@ -82,6 +85,7 @@ export const Desktop: React.FC<DesktopProps> = ({
   history = [],
   creativeIdeas = [],
   onFileDrop,
+  onCreateCreativeIdea,
 }) => {
   const { theme, themeName } = useTheme();
   const isLight = themeName === 'light';
@@ -1709,16 +1713,17 @@ export const Desktop: React.FC<DesktopProps> = ({
                 <>
                   <button
                     onClick={() => {
-                      handleToggleStack(contextMenu.itemId!);
+                      // 展开叠放改为双击打开叠放
+                      const stack = items.find(i => i.id === contextMenu.itemId) as DesktopStackItem;
+                      if (stack && onStackDoubleClick) {
+                        onStackDoubleClick(stack);
+                      }
                       setContextMenu(null);
                     }}
                     className="w-full px-3 py-2 text-left text-[12px] hover:bg-blue-500/10 transition-colors flex items-center gap-2"
                     style={{ color: theme.colors.textPrimary }}
                   >
-                    {(items.find(i => i.id === contextMenu.itemId) as DesktopStackItem)?.isExpanded 
-                      ? <><StackIcon className="w-4 h-4 text-blue-400" /><span>收起叠放</span></>
-                      : <><StackExpandIcon className="w-4 h-4 text-blue-400" /><span>展开叠放</span></>
-                    }
+                    <StackExpandIcon className="w-4 h-4 text-blue-400" /><span>打开叠放</span>
                   </button>
                   <button
                     onClick={() => handleUnstack(contextMenu.itemId!)}
@@ -1843,6 +1848,24 @@ export const Desktop: React.FC<DesktopProps> = ({
                     >
                       <RefreshIcon className="w-4 h-4 text-emerald-400" />
                       <span>重生成</span>
+                    </button>
+                  )}
+                  {/* 创建创意库 - 蓝色 */}
+                  {onCreateCreativeIdea && (
+                    <button
+                      onClick={() => {
+                        const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
+                        if (item && item.imageUrl) {
+                          // 传递图片URL和提示词
+                          onCreateCreativeIdea(item.imageUrl, item.prompt);
+                        }
+                        setContextMenu(null);
+                      }}
+                      className="w-full px-3 py-2 text-left text-[12px] hover:bg-blue-500/10 transition-colors flex items-center gap-2"
+                      style={{ color: theme.colors.textPrimary }}
+                    >
+                      <LibraryIcon className="w-4 h-4 text-blue-400" />
+                      <span>创建创意库</span>
                     </button>
                   )}
                   <div className="h-px my-1" style={{ background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }} />

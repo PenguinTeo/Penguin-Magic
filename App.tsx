@@ -3,7 +3,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { ImageUploader } from './components/ImageUploader';
 import { normalizeImageUrl } from './utils/image';
 import { GeneratedImageDisplay } from './components/GeneratedImageDisplay';
-import { editImageWithGemini, generateCreativePromptFromImage, initializeAiClient, processBPTemplate, setThirdPartyConfig } from './services/geminiService';
+import { editImageWithGemini, generateCreativePromptFromImage, initializeAiClient, processBPTemplate, setThirdPartyConfig, optimizePrompt } from './services/geminiService';
 import { ApiStatus, GeneratedContent, CreativeIdea, SmartPlusConfig, ThirdPartyApiConfig, GenerationHistory, DesktopItem, DesktopImageItem, DesktopFolderItem } from './types';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
 import { AddCreativeIdeaModal } from './components/AddCreativeIdeaModal';
@@ -126,6 +126,8 @@ interface CanvasProps {
   onDesktopImageRegenerate?: (item: DesktopImageItem) => void;
   // 拖放文件回调
   onFileDrop?: (files: FileList) => void;
+  // 从图片创建创意库
+  onCreateCreativeIdea?: (imageUrl: string, prompt?: string, aspectRatio?: string, resolution?: string) => void;
   // 最小化结果状态
   isResultMinimized: boolean;
   setIsResultMinimized: (value: boolean) => void;
@@ -1413,6 +1415,7 @@ const Canvas: React.FC<CanvasProps> = ({
   onDesktopImageEditAgain,
   onDesktopImageRegenerate,
     onFileDrop,
+  onCreateCreativeIdea,
   isResultMinimized,
   setIsResultMinimized,
   onToggleFavorite,
@@ -1512,6 +1515,7 @@ const Canvas: React.FC<CanvasProps> = ({
             history={history}
             creativeIdeas={creativeIdeas}
             onFileDrop={onFileDrop}
+            onCreateCreativeIdea={onCreateCreativeIdea}
           />
           
           {/* 生成结果浮层 - 毛玻璃效果 + 最小化联动 */}
@@ -1643,6 +1647,10 @@ const App: React.FC = () => {
   const [view, setView] = useState<'editor' | 'local-library'>('editor'); // 默认桌面模式
   const [isAddIdeaModalOpen, setAddIdeaModalOpen] = useState(false);
   const [editingIdea, setEditingIdea] = useState<CreativeIdea | null>(null);
+  const [presetImageForNewIdea, setPresetImageForNewIdea] = useState<string | null>(null); // 从桌面图片创建创意库时的预设图片
+  const [presetPromptForNewIdea, setPresetPromptForNewIdea] = useState<string | null>(null); // 预设提示词
+  const [presetAspectRatioForNewIdea, setPresetAspectRatioForNewIdea] = useState<string | null>(null); // 预设画面比例
+  const [presetResolutionForNewIdea, setPresetResolutionForNewIdea] = useState<string | null>(null); // 预设分辨率
   
   const [activeSmartTemplate, setActiveSmartTemplate] = useState<CreativeIdea | null>(null);
   const [activeSmartPlusTemplate, setActiveSmartPlusTemplate] = useState<CreativeIdea | null>(null);
@@ -2233,6 +2241,20 @@ const App: React.FC = () => {
 
   const handleAddNewIdea = () => {
     setEditingIdea(null);
+    setPresetImageForNewIdea(null);
+    setPresetPromptForNewIdea(null);
+    setPresetAspectRatioForNewIdea(null);
+    setPresetResolutionForNewIdea(null);
+    setAddIdeaModalOpen(true);
+  };
+
+  // 从桌面图片创建创意库
+  const handleCreateCreativeIdeaFromImage = (imageUrl: string, prompt?: string, aspectRatio?: string, resolution?: string) => {
+    setEditingIdea(null);
+    setPresetImageForNewIdea(imageUrl);
+    setPresetPromptForNewIdea(prompt || null);
+    setPresetAspectRatioForNewIdea(aspectRatio || null);
+    setPresetResolutionForNewIdea(resolution || null);
     setAddIdeaModalOpen(true);
   };
 
@@ -2307,11 +2329,7 @@ const App: React.FC = () => {
 
   const handleGenerateSmartPrompt = useCallback(async () => {
     const activeTemplate = activeSmartTemplate || activeSmartPlusTemplate || activeBPTemplate;
-     if (!activeTemplate) {
-      alert('请先从创意库选择一个模板');
-      return;
-    }
-
+    
     // 检查API配置：要么有Gemini Key，要么启用了贞贞API
     const hasValidApi = apiKey || (thirdPartyApiConfig.enabled && thirdPartyApiConfig.apiKey);
 
@@ -2323,6 +2341,26 @@ const App: React.FC = () => {
     setError(null);
 
     try {
+      // 无创意库模式 - 纯提示词优化
+      if (!activeTemplate) {
+        if (!hasValidApi) {
+          alert('提示词优化需要配置 API Key（Gemini 或贞贞API）');
+          setSmartPromptGenStatus(ApiStatus.Idle);
+          return;
+        }
+        if (!prompt.trim()) {
+          alert('请先输入提示词');
+          setSmartPromptGenStatus(ApiStatus.Idle);
+          return;
+        }
+        // 调用提示词优化函数
+        const optimizedPrompt = await optimizePrompt(prompt);
+        setPrompt(optimizedPrompt);
+        setSmartPromptGenStatus(ApiStatus.Success);
+        setAbortController(null);
+        return;
+      }
+
       if (activeBPTemplate) {
           // BP Mode Logic (New Orchestration)
           if (!hasValidApi) {
@@ -2701,8 +2739,9 @@ const App: React.FC = () => {
   const isSmartReady = !!activeSmartTemplate && prompt.trim().length > 0;
   const isSmartPlusReady = !!activeSmartPlusTemplate;
   const isBPReady = !!activeBPTemplate; // BP is ready to click penguin anytime to fill variables
+  const isPromptOnlyReady = !activeSmartTemplate && !activeSmartPlusTemplate && !activeBPTemplate && prompt.trim().length > 0; // 无创意库但有提示词
   
-  const canGenerateSmartPrompt = ((files.length > 0) && (isSmartReady || isSmartPlusReady)) || (isBPReady) && smartPromptGenStatus !== ApiStatus.Loading;
+  const canGenerateSmartPrompt = (((files.length > 0) && (isSmartReady || isSmartPlusReady)) || isBPReady || isPromptOnlyReady) && smartPromptGenStatus !== ApiStatus.Loading;
 
   const handleBpInputChange = (id: string, value: string) => {
       setBpInputs(prev => ({...prev, [id]: value}));
@@ -3062,6 +3101,7 @@ const App: React.FC = () => {
           onDesktopImageEditAgain={handleDesktopImageEditAgain}
           onDesktopImageRegenerate={handleDesktopImageRegenerate}
           onFileDrop={handleFileSelection}
+          onCreateCreativeIdea={handleCreateCreativeIdeaFromImage}
                     isResultMinimized={isResultMinimized}
           setIsResultMinimized={setIsResultMinimized}
           onToggleFavorite={handleToggleFavorite}
@@ -3109,11 +3149,22 @@ const App: React.FC = () => {
       {previewImageUrl && (
         <ImagePreviewModal imageUrl={previewImageUrl} onClose={() => setPreviewImageUrl(null)} />
       )}
-      <AddCreativeIdeaModal 
+      <AddCreativeIdeaModal
         isOpen={isAddIdeaModalOpen}
-        onClose={() => { setAddIdeaModalOpen(false); setEditingIdea(null); }}
+        onClose={() => { 
+          setAddIdeaModalOpen(false); 
+          setEditingIdea(null); 
+          setPresetImageForNewIdea(null);
+          setPresetPromptForNewIdea(null);
+          setPresetAspectRatioForNewIdea(null);
+          setPresetResolutionForNewIdea(null);
+        }}
         onSave={handleSaveCreativeIdea}
         ideaToEdit={editingIdea}
+        presetImageUrl={presetImageForNewIdea}
+        presetPrompt={presetPromptForNewIdea}
+        presetAspectRatio={presetAspectRatioForNewIdea}
+        presetResolution={presetResolutionForNewIdea}
       />
       <SettingsModal
         isOpen={isSettingsModalOpen}

@@ -326,6 +326,15 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                                 BP
                             </div>
                         )}
+                        {/* 显示作者信息（非BP模式也显示） */}
+                        {idea.author && (
+                            <div 
+                              className="px-1.5 py-0.5 text-[9px] font-medium rounded-full backdrop-blur-sm pointer-events-none"
+                              style={{ backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff' }}
+                            >
+                                @{idea.author}
+                            </div>
+                        )}
                       </div>
                       {/* 价格显示 */}
                       {idea.cost !== undefined && idea.cost > 0 && (

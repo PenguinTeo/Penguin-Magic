@@ -13,6 +13,10 @@ interface AddCreativeIdeaModalProps {
   onClose: () => void;
   onSave: (idea: Partial<CreativeIdea>) => void;
   ideaToEdit?: CreativeIdea | null;
+  presetImageUrl?: string | null; // 从桌面图片创建时预设的图片URL
+  presetPrompt?: string | null; // 预设的提示词
+  presetAspectRatio?: string | null; // 预设的画面比例
+  presetResolution?: string | null; // 预设的分辨率
 }
 
 const fileToBase64 = (file: File): Promise<string> => {
@@ -24,7 +28,7 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOpen, onClose, onSave, ideaToEdit }) => {
+export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOpen, onClose, onSave, ideaToEdit, presetImageUrl, presetPrompt, presetAspectRatio, presetResolution }) => {
   const { theme, themeName } = useTheme();
   const isLight = themeName === 'light';
   
@@ -121,9 +125,25 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
         setFile(null);
       } else {
         resetState();
+        // 如果有预设图片URL，设置它
+        if (presetImageUrl) {
+          setPreviewUrl(presetImageUrl);
+        }
+        // 设置预设的提示词
+        if (presetPrompt) {
+          setPrompt(presetPrompt);
+        }
+        // 设置预设的画面比例
+        if (presetAspectRatio) {
+          setSuggestedAspectRatio(presetAspectRatio as AspectRatioType);
+        }
+        // 设置预设的分辨率
+        if (presetResolution) {
+          setSuggestedResolution(presetResolution as ImageSizeType);
+        }
       }
     }
-  }, [isOpen, ideaToEdit, resetState]);
+  }, [isOpen, ideaToEdit, resetState, presetImageUrl, presetPrompt, presetAspectRatio, presetResolution]);
 
   useEffect(() => {
     const currentUrl = previewUrl;
