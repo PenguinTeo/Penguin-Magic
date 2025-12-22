@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import type { CreativeIdea } from '../types';
 import { PlusCircleIcon } from './icons/PlusCircleIcon';
-import { XCircleIcon } from './icons/XCircleIcon';
+import { TrashIcon } from './icons/TrashIcon';
 import { LibraryIcon } from './icons/LibraryIcon';
 import { EditIcon } from './icons/EditIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
@@ -270,7 +270,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                               ? 'bg-yellow-500/80 text-white' 
                               : 'bg-black/60 text-white hover:bg-yellow-500/60'
                           }`}
-                          aria-label={idea.isFavorite ? '取消收藏' : '收藏'}
+                          title="收藏"
                           style={{ cursor: 'pointer' }}
                       >
                           <svg className="w-3 h-3" fill={idea.isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
@@ -284,7 +284,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                             onEdit(idea);
                         }}
                         className="p-1 bg-black/60 text-white hover:bg-blue-500 rounded-full backdrop-blur-sm transition-all duration-200"
-                        aria-label={`编辑 '${idea.title}'`}
+                        title="编辑"
                         style={{ cursor: 'pointer' }}
                     >
                         <EditIcon className="w-3 h-3" />
@@ -296,8 +296,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                             handleExportSingle(idea);
                         }}
                         className="p-1 bg-black/60 text-white hover:bg-green-500 rounded-full backdrop-blur-sm transition-all duration-200"
-                        aria-label={`导出 '${idea.title}'`}
-                        title="导出该创意"
+                        title="导出"
                         style={{ cursor: 'pointer' }}
                     >
                         <DownloadIcon className="w-3 h-3" />
@@ -309,11 +308,11 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                                 onDelete(idea.id); 
                             }
                         }}
-                        className="p-1 bg-black/60 text-white hover:bg-gray-500 rounded-full backdrop-blur-sm transition-all duration-200"
-                        aria-label={`删除 '${idea.title}'`}
+                        className="p-1 bg-black/60 text-white hover:bg-red-500 rounded-full backdrop-blur-sm transition-all duration-200"
+                        title="删除"
                         style={{ cursor: 'pointer' }}
                     >
-                        <XCircleIcon className="w-3 h-3" />
+                        <TrashIcon className="w-3 h-3" />
                     </button>
                   </div>
                    <div className="absolute top-1.5 left-1.5 flex flex-col gap-0.5">
