@@ -498,19 +498,24 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                      className="px-2 py-0.5 rounded-md text-[9px] font-semibold"
                      style={{
                        background: activeBPTemplate 
-                         ? 'rgba(59,130,246,0.15)'
-                         : activeSmartPlusTemplate
-                         ? 'rgba(59,130,246,0.15)'
+                         ? 'rgba(238,209,109,0.15)'
                          : 'rgba(59,130,246,0.15)',
                        color: activeBPTemplate
-                         ? '#3b82f6'
-                         : activeSmartPlusTemplate
-                         ? '#60a5fa'
+                         ? '#eed16d'
                          : '#60a5fa',
                      }}
                    >
                      {activeTemplateName}
                    </span>
+                   {/* 作者显示 */}
+                   {activeTemplate?.author && (
+                     <span 
+                       className="text-[9px] font-medium"
+                       style={{ color: activeBPTemplate ? '#eed16d' : '#60a5fa' }}
+                     >
+                       @{activeTemplate.author}
+                     </span>
+                   )}
                    <button
                      onClick={onClearTemplate}
                      className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:scale-110"
@@ -674,8 +679,21 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                   )}
                 </div>
                 <h3 className="text-sm font-semibold" style={{ color: isDark ? '#fff' : '#0f172a' }}>
-                  {activeBPTemplate ? `BP 模式 - ${activeBPTemplate.title}` : '编辑提示词'}
+                  {activeBPTemplate 
+                    ? `BP 模式 - ${activeBPTemplate.title}` 
+                    : activeSmartTemplate || activeSmartPlusTemplate
+                    ? (activeSmartTemplate?.title || activeSmartPlusTemplate?.title)
+                    : '编辑提示词'}
                 </h3>
+                {/* 作者显示 - 所有模式 */}
+                {(activeBPTemplate?.author || activeSmartTemplate?.author || activeSmartPlusTemplate?.author) && (
+                  <span 
+                    className="text-xs font-medium"
+                    style={{ color: activeBPTemplate ? '#eed16d' : '#3b82f6' }}
+                  >
+                    @{activeBPTemplate?.author || activeSmartTemplate?.author || activeSmartPlusTemplate?.author}
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => setIsPromptExpanded(false)}
@@ -1939,12 +1957,8 @@ const App: React.FC = () => {
           if (item.bpInputs) {
             setBpInputs(item.bpInputs);
           }
-        } else if (item.creativeTemplateType === 'smartPlus') {
-          setActiveSmartPlusTemplate(template);
-          if (item.smartPlusOverrides) {
-            setSmartPlusOverrides(item.smartPlusOverrides);
-          }
-        } else if (item.creativeTemplateType === 'smart') {
+        } else {
+          // 非BP模式 = 普通模式模板
           setActiveSmartTemplate(template);
         }
       }
@@ -2294,6 +2308,7 @@ const App: React.FC = () => {
     setBpInputs({});
 
     if (idea.isBP) {
+        // BP模式模板
         setActiveBPTemplate(idea);
         setPrompt(''); // BP starts empty, waits for generation/fill
         
@@ -2312,15 +2327,10 @@ const App: React.FC = () => {
             idea.bpVariables.forEach(v => initialInputs[v.id] = '');
             setBpInputs(initialInputs);
         }
-    } else if (idea.isSmart) {
-      setActiveSmartTemplate(idea);
-      setPrompt(''); // Clear prompt for keyword
-    } else if (idea.isSmartPlus) {
-        setActiveSmartPlusTemplate(idea);
-        setSmartPlusOverrides(idea.smartPlusConfig || JSON.parse(JSON.stringify(defaultSmartPlusConfig)));
-        setPrompt(''); // Clear prompt for keywords
     } else {
-      setPrompt(idea.prompt);
+        // 非BP模式 = 普通模式模板
+        setActiveSmartTemplate(idea);
+        setPrompt(''); // 清空提示词，等待用户输入关键词
     }
     setView('editor');
   };
@@ -2659,10 +2669,25 @@ const App: React.FC = () => {
         }).then(savedHistoryId => {
           // 自动添加到桌面，并关联历史记录ID
           const freePos = findNextFreePosition();
+          
+          // 生成图片名称：如果有创意库模板，使用"标题(编号)"格式
+          let itemName = '';
+          const activeTemplateTitle = activeBPTemplate?.title || activeSmartPlusTemplate?.title || activeSmartTemplate?.title;
+          if (activeTemplateTitle) {
+            // 计算同模板名称的已有图片数量
+            const existingCount = desktopItems.filter(item => 
+              item.type === 'image' && item.name.startsWith(activeTemplateTitle)
+            ).length;
+            itemName = `${activeTemplateTitle}(${existingCount + 1})`;
+          } else {
+            // 无模板时使用提示词截取
+            itemName = promptForDesktop.slice(0, 15) + (promptForDesktop.length > 15 ? '...' : '');
+          }
+          
           const desktopItem: DesktopImageItem = {
             id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
             type: 'image',
-            name: promptForDesktop.slice(0, 15) + (promptForDesktop.length > 15 ? '...' : ''),
+            name: itemName,
             position: freePos,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -2961,12 +2986,8 @@ const App: React.FC = () => {
               if (historyItem.bpInputs) {
                 setBpInputs(historyItem.bpInputs);
               }
-            } else if (historyItem.creativeTemplateType === 'smartPlus') {
-              setActiveSmartPlusTemplate(template);
-              if (historyItem.smartPlusOverrides) {
-                setSmartPlusOverrides(historyItem.smartPlusOverrides);
-              }
-            } else if (historyItem.creativeTemplateType === 'smart') {
+            } else {
+              // 非BP模式 = 普通模式模板
               setActiveSmartTemplate(template);
             }
           }
