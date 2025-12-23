@@ -108,8 +108,11 @@ const fileToBase64 = async (file: File): Promise<string> => {
 // 将 aspectRatio 转换为 Nano-banana 支持的格式
 const convertAspectRatio = (ratio: string): NanoBananaRequest['aspect_ratio'] | undefined => {
   const validRatios = ['4:3', '3:4', '16:9', '9:16', '2:3', '3:2', '1:1', '4:5', '5:4', '21:9'];
-  if (ratio === 'Auto' || !validRatios.includes(ratio)) {
-    return '1:1'; // 默认使用 1:1
+  if (ratio === 'Auto') {
+    return undefined; // Auto 模式不指定比例，让API根据输入图片尺寸自动处理
+  }
+  if (!validRatios.includes(ratio)) {
+    return '1:1'; // 无效比例时使用 1:1
   }
   return ratio as NanoBananaRequest['aspect_ratio'];
 };
@@ -134,12 +137,20 @@ export const editImageWithThirdPartyApi = async (
     throw new Error("请先配置贞贞API Base URL");
   }
   
+  // 处理 Auto 宽高比：图生图模式下不传 aspect_ratio，让API根据输入图片尺寸自动生成
+  let aspectRatio = convertAspectRatio(config.aspectRatio);
+  if (config.aspectRatio === 'Auto' && files.length > 0) {
+    // 图生图 + Auto：不传 aspect_ratio，让API使用输入图片的原始尺寸
+    aspectRatio = undefined;
+    console.log('[Auto宽高比] 图生图模式，不指定比例，使用输入图片原始尺寸');
+  }
+  
   // 构建请求体
   const requestBody: NanoBananaRequest = {
     model: thirdPartyConfig.model || 'nano-banana-2',
     prompt: prompt,
     response_format: 'url',
-    aspect_ratio: convertAspectRatio(config.aspectRatio),
+    aspect_ratio: aspectRatio,
     image_size: config.imageSize as '1K' | '2K' | '4K',
     seed: config.seed,
   };
@@ -316,9 +327,16 @@ export const editImageWithGemini = async (files: File[], prompt: string, config:
       imageSize: config.imageSize,
   };
   
-  // Only add aspectRatio if it's not 'Auto'
-  if (config.aspectRatio !== 'Auto') {
-      imageConfig.aspectRatio = config.aspectRatio;
+  // 处理 Auto 宽高比：图生图模式下不传 aspectRatio，让API根据输入图片尺寸自动生成
+  if (config.aspectRatio === 'Auto') {
+    if (files.length > 0) {
+      // 图生图 + Auto：不传 aspectRatio，让Gemini使用输入图片的原始尺寸
+      console.log('[Gemini Auto宽高比] 图生图模式，不指定比例，使用输入图片原始尺寸');
+    }
+    // 文生图 + Auto：也不指定 aspectRatio，让 Gemini 自动处理
+  } else {
+    // 用户明确指定了比例
+    imageConfig.aspectRatio = config.aspectRatio;
   }
 
   const response: GenerateContentResponse = await withRetry(() => 
