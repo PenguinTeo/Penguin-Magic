@@ -1685,8 +1685,9 @@ const App: React.FC = () => {
   // const [bpPolish, setBpPolish] = useState(false); 
 
   // New State for Model Config
-  const [aspectRatio, setAspectRatio] = useState<string>('Auto');
+  const [aspectRatio, setAspectRatio] = useState<string>('1:1');
   const [imageSize, setImageSize] = useState<string>('2K');
+  const [batchCount, setBatchCount] = useState<number>(1); // 批量生成数量（1/2/4张）
 
   const [autoSave, setAutoSave] = useState(false);
   
@@ -2570,40 +2571,34 @@ const App: React.FC = () => {
 
   const handleGenerateClick = useCallback(async () => {
     // 检查API配置
-    // 本地版本：
-    // 1. 启用贞贞API + 有本地key → 使用本地贞贞
-    // 2. 有 Gemini key → 使用本地Gemini
-    // 3. 都没有 → 提示配置
     const hasValidApi = 
       (thirdPartyApiConfig.enabled && thirdPartyApiConfig.apiKey) ||  // 本地贞贞API
       apiKey;  // 本地Gemini
-    
+      
     if (!hasValidApi) {
       setError('请先配置 API Key（贞贞API 或 Gemini）');
       setStatus(ApiStatus.Error);
       return;
     }
-    
+      
     // 获取当前模板的权限设置
     const activeTemplate = activeBPTemplate || activeSmartPlusTemplate || activeSmartTemplate;
     const canViewPrompt = activeTemplate?.allowViewPrompt !== false;
-    
+      
     let finalPrompt = prompt;
-    
+      
     // 如果不允许查看提示词，需要先自动生成提示词
     if (!canViewPrompt && activeTemplate) {
-      setStatus(ApiStatus.Loading);
+      // 并发模式不设置全局 Loading 状态，使用占位项显示进度
       setError(null);
-      
+        
       try {
         console.log('[Generate] 不允许查看提示词，自动生成中...');
-        
+          
         if (activeBPTemplate) {
-          // BP 模式
           const activeFile = files.length > 0 ? files[0] : null;
           finalPrompt = await processBPTemplate(activeFile, activeBPTemplate, bpInputs);
         } else if (activeSmartPlusTemplate || activeSmartTemplate) {
-          // Smart/Smart+ 模式
           const activeFile = files.length > 0 ? files[0] : null;
           if (!activeFile) {
             setError('Smart/Smart+模式需要上传图片');
@@ -2617,141 +2612,227 @@ const App: React.FC = () => {
             smartPlusConfig: activeTemplate.isSmartPlus ? smartPlusOverrides : undefined,
           });
         }
-        
         console.log('[Generate] 提示词已生成，开始生图');
       } catch (e: unknown) {
         const errorMessage = e instanceof Error ? e.message : '提示词生成失败';
-        console.error('[Generate] 提示词生成失败');
         setError(`生成失败: ${errorMessage}`);
         setStatus(ApiStatus.Error);
         return;
       }
     } else {
-      // 允许查看提示词的正常流程
       if (!prompt) {
         setError('请输入提示词');
         setStatus(ApiStatus.Error);
         return;
       }
-      
-      // Ensure prompt is generated if template is active but prompt box is empty
       if ((activeSmartTemplate || activeSmartPlusTemplate || activeBPTemplate) && !prompt.trim()) {
-           setError(`请先点击企鹅按钮生成/填入提示词`);
-           setStatus(ApiStatus.Error);
-           return;
+        setError(`请先点击企鹅按钮生成/填入提示词`);
+        setStatus(ApiStatus.Error);
+        return;
       }
     }
-    
-    setStatus(ApiStatus.Loading);
+      
+    // 并发模式不设置全局 Loading 状态，使用占位项显示进度
     setError(null);
     setGeneratedContent(null);
-
-    try {
-      // 获取当前创意库的扣费金额（优先用 activeCreativeIdea，它保存了所有类型的创意库）
-      const creativeIdeaCost = activeCreativeIdea?.cost;
+  
+    const creativeIdeaCost = activeCreativeIdea?.cost;
+    const promptToSave = canViewPrompt ? finalPrompt : '[加密提示词]';
+    const activeTemplateTitle = activeBPTemplate?.title || activeSmartPlusTemplate?.title || activeSmartTemplate?.title;
       
-      // 传递所有上传的文件（支持多图编辑），使用 finalPrompt
-      const result = await editImageWithGemini(files, finalPrompt, { aspectRatio, imageSize }, creativeIdeaCost);
-      // 保存生成时使用的所有原始图片，用于重新生成
-      setGeneratedContent({ ...result, originalFiles: [...files] });
-      setStatus(ApiStatus.Success);
+    // 计算基础命名
+    let baseItemName = '';
+    if (activeTemplateTitle) {
+      baseItemName = activeTemplateTitle;
+    } else {
+      baseItemName = finalPrompt.slice(0, 15) + (finalPrompt.length > 15 ? '...' : '');
+    }
       
-      // 日志输出 - 不打印提示词内容
-      console.log('[Generate] 生成成功');
-      
-      // 保存到历史记录（包含原始输入图片和创意库信息）
-      // 如果不允许查看提示词，保存时用占位文本
-      const promptToSave = canViewPrompt ? finalPrompt : '[加密提示词]';
-      
-      // 命名规则：有创意库时用“创意库标题 + 关键词”，否则用提示词
-      let promptForDesktop = finalPrompt;
-      if (activeTemplate) {
-        // 获取创意库标题
-        const templateTitle = activeTemplate.title || '创意库';
-        // 获取关键词：BP模式用bpInputs的第一个输入，Smart/Smart+模式用prompt
-        let keyword = '';
-        if (activeBPTemplate && bpInputs) {
-          // BP模式：取所有用户输入的第一个非空值
-          const inputValues = Object.values(bpInputs as Record<string, string>).filter(v => v && v.trim());
-          keyword = inputValues[0] || '';
-        } else {
-          // Smart/Smart+模式：用用户输入的关键词
-          keyword = prompt.trim();
-        }
-        // 组合命名
-        promptForDesktop = keyword ? `${templateTitle}·${keyword}` : templateTitle;
-      }
-      if (result.imageUrl) {
-        // 确定当前使用的创意库类型
-        let templateType: 'smart' | 'smartPlus' | 'bp' | 'none' = 'none';
-        let templateId: number | undefined;
-        if (activeBPTemplate) {
-          templateType = 'bp';
-          templateId = activeBPTemplate.id;
-        } else if (activeSmartPlusTemplate) {
-          templateType = 'smartPlus';
-          templateId = activeSmartPlusTemplate.id;
-        } else if (activeSmartTemplate) {
-          templateType = 'smart';
-          templateId = activeSmartTemplate.id;
-        }
+    // 获取创意库类型
+    let templateType: 'smart' | 'smartPlus' | 'bp' | 'none' = 'none';
+    let templateId: number | undefined;
+    if (activeBPTemplate) {
+      templateType = 'bp';
+      templateId = activeBPTemplate.id;
+    } else if (activeSmartPlusTemplate) {
+      templateType = 'smartPlus';
+      templateId = activeSmartPlusTemplate.id;
+    } else if (activeSmartTemplate) {
+      templateType = 'smart';
+      templateId = activeSmartTemplate.id;
+    }
+  
+    // === 批量并发生成逻辑 ===
+    if (batchCount > 1) {
+      // 创建 loading 占位项
+      const placeholderItems: DesktopImageItem[] = [];
+      const existingCount = desktopItems.filter(item => 
+        item.type === 'image' && item.name.startsWith(baseItemName)
+      ).length;
         
-        await saveToHistory(result.imageUrl, promptToSave, thirdPartyApiConfig.enabled, files.length > 0 ? files : [], {
+      for (let i = 0; i < batchCount; i++) {
+        const freePos = findNextFreePosition();
+        const itemName = activeTemplateTitle 
+          ? `${activeTemplateTitle}(${existingCount + i + 1})`
+          : `${baseItemName} #${i + 1}`;
+          
+        const placeholderItem: DesktopImageItem = {
+          id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 8)}-${i}`,
+          type: 'image',
+          name: itemName,
+          position: { x: freePos.x + i * 100, y: freePos.y }, // 横向排列
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          imageUrl: '', // 空的，等待填充
+          prompt: promptToSave,
+          model: thirdPartyApiConfig.enabled ? 'nano-banana-2' : 'Gemini',
+          isThirdParty: thirdPartyApiConfig.enabled,
+          isLoading: true, // 标记为加载中
+        };
+        placeholderItems.push(placeholderItem);
+      }
+        
+      // 添加所有占位项到桌面
+      const newItems = [...desktopItems, ...placeholderItems];
+      setDesktopItems(newItems);
+      await desktopApi.saveDesktopItems(newItems);
+        
+      // 并发发起所有生成请求
+      const generatePromises = placeholderItems.map(async (placeholder, index) => {
+        try {
+          const result = await editImageWithGemini(files, finalPrompt, { aspectRatio, imageSize }, creativeIdeaCost);
+            
+          if (result.imageUrl) {
+            // 保存到历史记录
+            const saveResult = await saveToHistory(result.imageUrl, promptToSave, thirdPartyApiConfig.enabled, files.length > 0 ? files : [], {
+              templateId,
+              templateType,
+              bpInputs: templateType === 'bp' ? { ...bpInputs } : undefined,
+              smartPlusOverrides: templateType === 'smartPlus' ? [...smartPlusOverrides] : undefined
+            });
+              
+            const localImageUrl = saveResult?.localImageUrl || result.imageUrl;
+            const historyId = saveResult?.historyId;
+              
+            // 更新桌面项：设置图片URL，清除loading状态
+            setDesktopItems(prev => prev.map(item => 
+              item.id === placeholder.id 
+                ? { ...item, imageUrl: localImageUrl, isLoading: false, historyId } as DesktopImageItem
+                : item
+            ));
+              
+            console.log(`[Batch Generate] #${index + 1} 成功`);
+            return { success: true, index };
+          }
+          throw new Error('API 未返回图片');
+        } catch (e: unknown) {
+          const errorMessage = e instanceof Error ? e.message : '生成失败';
+          console.error(`[Batch Generate] #${index + 1} 失败:`, errorMessage);
+            
+          // 更新桌面项：设置错误状态
+          setDesktopItems(prev => prev.map(item => 
+            item.id === placeholder.id 
+              ? { ...item, isLoading: false, loadingError: errorMessage } as DesktopImageItem
+              : item
+          ));
+            
+          return { success: false, index, error: errorMessage };
+        }
+      });
+        
+      // 等待所有请求完成
+      const results = await Promise.all(generatePromises);
+      const successCount = results.filter(r => r.success).length;
+        
+      console.log(`[Batch Generate] 完成: ${successCount}/${batchCount} 成功`);
+        
+      // 批量模式不设置全局状态，避免影响其他正在进行的批次
+      // 如果有错误，只在控制台输出
+      if (successCount < batchCount) {
+        console.warn(`[批量生成] 部分失败: ${successCount}/${batchCount}`);
+      }
+        
+      // 保存桌面状态
+      desktopApi.saveDesktopItems(desktopItems);
+      return;
+    }
+  
+    // === 单张生成逻辑（采用占位项模式，支持并发） ===
+    // 先创建占位项
+    const freePos = findNextFreePosition();
+    const existingCount = desktopItems.filter(item => 
+      item.type === 'image' && item.name.startsWith(baseItemName)
+    ).length;
+    const itemName = activeTemplateTitle 
+      ? `${activeTemplateTitle}(${existingCount + 1})`
+      : baseItemName;
+    
+    const placeholderId = `img-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const placeholderItem: DesktopImageItem = {
+      id: placeholderId,
+      type: 'image',
+      name: itemName,
+      position: freePos,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      imageUrl: '', // 空的，等待填充
+      prompt: promptToSave,
+      model: thirdPartyApiConfig.enabled ? 'nano-banana-2' : 'Gemini',
+      isThirdParty: thirdPartyApiConfig.enabled,
+      isLoading: true, // 标记为加载中
+    };
+    
+    // 添加占位项到桌面
+    const newItems = [...desktopItems, placeholderItem];
+    setDesktopItems(newItems);
+    desktopApi.saveDesktopItems(newItems);
+    
+    try {
+      const result = await editImageWithGemini(files, finalPrompt, { aspectRatio, imageSize }, creativeIdeaCost);
+      console.log('[Generate] 生成成功');
+        
+      if (result.imageUrl) {
+        // 保存到历史记录
+        const saveResult = await saveToHistory(result.imageUrl, promptToSave, thirdPartyApiConfig.enabled, files.length > 0 ? files : [], {
           templateId,
           templateType,
           bpInputs: templateType === 'bp' ? { ...bpInputs } : undefined,
           smartPlusOverrides: templateType === 'smartPlus' ? [...smartPlusOverrides] : undefined
-        }).then(saveResult => {
-          // saveResult 包含 { historyId, localImageUrl }
-          const savedHistoryId = saveResult?.historyId;
-          const localImageUrl = saveResult?.localImageUrl || result.imageUrl!;
-          
-          // 自动添加到桌面，并关联历史记录ID
-          const freePos = findNextFreePosition();
-          
-          // 生成图片名称：如果有创意库模板，使用"标题(编号)"格式
-          let itemName = '';
-          const activeTemplateTitle = activeBPTemplate?.title || activeSmartPlusTemplate?.title || activeSmartTemplate?.title;
-          if (activeTemplateTitle) {
-            // 计算同模板名称的已有图片数量
-            const existingCount = desktopItems.filter(item => 
-              item.type === 'image' && item.name.startsWith(activeTemplateTitle)
-            ).length;
-            itemName = `${activeTemplateTitle}(${existingCount + 1})`;
-          } else {
-            // 无模板时使用提示词截取
-            itemName = promptForDesktop.slice(0, 15) + (promptForDesktop.length > 15 ? '...' : '');
-          }
-          
-          const desktopItem: DesktopImageItem = {
-            id: `img-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-            type: 'image',
-            name: itemName,
-            position: freePos,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            imageUrl: localImageUrl, // 使用本地URL
-            prompt: promptToSave,
-            model: thirdPartyApiConfig.enabled ? 'nano-banana-2' : 'Gemini',
-            isThirdParty: thirdPartyApiConfig.enabled,
-            historyId: savedHistoryId, // 关联历史记录，用于重新生成时恢复原始输入图片
-          };
-          handleAddToDesktop(desktopItem);
         });
+        
+        const savedHistoryId = saveResult?.historyId;
+        const localImageUrl = saveResult?.localImageUrl || result.imageUrl;
+        
+        // 更新占位项：设置图片URL，清除loading状态
+        setDesktopItems(prev => prev.map(item => 
+          item.id === placeholderId 
+            ? { ...item, imageUrl: localImageUrl, isLoading: false, historyId: savedHistoryId } as DesktopImageItem
+            : item
+        ));
+        
+        // 显示结果浮层
+        setGeneratedContent({ ...result, originalFiles: [...files] });
+        setStatus(ApiStatus.Success);
+        
+        if (autoSave) {
+          downloadImage(result.imageUrl);
+        }
+      } else {
+        throw new Error('API 未返回图片');
       }
-      
-      if (autoSave && result.imageUrl) {
-        downloadImage(result.imageUrl);
-      }
-      
-      // 本地版本：不需要处理用户余额
     } catch (e: unknown) {
-      // 检查是否为余额不足错误（402状态码）
       let errorMessage = 'An unknown error occurred.';
       if (e instanceof Error) {
         errorMessage = e.message;
       }
-      // 如果是来自后端的余额不足提示，直接显示趣味文案
+      
+      // 更新占位项：设置错误状态
+      setDesktopItems(prev => prev.map(item => 
+        item.id === placeholderId 
+          ? { ...item, isLoading: false, loadingError: errorMessage } as DesktopImageItem
+          : item
+      ));
+      
       if (errorMessage.includes('🐧') || errorMessage.includes('Pebbling') || errorMessage.includes('鹅卵石') || errorMessage.includes('余额')) {
         setError(errorMessage);
       } else {
@@ -2760,7 +2841,7 @@ const App: React.FC = () => {
       console.error('[Generate] 生成失败');
       setStatus(ApiStatus.Error);
     }
-  }, [files, prompt, apiKey, thirdPartyApiConfig, activeSmartTemplate, activeSmartPlusTemplate, activeBPTemplate, autoSave, downloadImage, aspectRatio, imageSize, activeCreativeIdea, findNextFreePosition, handleAddToDesktop, bpInputs, smartPlusOverrides]);
+  }, [files, prompt, apiKey, thirdPartyApiConfig, activeSmartTemplate, activeSmartPlusTemplate, activeBPTemplate, autoSave, downloadImage, aspectRatio, imageSize, activeCreativeIdea, findNextFreePosition, handleAddToDesktop, bpInputs, smartPlusOverrides, batchCount, desktopItems, saveToHistory]);
 
   // 卸载创意库：清空所有模板设置和提示词
   const handleClearTemplate = useCallback(() => {
@@ -2796,9 +2877,10 @@ const App: React.FC = () => {
 
   // 修改canGenerate条件
   // 如果不允许查看提示词，则只要有模板就可以生成
+  // 完全支持并发，不受 Loading 状态限制（所有生成都采用占位项模式）
   const activeTemplateForCheck = activeBPTemplate || activeSmartPlusTemplate || activeSmartTemplate;
   const canViewPromptForCheck = activeTemplateForCheck?.allowViewPrompt !== false;
-  const canGenerate = (canViewPromptForCheck ? prompt.trim().length > 0 : !!activeTemplateForCheck) && status !== ApiStatus.Loading;
+  const canGenerate = (canViewPromptForCheck ? prompt.trim().length > 0 : !!activeTemplateForCheck);
   
   const isSmartReady = !!activeSmartTemplate && prompt.trim().length > 0;
   const isSmartPlusReady = !!activeSmartPlusTemplate;
@@ -3168,7 +3250,28 @@ const App: React.FC = () => {
           isImporting={isImporting}
         />
         {view === 'editor' && (
-             <div className="absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-300 bottom-6">
+             <div className="absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-300 bottom-6 flex items-center gap-3">
+                {/* 批量生成数量选择器 - 简洁设计 */}
+                <div className="flex items-center bg-black/40 backdrop-blur-xl rounded-full px-1.5 py-1 border border-white/10">
+                  {/* 减少按钮 */}
+                  <button
+                    onClick={() => setBatchCount(Math.max(1, batchCount - 1))}
+                    disabled={batchCount <= 1}
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                  </button>
+                  {/* 数量显示 */}
+                  <span className="w-6 text-center text-xs font-medium text-white">{batchCount}</span>
+                  {/* 增加按钮 */}
+                  <button
+                    onClick={() => setBatchCount(Math.min(20, batchCount + 1))}
+                    disabled={batchCount >= 20}
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  </button>
+                </div>
                 <GenerateButton 
                     onClick={handleGenerateClick}
                     disabled={!canGenerate}
