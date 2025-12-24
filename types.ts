@@ -230,6 +230,9 @@ export interface DesktopImageItem extends BaseDesktopItem {
   model?: string;
   isThirdParty?: boolean;
   historyId?: number; // 关联的历史记录ID
+  // 多并发生成支持
+  isLoading?: boolean; // 是否正在生成中
+  loadingError?: string; // 生成失败的错误信息
 }
 
 // 文件夹项目

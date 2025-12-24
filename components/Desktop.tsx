@@ -1416,23 +1416,47 @@ export const Desktop: React.FC<DesktopProps> = ({
               }}
             >
               {item.type === 'image' ? (
-                <img
-                  src={getThumbnailUrl((item as DesktopImageItem).imageUrl)}
-                  alt={item.name}
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                  onError={(e) => {
-                    // 缩略图加载失败，回退到原图
-                    const target = e.target as HTMLImageElement;
-                    const originalUrl = normalizeImageUrl((item as DesktopImageItem).imageUrl);
-                    if (target.src !== originalUrl) {
-                      target.src = originalUrl;
-                    } else {
-                      // 原图也失败，显示占位图
-                      target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
-                    }
-                  }}
-                />
+                // 检查是否正在加载中
+                (item as DesktopImageItem).isLoading ? (
+                  // Loading 状态：简洁暗色风格
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-neutral-900/80 backdrop-blur-sm">
+                    <div className="relative w-10 h-10">
+                      {/* 外圈旋转 */}
+                      <div className="absolute inset-0 rounded-full border-2 border-neutral-700" />
+                      <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 animate-spin" />
+                      {/* 中心图标 */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-lg">🐧</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (item as DesktopImageItem).loadingError ? (
+                  // 错误状态：简洁暗色风格
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-neutral-900/80 backdrop-blur-sm">
+                    <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                      <span className="text-red-400 text-lg">✗</span>
+                    </div>
+                  </div>
+                ) : (
+                  // 正常状态：显示图片
+                  <img
+                    src={getThumbnailUrl((item as DesktopImageItem).imageUrl)}
+                    alt={item.name}
+                    className="w-full h-full object-cover"
+                    draggable={false}
+                    onError={(e) => {
+                      // 缩略图加载失败，回退到原图
+                      const target = e.target as HTMLImageElement;
+                      const originalUrl = normalizeImageUrl((item as DesktopImageItem).imageUrl);
+                      if (target.src !== originalUrl) {
+                        target.src = originalUrl;
+                      } else {
+                        // 原图也失败，显示占位图
+                        target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                      }
+                    }}
+                  />
+                )
               ) : item.type === 'stack' ? (
                 // Mac风格叠放效果
                 <div className="w-full h-full relative">

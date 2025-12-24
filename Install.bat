@@ -1,26 +1,26 @@
 @echo off
-chcp 65001 > nul
-title 企鹅艾洛魔法世界 - 首次安装
+chcp 437 > nul
+title Penguin Magic World - Install
 cd /d "%~dp0"
 color 0B
 
 echo.
 echo  ============================================
-echo       企鹅艾洛魔法世界 - 首次安装
+echo       Penguin Magic World - Install
 echo  ============================================
 echo.
 
 REM Check Environment
-echo  [1/4] 检查环境...
+echo  [1/4] Checking environment...
 echo.
 
 where node >nul 2>&1
 if %errorlevel% neq 0 (
     color 0C
-    echo  [ERROR] 未找到 Node.js！
+    echo  [ERROR] Node.js not found!
     echo.
-    echo  请安装 Node.js 18 或更高版本:
-    echo  下载: https://nodejs.org/
+    echo  Please install Node.js 18 or higher:
+    echo  Download: https://nodejs.org/
     echo.
     pause
     exit /b 1
@@ -31,26 +31,26 @@ echo  [OK] Node.js %NODE_VER%
 echo.
 
 REM Install Frontend Dependencies
-echo  [2/4] 安装前端依赖...
-echo        这可能需要几分钟...
+echo  [2/4] Installing frontend dependencies...
+echo        This may take a few minutes...
 echo.
 
 call npm install
 if %errorlevel% neq 0 (
     color 0C
     echo.
-    echo  [ERROR] 前端依赖安装失败！
-    echo          请检查网络连接
+    echo  [ERROR] Frontend dependencies failed!
+    echo          Please check network connection.
     pause
     exit /b 1
 )
 
 echo.
-echo  [OK] 前端依赖安装完成
+echo  [OK] Frontend dependencies installed
 echo.
 
 REM Install Backend Dependencies
-echo  [3/4] 安装后端依赖...
+echo  [3/4] Installing backend dependencies...
 echo.
 
 cd backend-nodejs
@@ -58,43 +58,43 @@ call npm install
 if %errorlevel% neq 0 (
     color 0C
     echo.
-    echo  [ERROR] 后端依赖安装失败！
-    echo          请检查网络连接
+    echo  [ERROR] Backend dependencies failed!
+    echo          Please check network connection.
     pause
     exit /b 1
 )
 cd ..
 
 echo.
-echo  [OK] 后端依赖安装完成
+echo  [OK] Backend dependencies installed
 echo.
 
 REM Build Frontend
-echo  [4/4] 构建前端项目...
+echo  [4/4] Building frontend...
 echo.
 
 call npm run build
 if %errorlevel% neq 0 (
     color 0C
     echo.
-    echo  [ERROR] 前端构建失败！
+    echo  [ERROR] Frontend build failed!
     pause
     exit /b 1
 )
 
 echo.
-echo  [OK] 前端构建完成
+echo  [OK] Frontend build complete
 echo.
 
 REM Create Directories
-echo  创建数据目录...
+echo  Creating data directories...
 
 if not exist "data" mkdir "data"
 if not exist "input" mkdir "input"
 if not exist "output" mkdir "output"
 if not exist "creative_images" mkdir "creative_images"
 
-echo  [OK] 目录创建完成
+echo  [OK] Directories created
 echo.
 
 REM Done
@@ -102,10 +102,10 @@ color 0A
 echo.
 echo  ============================================
 echo.
-echo       安装完成！
+echo       Installation Complete!
 echo.
-echo   现在可以运行应用程序:
-echo   双击 "一键启动.bat" 来启动
+echo   You can now run the application:
+echo   Double-click "Start.bat" to launch
 echo.
 echo  ============================================
 echo.
