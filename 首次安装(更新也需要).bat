@@ -10,7 +10,7 @@ echo       企鹅艾洛魔法世界 - 首次安装
 echo  ============================================
 echo.
 
-:: Check Environment
+REM Check Environment
 echo  [1/4] 检查环境...
 echo.
 
@@ -30,7 +30,7 @@ for /f "tokens=1" %%i in ('node --version 2^>^&1') do set NODE_VER=%%i
 echo  [OK] Node.js %NODE_VER%
 echo.
 
-:: Install Frontend Dependencies
+REM Install Frontend Dependencies
 echo  [2/4] 安装前端依赖...
 echo        这可能需要几分钟...
 echo.
@@ -49,7 +49,7 @@ echo.
 echo  [OK] 前端依赖安装完成
 echo.
 
-:: Install Backend Dependencies
+REM Install Backend Dependencies
 echo  [3/4] 安装后端依赖...
 echo.
 
@@ -69,7 +69,7 @@ echo.
 echo  [OK] 后端依赖安装完成
 echo.
 
-:: Build Frontend
+REM Build Frontend
 echo  [4/4] 构建前端项目...
 echo.
 
@@ -86,7 +86,7 @@ echo.
 echo  [OK] 前端构建完成
 echo.
 
-:: Create Directories
+REM Create Directories
 echo  创建数据目录...
 
 if not exist "data" mkdir "data"
@@ -97,7 +97,7 @@ if not exist "creative_images" mkdir "creative_images"
 echo  [OK] 目录创建完成
 echo.
 
-:: Done
+REM Done
 color 0A
 echo.
 echo  ============================================
