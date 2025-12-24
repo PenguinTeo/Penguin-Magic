@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+doc
 
 # 用户数据（不上传内容，保留目录结构）
 data/*.json

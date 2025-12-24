@@ -138,22 +138,30 @@ export const editImageWithThirdPartyApi = async (
   }
   
   // 处理 Auto 宽高比：图生图模式下不传 aspect_ratio，让API根据输入图片尺寸自动生成
-  let aspectRatio = convertAspectRatio(config.aspectRatio);
-  if (config.aspectRatio === 'Auto' && files.length > 0) {
-    // 图生图 + Auto：不传 aspect_ratio，让API使用输入图片的原始尺寸
-    aspectRatio = undefined;
+  const isAutoAspectRatio = config.aspectRatio === 'Auto';
+  const hasInputImage = files.length > 0;
+  
+  if (isAutoAspectRatio && hasInputImage) {
     console.log('[Auto宽高比] 图生图模式，不指定比例，使用输入图片原始尺寸');
   }
   
-  // 构建请求体
+  // 构建请求体 - Auto+图生图时完全不包含 aspect_ratio 字段
   const requestBody: NanoBananaRequest = {
     model: thirdPartyConfig.model || 'nano-banana-2',
     prompt: prompt,
     response_format: 'url',
-    aspect_ratio: aspectRatio,
     image_size: config.imageSize as '1K' | '2K' | '4K',
     seed: config.seed,
   };
+  
+  // 只有非 Auto 或文生图模式时才添加 aspect_ratio
+  if (!isAutoAspectRatio) {
+    requestBody.aspect_ratio = convertAspectRatio(config.aspectRatio);
+  } else if (!hasInputImage) {
+    // 文生图 + Auto：默认使用 1:1
+    requestBody.aspect_ratio = '1:1';
+  }
+  // 图生图 + Auto：不添加 aspect_ratio 字段，让API使用输入图片的原始尺寸
   
   // 如果有上传图片，添加参考图（图生图模式，支持多图）
   if (files.length > 0) {
@@ -322,21 +330,21 @@ export const editImageWithGemini = async (files: File[], prompt: string, config:
     };
   }
 
-  // Configure image settings
-  const imageConfig: any = {
-      imageSize: config.imageSize,
+  // Configure image settings - 使用 snake_case 命名，和 Python SDK 保持一致
+  const image_config: any = {
+      image_size: config.imageSize,
   };
   
-  // 处理 Auto 宽高比：图生图模式下不传 aspectRatio，让API根据输入图片尺寸自动生成
+  // 处理 Auto 宽高比：图生图模式下不传 aspect_ratio，让API根据输入图片尺寸自动生成
   if (config.aspectRatio === 'Auto') {
     if (files.length > 0) {
-      // 图生图 + Auto：不传 aspectRatio，让Gemini使用输入图片的原始尺寸
+      // 图生图 + Auto：不传 aspect_ratio，让Gemini使用输入图片的原始尺寸
       console.log('[Gemini Auto宽高比] 图生图模式，不指定比例，使用输入图片原始尺寸');
     }
-    // 文生图 + Auto：也不指定 aspectRatio，让 Gemini 自动处理
+    // 文生图 + Auto：也不指定 aspect_ratio，让 Gemini 自动处理
   } else {
     // 用户明确指定了比例
-    imageConfig.aspectRatio = config.aspectRatio;
+    image_config.aspect_ratio = config.aspectRatio;
   }
 
   const response: GenerateContentResponse = await withRetry(() => 
@@ -344,7 +352,7 @@ export const editImageWithGemini = async (files: File[], prompt: string, config:
       model: model,
       contents: contents,
       config: {
-        imageConfig: imageConfig
+        image_config: image_config
       },
     })
   );
