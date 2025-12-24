@@ -79,3 +79,69 @@ export const getImageMimeType = (url: string): string => {
       return 'image/png';
   }
 };
+
+/**
+ * 压缩图片，将最长边限制为指定尺寸
+ * @param imageUrl - 图片URL (支持 data URL, http URL, 文件路径)
+ * @param maxSize - 最长边的最大尺寸，默认512px
+ * @returns 压缩后的 base64 data URL
+ */
+export const compressImage = (imageUrl: string, maxSize: number = 512): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      const { width, height } = img;
+      
+      // 如果图片已经小于 maxSize，直接返回原图
+      if (width <= maxSize && height <= maxSize) {
+        // 仍然通过 canvas 转换确保格式统一
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        return;
+      }
+      
+      // 计算新尺寸，保持宽高比
+      let newWidth: number;
+      let newHeight: number;
+      
+      if (width > height) {
+        // 横向图片，宽度为最长边
+        newWidth = maxSize;
+        newHeight = Math.round((height / width) * maxSize);
+      } else {
+        // 纵向图片，高度为最长边
+        newHeight = maxSize;
+        newWidth = Math.round((width / height) * maxSize);
+      }
+      
+      // 创建 canvas 进行缩放
+      const canvas = document.createElement('canvas');
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+      const ctx = canvas.getContext('2d')!;
+      
+      // 高质量缩放
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, newWidth, newHeight);
+      
+      // 输出为 JPEG，质量 0.85 (平衡质量和大小)
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      console.log(`[图片压缩] ${width}x${height} -> ${newWidth}x${newHeight}`);
+      resolve(compressedDataUrl);
+    };
+    
+    img.onerror = () => {
+      reject(new Error('加载图片失败'));
+    };
+    
+    // 处理不同格式的 URL
+    img.src = normalizeImageUrl(imageUrl);
+  });
+};

@@ -7,6 +7,7 @@ import { PlusCircleIcon } from './icons/PlusCircleIcon';
 import { LightbulbIcon } from './icons/LightbulbIcon';
 import { defaultSmartPlusConfig } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
+import { compressImage } from '../utils/image';
 
 interface AddCreativeIdeaModalProps {
   isOpen: boolean;
@@ -232,7 +233,17 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
     setError(null);
 
     try {
-        const imageUrl = file ? await fileToBase64(file) : previewUrl;
+        // 获取原始图片URL
+        const rawImageUrl = file ? await fileToBase64(file) : previewUrl;
+        
+        // 压缩封面图，最长边512px
+        let imageUrl = rawImageUrl;
+        try {
+          imageUrl = await compressImage(rawImageUrl, 512);
+          console.log('[创意库] 封面图已压缩到512px');
+        } catch (e) {
+          console.warn('[创意库] 封面图压缩失败，使用原图:', e);
+        }
         
         const ideaData: Partial<CreativeIdea> = {
           id: ideaToEdit?.id,

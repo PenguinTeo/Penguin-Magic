@@ -23,7 +23,7 @@ import { HistoryStrip } from './components/HistoryStrip';
 import * as creativeIdeasApi from './services/api/creativeIdeas';
 import * as historyApi from './services/api/history';
 import * as desktopApi from './services/api/desktop';
-import { saveToOutput } from './services/api/files';
+import { saveToOutput, saveToInput } from './services/api/files';
 import { downloadImage } from './services/export';
 import { ThemeProvider, useTheme, SnowfallEffect } from './contexts/ThemeContext';
 import { Desktop, createDesktopItemFromHistory, TOP_OFFSET } from './components/Desktop';
@@ -1861,9 +1861,29 @@ const App: React.FC = () => {
     setPrompt(value);
   };
 
-  const handleFileSelection = useCallback((selectedFiles: FileList | null) => {
+  const handleFileSelection = useCallback(async (selectedFiles: FileList | null) => {
     if (selectedFiles && selectedFiles.length > 0) {
       const newFiles = Array.from(selectedFiles).filter(file => file.type.startsWith('image/'));
+      
+      // 保存每个图片到 input 目录
+      for (const file of newFiles) {
+        try {
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            const imageData = reader.result as string;
+            const result = await saveToInput(imageData, file.name);
+            if (result.success) {
+              console.log('[Input] 图片已保存:', result.data?.filename);
+            } else {
+              console.warn('[Input] 保存失败:', result.error);
+            }
+          };
+          reader.readAsDataURL(file);
+        } catch (e) {
+          console.warn('[Input] 保存图片到input目录失败:', e);
+        }
+      }
+      
       setFiles(prevFiles => {
         const wasEmpty = prevFiles.length === 0;
         const updatedFiles = [...prevFiles, ...newFiles];
@@ -2044,6 +2064,7 @@ const App: React.FC = () => {
     // 先保存图片到本地output目录，获取本地URL
     let localImageUrl = imageUrl;
     if (imageUrl.startsWith('data:')) {
+      // base64 格式，直接保存
       try {
         const saveResult = await saveToOutput(imageUrl);
         if (saveResult.success && saveResult.data) {
@@ -2052,6 +2073,25 @@ const App: React.FC = () => {
         }
       } catch (e) {
         console.log('保存到output失败，使用base64:', e);
+      }
+    } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      // 远程 URL（贞贞 API 等返回），下载后保存到本地防止过期
+      try {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        const saveResult = await saveToOutput(base64);
+        if (saveResult.success && saveResult.data) {
+          localImageUrl = saveResult.data.url;
+          console.log('远程URL图片已保存到本地:', localImageUrl);
+        }
+      } catch (e) {
+        console.log('下载远程图片失败，使用原始URL:', e);
       }
     }
     
