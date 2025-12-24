@@ -333,7 +333,7 @@ export const editImageWithGemini = async (files: File[], prompt: string, config:
   // Configure image settings - TypeScript SDK 使用 camelCase
   const imageConfig: any = {
       imageSize: config.imageSize,
-      outputMimeType: 'image/png', // 强制输出 PNG 格式
+      // 注意：outputMimeType 在某些 Gemini API 版本中不支持，由 API 自动决定输出格式
   };
   
   // 处理 Auto 宽高比：图生图模式下不传 aspectRatio，让API根据输入图片尺寸自动生成

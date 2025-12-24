@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import { GenerationHistory, SmartPlusConfig } from '../types';
 import * as historyApi from '../services/api/history';
-import { saveToOutput } from '../services/api/files';
+import { saveToOutput, downloadRemoteToOutput } from '../services/api/files';
 
 export interface SaveToHistoryParams {
   imageUrl: string;
@@ -98,14 +98,32 @@ export const useGenerationHistory = (): UseGenerationHistoryReturn => {
     
     // 先保存图片到本地output目录，获取本地URL
     let localImageUrl = imageUrl;
+    
+    // 处理base64格式的图片
     if (imageUrl.startsWith('data:')) {
       try {
         const saveResult = await saveToOutput(imageUrl);
         if (saveResult.success && saveResult.data) {
           localImageUrl = saveResult.data.url;
+          console.log('[History] base64图片已保存到本地:', saveResult.data.url);
         }
       } catch (e) {
         console.log('保存到output失败，使用base64:', e);
+      }
+    }
+    // 处理远程URL格式的图片（第三方API返回的）
+    else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      try {
+        console.log('[History] 下载远程图片到本地...');
+        const downloadResult = await downloadRemoteToOutput(imageUrl);
+        if (downloadResult.success && downloadResult.data) {
+          localImageUrl = downloadResult.data.url;
+          console.log('[History] 远程图片已保存到本地:', downloadResult.data.url);
+        } else {
+          console.warn('[History] 下载远程图片失败:', downloadResult.error);
+        }
+      } catch (e) {
+        console.warn('[History] 下载远程图片异常，保留远程URL:', e);
       }
     }
     

@@ -14,9 +14,14 @@ const config = {
   BASE_DIR: BASE_DIR,
   INPUT_DIR: path.join(BASE_DIR, 'input'),
   OUTPUT_DIR: path.join(BASE_DIR, 'output'),
+  THUMBNAILS_DIR: path.join(BASE_DIR, 'thumbnails'),
   DATA_DIR: path.join(BASE_DIR, 'data'),
   CREATIVE_IMAGES_DIR: path.join(BASE_DIR, 'creative_images'),
   DIST_DIR: path.join(BASE_DIR, 'dist'),
+  
+  // 缩略图配置
+  THUMBNAIL_SIZE: 160, // 缩略图大小（像素）
+  THUMBNAIL_QUALITY: 80, // 缩略图质量（JPEG）
   
   // 数据文件路径
   CREATIVE_IDEAS_FILE: path.join(BASE_DIR, 'data', 'creative_ideas.json'),

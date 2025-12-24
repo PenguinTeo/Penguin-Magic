@@ -3,10 +3,54 @@
  * 使用 React.memo 优化，减少不必要的重新渲染
  */
 
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem } from '../../types';
-import { normalizeImageUrl } from '../../utils/image';
+import { normalizeImageUrl, getThumbnailUrl } from '../../utils/image';
 import { FolderIcon } from '../icons/FolderIcon';
+
+// 默认占位图
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0NDQ0NDQiIHN0cm9rZS13aWR0aD0iMSI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjwvc3ZnPg==';
+
+/**
+ * 缩略图组件
+ * 优先加载缩略图，失败时回退到原图
+ */
+const ThumbnailImage = memo<{ imageUrl: string; alt: string }>(({ imageUrl, alt }) => {
+  const [useThumbnail, setUseThumbnail] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  
+  // 缩略图URL
+  const thumbnailUrl = getThumbnailUrl(imageUrl);
+  // 原图URL
+  const originalUrl = normalizeImageUrl(imageUrl);
+  
+  // 如果不是本地文件路径，直接使用原图
+  const shouldUseThumbnail = useThumbnail && imageUrl?.startsWith('/files/');
+  
+  const handleError = () => {
+    if (shouldUseThumbnail && useThumbnail) {
+      // 缩略图加载失败，回退到原图
+      console.log('[Thumbnail] 加载失败，回退到原图:', thumbnailUrl);
+      setUseThumbnail(false);
+    } else {
+      // 原图也加载失败，显示占位图
+      setHasError(true);
+    }
+  };
+  
+  return (
+    <img
+      src={hasError ? PLACEHOLDER_IMAGE : (shouldUseThumbnail ? thumbnailUrl : originalUrl)}
+      alt={alt}
+      className="w-full h-full object-cover"
+      draggable={false}
+      onError={handleError}
+      loading="lazy"
+    />
+  );
+});
+
+ThumbnailImage.displayName = 'ThumbnailImage';
 
 interface DesktopItemProps {
   item: DesktopItem;
@@ -91,14 +135,9 @@ export const DesktopItemComponent = memo<DesktopItemProps>(({
         }}
       >
         {item.type === 'image' ? (
-          <img
-            src={normalizeImageUrl((item as DesktopImageItem).imageUrl)}
+          <ThumbnailImage
+            imageUrl={(item as DesktopImageItem).imageUrl}
             alt={item.name}
-            className="w-full h-full object-cover"
-            draggable={false}
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
-            }}
           />
         ) : item.type === 'stack' ? (
           <StackPreview 
@@ -191,24 +230,38 @@ const StackPreview = memo<{ stack: DesktopStackItem; allItems: DesktopItem[] }>(
   
   return (
     <div className="w-full h-full relative">
-      {stackImages.map((img, idx) => (
-        <img
-          key={img.id}
-          src={normalizeImageUrl(img.imageUrl)}
-          alt={img.name}
-          className="absolute rounded-lg object-cover"
-          style={{
-            width: '70%',
-            height: '70%',
-            left: `${8 + idx * 6}%`,
-            top: `${8 + idx * 6}%`,
-            transform: `rotate(${(idx - 1.5) * 5}deg)`,
-            zIndex: idx,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          }}
-          draggable={false}
-        />
-      ))}
+      {stackImages.map((img, idx) => {
+        // 使用缩略图
+        const thumbnailUrl = getThumbnailUrl(img.imageUrl);
+        const originalUrl = normalizeImageUrl(img.imageUrl);
+        const shouldUseThumbnail = img.imageUrl?.startsWith('/files/');
+        
+        return (
+          <img
+            key={img.id}
+            src={shouldUseThumbnail ? thumbnailUrl : originalUrl}
+            alt={img.name}
+            className="absolute rounded-lg object-cover"
+            style={{
+              width: '70%',
+              height: '70%',
+              left: `${8 + idx * 6}%`,
+              top: `${8 + idx * 6}%`,
+              transform: `rotate(${(idx - 1.5) * 5}deg)`,
+              zIndex: idx,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+            draggable={false}
+            loading="lazy"
+            onError={(e) => {
+              // 缩略图失败时回退到原图
+              if (shouldUseThumbnail && (e.target as HTMLImageElement).src === thumbnailUrl) {
+                (e.target as HTMLImageElement).src = originalUrl;
+              }
+            }}
+          />
+        );
+      })}
       {/* 叠放数量标记 */}
       <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded-full z-10">
         {stack.itemIds.length}

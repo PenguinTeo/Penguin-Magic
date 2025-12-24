@@ -38,6 +38,7 @@ function initializeApp() {
   // 创建必要的目录
   FileHandler.ensureDir(config.INPUT_DIR);
   FileHandler.ensureDir(config.OUTPUT_DIR);
+  FileHandler.ensureDir(config.THUMBNAILS_DIR);
   FileHandler.ensureDir(config.DATA_DIR);
   FileHandler.ensureDir(config.CREATIVE_IMAGES_DIR);
   
@@ -60,6 +61,7 @@ if (require('fs').existsSync(config.DIST_DIR)) {
 // 托管文件资源
 app.use('/files/output', express.static(config.OUTPUT_DIR));
 app.use('/files/input', express.static(config.INPUT_DIR));
+app.use('/files/thumbnails', express.static(config.THUMBNAILS_DIR));
 app.use('/files/creative', express.static(config.CREATIVE_IMAGES_DIR));
 app.use('/files/creative_images', express.static(config.CREATIVE_IMAGES_DIR)); // 兼容旧路径
 

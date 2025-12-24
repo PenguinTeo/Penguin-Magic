@@ -9,19 +9,28 @@
     "dev": "node src/server.js",
     "build": "npx pkg . --target node18-win-x64 --output penguin-backend.exe"
   },
-  "keywords": ["penguin", "magic", "backend"],
+  "keywords": [
+    "penguin",
+    "magic",
+    "backend"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.18.0",
-    "cors": "^2.8.5"
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "pkg": "^5.8.0"
   },
   "pkg": {
-    "targets": ["node18-win-x64"],
-    "assets": ["../dist/**/*"],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "assets": [
+      "../dist/**/*"
+    ],
     "outputPath": "."
   }
 }

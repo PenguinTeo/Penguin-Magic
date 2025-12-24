@@ -19,7 +19,7 @@ import { LibraryIcon } from './icons/LibraryIcon';
 import { LayersIcon } from './icons/GridIcon';
 // JSZip 导出逻辑已迁移到 services/export/desktopExporter.ts
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
-import { normalizeImageUrl } from '../utils/image';
+import { normalizeImageUrl, getThumbnailUrl } from '../utils/image';
 
 interface DesktopProps {
   items: DesktopItem[];
@@ -1417,12 +1417,20 @@ export const Desktop: React.FC<DesktopProps> = ({
             >
               {item.type === 'image' ? (
                 <img
-                  src={normalizeImageUrl((item as DesktopImageItem).imageUrl)}
+                  src={getThumbnailUrl((item as DesktopImageItem).imageUrl)}
                   alt={item.name}
                   className="w-full h-full object-cover"
                   draggable={false}
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                    // 缩略图加载失败，回退到原图
+                    const target = e.target as HTMLImageElement;
+                    const originalUrl = normalizeImageUrl((item as DesktopImageItem).imageUrl);
+                    if (target.src !== originalUrl) {
+                      target.src = originalUrl;
+                    } else {
+                      // 原图也失败，显示占位图
+                      target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                    }
                   }}
                 />
               ) : item.type === 'stack' ? (
@@ -1438,8 +1446,16 @@ export const Desktop: React.FC<DesktopProps> = ({
                     return stackImages.map((img, idx) => (
                       <img
                         key={img.id}
-                        src={normalizeImageUrl(img.imageUrl)}
+                        src={getThumbnailUrl(img.imageUrl)}
                         alt={img.name}
+                        onError={(e) => {
+                          // 缩略图加载失败，回退到原图
+                          const target = e.target as HTMLImageElement;
+                          const originalUrl = normalizeImageUrl(img.imageUrl);
+                          if (target.src !== originalUrl) {
+                            target.src = originalUrl;
+                          }
+                        }}
                         className="absolute rounded-lg object-cover"
                         style={{
                           width: '70%',

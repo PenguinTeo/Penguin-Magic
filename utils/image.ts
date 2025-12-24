@@ -81,6 +81,38 @@ export const getImageMimeType = (url: string): string => {
 };
 
 /**
+ * 获取缩略图URL
+ * 将原图URL转换为缩略图URL
+ * 支持的路径格式: /files/output/xxx.png, /files/input/xxx.jpg, /files/creative_images/xxx.png
+ * @param originalUrl - 原图URL
+ * @returns 缩略图URL，如枟不支持则返回原图URL
+ */
+export const getThumbnailUrl = (originalUrl: string | undefined | null): string => {
+  if (!originalUrl) return '';
+  
+  // 只处理本地文件路径
+  if (!originalUrl.startsWith('/files/')) {
+    return originalUrl;
+  }
+  
+  // 解析路径: /files/output/filename.png
+  const parts = originalUrl.split('/');
+  if (parts.length < 4) return originalUrl;
+  
+  const dirName = parts[2]; // output, input, creative_images, creative
+  const filename = parts[3];
+  
+  // 获取不带扩展名的文件名
+  const lastDotIndex = filename.lastIndexOf('.');
+  const nameWithoutExt = lastDotIndex > 0 ? filename.substring(0, lastDotIndex) : filename;
+  
+  // 统一目录名称 (creative -> creative_images)
+  const normalizedDirName = dirName === 'creative' ? 'creative_images' : dirName;
+  
+  return `/files/thumbnails/${normalizedDirName}_${nameWithoutExt}_thumb.jpg`;
+};
+
+/**
  * 压缩图片，将最长边限制为指定尺寸
  * @param imageUrl - 图片URL (支持 data URL, http URL, 文件路径)
  * @param maxSize - 最长边的最大尺寸，默认512px

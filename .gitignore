@@ -18,10 +18,12 @@ data/*.json
 creative_images/*
 output/*
 input/*
+thumbnails/*
 !data/.gitkeep
 !creative_images/.gitkeep
 !output/.gitkeep
 !input/.gitkeep
+!thumbnails/.gitkeep
 
 # Python
 __pycache__/

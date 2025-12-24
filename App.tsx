@@ -23,7 +23,7 @@ import { HistoryStrip } from './components/HistoryStrip';
 import * as creativeIdeasApi from './services/api/creativeIdeas';
 import * as historyApi from './services/api/history';
 import * as desktopApi from './services/api/desktop';
-import { saveToOutput, saveToInput } from './services/api/files';
+import { saveToOutput, saveToInput, downloadRemoteToOutput } from './services/api/files';
 import { downloadImage } from './services/export';
 import { ThemeProvider, useTheme, SnowfallEffect } from './contexts/ThemeContext';
 import { Desktop, createDesktopItemFromHistory, TOP_OFFSET } from './components/Desktop';
@@ -2025,7 +2025,7 @@ const App: React.FC = () => {
       bpInputs?: Record<string, string>;
       smartPlusOverrides?: SmartPlusConfig;
     }
-  ): Promise<number | undefined> => {
+  ): Promise<{ historyId?: number; localImageUrl: string } | undefined> => {
     // 将输入图片转换为 base64 保存
     let inputImageData: string | undefined;
     let inputImageName: string | undefined;
@@ -2075,20 +2075,14 @@ const App: React.FC = () => {
         console.log('保存到output失败，使用base64:', e);
       }
     } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      // 远程 URL（贞贞 API 等返回），下载后保存到本地防止过期
+      // 远程 URL（贞贞 API 等返回），通过后端下载保存到本地防止过期（避免CORS问题）
       try {
-        const response = await fetch(imageUrl);
-        const blob = await response.blob();
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-        const saveResult = await saveToOutput(base64);
-        if (saveResult.success && saveResult.data) {
-          localImageUrl = saveResult.data.url;
+        const downloadResult = await downloadRemoteToOutput(imageUrl);
+        if (downloadResult.success && downloadResult.data) {
+          localImageUrl = downloadResult.data.url;
           console.log('远程URL图片已保存到本地:', localImageUrl);
+        } else {
+          console.warn('后端下载远程图片失败:', downloadResult.error);
         }
       } catch (e) {
         console.log('下载远程图片失败，使用原始URL:', e);
@@ -2117,13 +2111,14 @@ const App: React.FC = () => {
       const result = await historyApi.createHistory(historyWithoutId as any);
       if (result.success && result.data) {
         setGenerationHistory(prev => [result.data!, ...prev].slice(0, 50));
-        return result.data.id;
+        return { historyId: result.data.id, localImageUrl };
       }
       console.error('保存历史记录失败:', result.error);
     } catch (e) {
       console.error('保存历史记录失败:', e);
     }
-    return undefined;
+    // 即使保存历史记录失败，也返回本地URL供桌面使用
+    return { historyId: undefined, localImageUrl };
   };
   
   // 图片下载逻辑已迁移到 services/export/desktopExporter.ts
@@ -2706,7 +2701,11 @@ const App: React.FC = () => {
           templateType,
           bpInputs: templateType === 'bp' ? { ...bpInputs } : undefined,
           smartPlusOverrides: templateType === 'smartPlus' ? [...smartPlusOverrides] : undefined
-        }).then(savedHistoryId => {
+        }).then(saveResult => {
+          // saveResult 包含 { historyId, localImageUrl }
+          const savedHistoryId = saveResult?.historyId;
+          const localImageUrl = saveResult?.localImageUrl || result.imageUrl!;
+          
           // 自动添加到桌面，并关联历史记录ID
           const freePos = findNextFreePosition();
           
@@ -2731,7 +2730,7 @@ const App: React.FC = () => {
             position: freePos,
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            imageUrl: result.imageUrl!,
+            imageUrl: localImageUrl, // 使用本地URL
             prompt: promptToSave,
             model: thirdPartyApiConfig.enabled ? 'nano-banana-2' : 'Gemini',
             isThirdParty: thirdPartyApiConfig.enabled,
