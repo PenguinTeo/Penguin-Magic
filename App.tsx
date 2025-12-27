@@ -4,6 +4,7 @@ import { ImageUploader } from './components/ImageUploader';
 import { normalizeImageUrl } from './utils/image';
 import { GeneratedImageDisplay } from './components/GeneratedImageDisplay';
 import { editImageWithGemini, generateCreativePromptFromImage, initializeAiClient, processBPTemplate, setThirdPartyConfig, optimizePrompt } from './services/geminiService';
+import CreativeExtractor, { extractCreatives } from './services/creativeExtractor';
 import { ApiStatus, GeneratedContent, CreativeIdea, SmartPlusConfig, ThirdPartyApiConfig, GenerationHistory, DesktopItem, DesktopImageItem, DesktopFolderItem } from './types';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
 import { AddCreativeIdeaModal } from './components/AddCreativeIdeaModal';
@@ -94,6 +95,8 @@ interface CanvasProps {
     onExportIdeas: () => void;
   onImportIdeas: () => void;
   isImporting?: boolean; // 导入状态
+  onImportById?: (idRange: string) => void; // 按ID导入
+  isImportingById?: boolean; // 按ID导入状态
   onReorderIdeas: (ideas: CreativeIdea[]) => void;
   onToggleFavorite?: (id: number) => void;
   onEditAgain?: () => void; // 再次编辑
@@ -1407,6 +1410,7 @@ const Canvas: React.FC<CanvasProps> = ({
   onPreviewClick,
   onExportIdeas,
   onImportIdeas,
+  onImportById,
   onReorderIdeas,
   onEditAgain,
   onRegenerate,
@@ -1438,6 +1442,7 @@ const Canvas: React.FC<CanvasProps> = ({
   setIsResultMinimized,
   onToggleFavorite,
   isImporting,
+  isImportingById,
 }) => {
   const { theme, themeName } = useTheme();
   const isDark = themeName !== 'light';
@@ -1505,9 +1510,11 @@ const Canvas: React.FC<CanvasProps> = ({
             onUse={onUse}
             onExport={onExportIdeas}
             onImport={onImportIdeas}
+            onImportById={onImportById}
             onReorder={onReorderIdeas}
             onToggleFavorite={onToggleFavorite}
             isImporting={isImporting}
+            isImportingById={isImportingById}
           />
         </div>
       ) : null}
@@ -1713,6 +1720,7 @@ const App: React.FC = () => {
     const [isResultMinimized, setIsResultMinimized] = useState(false); // 生成结果最小化状态
   const [isLoading, setIsLoading] = useState(true); // 加载状态
   const [isImporting, setIsImporting] = useState(false); // 导入状态
+  const [isImportingById, setIsImportingById] = useState(false); // 按ID导入状态
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importIdeasInputRef = useRef<HTMLInputElement>(null);
@@ -2236,6 +2244,55 @@ const App: React.FC = () => {
         alert('文件读取失败');
       };
       reader.readAsText(file);
+  };
+  
+  const handleImportCreativeById = async (idRange: string) => {
+    // 防止重复导入
+    if (isImportingById) {
+      alert('正在导入中，请稍候...');
+      return;
+    }
+      
+    setIsImportingById(true);
+      
+    try {
+      console.log('开始智能导入，ID范围:', idRange);
+      
+      // 调用后端智能导入API
+      const response = await fetch('/api/creative-ideas/smart-import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: 'https://opennana.com/awesome-prompt-gallery/data/prompts.json',
+          idRange: idRange
+        })
+      });
+      
+      const result = await response.json();
+      console.log('智能导入结果:', result);
+      
+      if (result.success) {
+        await loadDataFromLocal();
+        if (result.imported > 0) {
+          alert(result.message || `已成功导入 ${result.imported} 个创意`);
+        } else {
+          alert('未找到符合条件的创意，请检查编号范围是否正确 (例如: 988-985)');
+        }
+      } else {
+        throw new Error(result.error || '导入失败');
+      }
+    } catch (error) {
+      console.error('智能导入失败:', error);
+      let errorMessage = '未知错误';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      alert(`导入失败: ${errorMessage}`);
+    } finally {
+      setIsImportingById(false);
+    }
   };
   
   const handleSaveCreativeIdea = async (idea: Partial<CreativeIdea>) => {
@@ -3217,6 +3274,7 @@ const App: React.FC = () => {
           onPreviewClick={setPreviewImageUrl}
           onExportIdeas={handleExportIdeas}
           onImportIdeas={() => importIdeasInputRef.current?.click()}
+          onImportById={handleImportCreativeById}
           onReorderIdeas={handleReorderIdeas}
           onEditAgain={handleEditAgain}
           onRegenerate={handleRegenerate}
@@ -3248,6 +3306,7 @@ const App: React.FC = () => {
           setIsResultMinimized={setIsResultMinimized}
           onToggleFavorite={handleToggleFavorite}
           isImporting={isImporting}
+          isImportingById={isImportingById}
         />
         {view === 'editor' && (
              <div className="absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-300 bottom-6 flex items-center gap-3">

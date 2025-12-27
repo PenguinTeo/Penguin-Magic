@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const config = require('../config');
 const JsonStorage = require('../utils/jsonStorage');
 const FileHandler = require('../utils/fileHandler');
+const { CreativeExtractor, extract } = require('../utils/creativeExtractor');
 
 const router = express.Router();
 
@@ -201,6 +202,199 @@ router.post('/reorder', (req, res) => {
   
   JsonStorage.save(config.CREATIVE_IDEAS_FILE, reordered);
   res.json({ success: true, message: '排序已更新' });
+});
+
+// 代理外部API数据获取（解决CORS问题）
+router.get('/external-data', async (req, res) => {
+  try {
+    const { url } = req.query;
+    console.log('收到外部数据请求，URL:', url); // 调试信息
+    
+    if (!url) {
+      console.log('缺少URL参数');
+      return res.status(400).json({ success: false, error: '缺少URL参数' });
+    }
+    
+    // 验证URL是否为允许的域名
+    const allowedDomains = ['opennana.com'];
+    
+    try {
+      const parsedUrlForValidation = new URL(url);
+      console.log('解析的主机名:', parsedUrlForValidation.hostname); // 调试信息
+      
+      if (!allowedDomains.some(domain => parsedUrlForValidation.hostname.includes(domain))) {
+        console.log('不允许的域名:', parsedUrlForValidation.hostname);
+        return res.status(400).json({ success: false, error: '不允许的域名' });
+      }
+    } catch (urlError) {
+      console.log('URL解析错误:', urlError.message);
+      return res.status(400).json({ success: false, error: '无效的URL格式' });
+    }
+    
+    // 使用内置的http/https模块替代fetch，以避免Node.js版本兼容性问题
+    const https = require('https');
+    const http = require('http');
+    
+    const parsedUrl = new URL(url);
+    const client = parsedUrl.protocol === 'https:' ? https : http;
+    
+    const request = client.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      }
+    }, (response) => {
+      let data = '';
+      
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      response.on('end', () => {
+        try {
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            const jsonData = JSON.parse(data);
+            res.json({ success: true, data: jsonData });
+          } else {
+            res.status(response.statusCode).json({ success: false, error: `HTTP ${response.statusCode}: ${response.statusMessage}` });
+          }
+        } catch (parseError) {
+          console.error('解析响应失败:', parseError.message);
+          res.status(500).json({ success: false, error: `解析响应失败: ${parseError.message}` });
+        }
+      });
+    });
+    
+    request.on('error', (error) => {
+      console.error('请求外部数据失败:', error);
+      res.status(500).json({ success: false, error: error.message });
+    });
+    
+    request.setTimeout(30000, () => {
+      request.destroy();
+      console.error('请求超时');
+      res.status(408).json({ success: false, error: '请求超时' });
+    });
+  } catch (error) {
+    console.error('获取外部数据失败:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 智能导入：从外部URL提取创意并导入
+router.post('/smart-import', async (req, res) => {
+  try {
+    const { url, idRange } = req.body;
+    
+    console.log('=== 智能导入请求 ===');
+    console.log('URL:', url);
+    console.log('ID范围:', idRange);
+    
+    if (!url) {
+      return res.status(400).json({ success: false, error: '缺少数据URL参数' });
+    }
+    
+    if (!idRange) {
+      return res.status(400).json({ success: false, error: '缺少ID范围参数' });
+    }
+    
+    // 验证URL是否为允许的域名
+    const allowedDomains = ['opennana.com'];
+    try {
+      const parsedUrl = new URL(url);
+      if (!allowedDomains.some(domain => parsedUrl.hostname.includes(domain))) {
+        return res.status(400).json({ success: false, error: '不允许的数据源域名' });
+      }
+    } catch (urlError) {
+      return res.status(400).json({ success: false, error: '无效的URL格式' });
+    }
+    
+    // 使用CreativeExtractor提取数据
+    console.log('开始提取数据...');
+    const extractedData = await extract({
+      url: url,
+      idRange: idRange,
+      onProgress: (current, total, record) => {
+        console.log(`进度: ${current}/${total} - ID: ${record.id}`);
+      }
+    });
+    
+    console.log(`提取完成，共 ${extractedData.length} 条记录`);
+    
+    if (extractedData.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        imported: 0,
+        skipped: 0,
+        message: '未找到符合条件的记录'
+      });
+    }
+    
+    // 导入到创意库
+    const ideas = JsonStorage.load(config.CREATIVE_IDEAS_FILE, []);
+    
+    // 创建现有创意的特征集合（标题 + 提示词）
+    const existingSet = new Set();
+    ideas.forEach(idea => {
+      const title = (idea.title || '').trim().toLowerCase();
+      const prompt = (idea.prompt || '').trim().toLowerCase();
+      existingSet.add(`${title}::${prompt}`);
+    });
+    
+    let maxId = Math.max(...ideas.map(i => i.id || 0), 0);
+    const imported = [];
+    let skipped = 0;
+    
+    extractedData.forEach(idea => {
+      // 检查是否已存在
+      const title = (idea.title || '').trim().toLowerCase();
+      const prompt = (idea.prompt || '').trim().toLowerCase();
+      const key = `${title}::${prompt}`;
+      
+      if (existingSet.has(key)) {
+        skipped++;
+        console.log(`跳过重复: ${idea.title}`);
+        return;
+      }
+      
+      // 新创意，添加到库中
+      maxId++;
+      const newIdea = {
+        ...idea,
+        id: maxId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // 处理图片
+      processCreativeImage(newIdea);
+      
+      ideas.push(newIdea);
+      imported.push(newIdea);
+      existingSet.add(key);
+    });
+    
+    JsonStorage.save(config.CREATIVE_IDEAS_FILE, ideas);
+    
+    console.log(`=== 导入完成 ===`);
+    console.log(`新增: ${imported.length}, 跳过: ${skipped}`);
+    
+    res.json({
+      success: true,
+      data: imported,
+      imported: imported.length,
+      skipped: skipped,
+      message: `导入成功: ${imported.length} 个新创意${skipped > 0 ? `, 跳过 ${skipped} 个重复` : ''}`
+    });
+    
+  } catch (error) {
+    console.error('智能导入失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || '提取数据失败'
+    });
+  }
 });
 
 module.exports = router;

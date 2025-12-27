@@ -10,6 +10,7 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { UploadIcon } from './icons/UploadIcon';
 import { useTheme } from '../contexts/ThemeContext';
 import { normalizeImageUrl } from '../utils/image';
+import { ImportCreativeModal } from './ImportCreativeModal';
 
 
 interface CreativeLibraryProps {
@@ -21,14 +22,17 @@ interface CreativeLibraryProps {
   onUse: (idea: CreativeIdea) => void;
   onExport: () => void;
   onImport: () => void;
+  onImportById: (idRange: string) => Promise<void>;
   onReorder: (reorderedIdeas: CreativeIdea[]) => void;
   onToggleFavorite?: (id: number) => void;
   isImporting?: boolean; // 导入状态
+  isImportingById?: boolean; // 按ID导入状态
 }
 
 type FilterType = 'all' | 'bp';
 
-export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack, onAdd, onDelete, onEdit, onUse, onExport, onImport, onReorder, onToggleFavorite, isImporting }) => {
+export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack, onAdd, onDelete, onEdit, onUse, onExport, onImport, onImportById, onReorder, onToggleFavorite, isImporting, isImportingById }) => {
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const { themeName, theme } = useTheme();
   const isLight = themeName === 'light';
   const [searchTerm, setSearchTerm] = useState('');
@@ -156,6 +160,30 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
               <>
                 <UploadIcon className="w-4 h-4" />
                 <span>导入</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            disabled={isImportingById}
+            className="flex items-center gap-1.5 px-3 py-1.5 font-semibold rounded-lg text-xs transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${theme.colors.border}`,
+              color: theme.colors.textPrimary
+            }}
+          >
+            {isImportingById ? (
+              <>
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                <span>导入中...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                <span>智能导入</span>
               </>
             )}
           </button>
@@ -358,6 +386,13 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
           </div>
         )}
       </main>
+      
+      <ImportCreativeModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={onImportById}
+        isImporting={isImportingById}
+      />
     </div>
   );
 };
