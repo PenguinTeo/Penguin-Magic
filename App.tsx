@@ -62,6 +62,7 @@ interface LeftPanelProps {
   setImageSize: (value: string) => void;
   isThirdPartyApiEnabled: boolean;
   onClearTemplate: () => void;
+  backendStatus: 'connected' | 'disconnected' | 'checking'; // 后端连接状态
 }
 
 interface RightPanelProps {
@@ -171,6 +172,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
   setImageSize,
   isThirdPartyApiEnabled,
   onClearTemplate,
+  backendStatus,
 }) => {
   const { theme, themeName, setTheme } = useTheme();
   
@@ -319,9 +321,16 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
         }}
       >
         <div className="flex items-center gap-2.5">
-          {/* 本地版图标 */}
+          {/* 本地版图标 - 根据后端状态变色 */}
           <div 
-            className="w-9 h-9 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-lg ring-2 ring-white/20"
+            className={`w-9 h-9 rounded-full flex items-center justify-center shadow-lg ring-2 ring-white/20 transition-all duration-300 ${
+              backendStatus === 'connected' 
+                ? 'bg-gradient-to-br from-green-400 to-emerald-500' 
+                : backendStatus === 'checking'
+                  ? 'bg-gradient-to-br from-yellow-400 to-amber-500 animate-pulse'
+                  : 'bg-gradient-to-br from-red-400 to-rose-500'
+            }`}
+            title={backendStatus === 'connected' ? '后端连接正常' : backendStatus === 'checking' ? '正在检测后端...' : '后端已断开连接'}
           >
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -1724,6 +1733,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true); // 加载状态
   const [isImporting, setIsImporting] = useState(false); // 导入状态
   const [isImportingById, setIsImportingById] = useState(false); // 按ID导入状态
+  const [backendStatus, setBackendStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking'); // 后端连接状态
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importIdeasInputRef = useRef<HTMLInputElement>(null);
@@ -1775,6 +1785,33 @@ const App: React.FC = () => {
     if (savedAutoSave) {
         setAutoSave(JSON.parse(savedAutoSave));
     }
+  }, []);
+  
+  // 后端健康检查 - 定时检测连接状态
+  useEffect(() => {
+    const checkBackendHealth = async () => {
+      try {
+        const response = await fetch('/api/status', { 
+          method: 'GET',
+          signal: AbortSignal.timeout(5000) // 5秒超时
+        });
+        if (response.ok) {
+          setBackendStatus('connected');
+        } else {
+          setBackendStatus('disconnected');
+        }
+      } catch (e) {
+        setBackendStatus('disconnected');
+      }
+    };
+    
+    // 立即检查一次
+    checkBackendHealth();
+    
+    // 每10秒检查一次
+    const interval = setInterval(checkBackendHealth, 10000);
+    
+    return () => clearInterval(interval);
   }, []);
   
   // 从 Node.js 后端加载数据（纯本地文件，不用浏览器缓存）
@@ -3273,6 +3310,7 @@ const App: React.FC = () => {
             setImageSize={setImageSize}
             isThirdPartyApiEnabled={thirdPartyApiConfig.enabled}
             onClearTemplate={handleClearTemplate}
+            backendStatus={backendStatus}
           />
         </div>
       <div className="relative flex-1 flex min-w-0">
