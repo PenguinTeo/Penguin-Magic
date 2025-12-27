@@ -8,29 +8,42 @@ const { CreativeExtractor, extract } = require('../utils/creativeExtractor');
 
 const router = express.Router();
 
+// 智能导入并发锁
+let isSmartImporting = false;
+
 /**
  * 处理创意图片：将base64保存为文件
+ * 添加了错误处理，防止图片处理失败导致崩溃
  */
 function processCreativeImage(idea) {
-  const imageUrl = idea.imageUrl || '';
-  
-  // 如果已经是本地文件URL，直接返回
-  if (!imageUrl || imageUrl.startsWith('/files/')) {
+  try {
+    const imageUrl = idea.imageUrl || '';
+    
+    // 如果已经是本地文件URL，直接返回
+    if (!imageUrl || imageUrl.startsWith('/files/')) {
+      return idea;
+    }
+    
+    // 如果是base64，保存到文件
+    if (imageUrl.startsWith('data:')) {
+      const result = FileHandler.saveImage(imageUrl, config.CREATIVE_IMAGES_DIR);
+      if (result.success) {
+        idea.imageUrl = result.data.url;
+        console.log(`  ✓ 创意图片已保存: ${result.data.filename}`);
+      } else {
+        console.error(`  ✗ 创意图片保存失败: ${result.error}`);
+        // 保存失败时清空图片URL，避免存储巨大的base64字符串
+        idea.imageUrl = '';
+      }
+    }
+    
+    return idea;
+  } catch (error) {
+    console.error(`  ✗ 处理创意图片时发生错误: ${error.message}`);
+    // 发生错误时清空图片URL
+    idea.imageUrl = '';
     return idea;
   }
-  
-  // 如果是base64，保存到文件
-  if (imageUrl.startsWith('data:')) {
-    const result = FileHandler.saveImage(imageUrl, config.CREATIVE_IMAGES_DIR);
-    if (result.success) {
-      idea.imageUrl = result.data.url;
-      console.log(`  ✓ 创意图片已保存: ${result.data.filename}`);
-    } else {
-      console.error(`  ✗ 创意图片保存失败: ${result.error}`);
-    }
-  }
-  
-  return idea;
 }
 
 // 获取所有创意
@@ -283,6 +296,18 @@ router.get('/external-data', async (req, res) => {
 
 // 智能导入：从外部URL提取创意并导入
 router.post('/smart-import', async (req, res) => {
+  // 检查并发锁
+  if (isSmartImporting) {
+    console.log('智能导入正在进行中，拒绝新请求');
+    return res.status(429).json({
+      success: false,
+      error: '正在导入中，请等待当前导入完成后再试'
+    });
+  }
+  
+  // 设置锁
+  isSmartImporting = true;
+  
   try {
     const { url, idRange } = req.body;
     
@@ -394,6 +419,9 @@ router.post('/smart-import', async (req, res) => {
       success: false,
       error: error.message || '提取数据失败'
     });
+  } finally {
+    // 释放锁
+    isSmartImporting = false;
   }
 });
 

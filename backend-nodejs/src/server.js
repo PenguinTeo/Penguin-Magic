@@ -150,4 +150,19 @@ if (require.main === module) {
   startServer();
 }
 
+// ============== 全局错误处理 ==============
+// 捕获未处理的异常，防止进程崩溃
+process.on('uncaughtException', (err) => {
+  console.error('\n⚠️ 未捕获的异常:', err.message);
+  console.error('堆栈:', err.stack);
+  // 不退出进程，继续运行
+});
+
+// 捕获未处理的Promise rejection
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('\n⚠️ 未处理的Promise rejection:');
+  console.error('原因:', reason);
+  // 不退出进程，继续运行
+});
+
 module.exports = app;

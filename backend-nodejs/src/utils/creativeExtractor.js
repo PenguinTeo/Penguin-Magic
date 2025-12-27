@@ -189,10 +189,25 @@ class CreativeExtractor {
       prompt = record.prompt;
     }
 
+    // 处理作者字段：优先从 source.name 获取，否则使用 author
+    let author = '';
+    if (record.source && record.source.name) {
+      author = record.source.name;
+    } else if (record.author) {
+      author = record.author;
+    }
+
+    // 处理来源URL：从source.url获取
+    let sourceUrl = '';
+    if (record.source && record.source.url) {
+      sourceUrl = record.source.url;
+    }
+
     return {
       order: record.order ?? record.id,
       title: record.title || '',
-      author: record.author || '',
+      author: author,
+      sourceUrl: sourceUrl,
       prompt: prompt,
       imageUrl: base64Image,
       cost: record.cost ?? 0,
