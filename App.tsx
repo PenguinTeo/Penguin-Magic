@@ -86,6 +86,7 @@ interface CanvasProps {
   onBack: () => void;
   onAdd: () => void;
   onDelete: (id: number) => void;
+  onDeleteMultiple?: (ids: number[]) => void; // 批量删除
   onEdit: (idea: CreativeIdea) => void;
   onUse: (idea: CreativeIdea) => void;
   status: ApiStatus;
@@ -1402,6 +1403,7 @@ const Canvas: React.FC<CanvasProps> = ({
   onBack,
   onAdd,
   onDelete,
+  onDeleteMultiple,
   onEdit,
   onUse,
   status,
@@ -1506,6 +1508,7 @@ const Canvas: React.FC<CanvasProps> = ({
             onBack={onBack}
             onAdd={onAdd}
             onDelete={onDelete}
+            onDeleteMultiple={onDeleteMultiple}
             onEdit={onEdit}
             onUse={onUse}
             onExport={onExportIdeas}
@@ -2337,6 +2340,23 @@ const App: React.FC = () => {
       await loadDataFromLocal();
     } catch (e) {
       console.error('删除创意失败:', e);
+      alert(`删除失败: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+  };
+  
+  // 批量删除创意
+  const handleDeleteMultipleCreativeIdeas = async (ids: number[]) => {
+    try {
+      // 逐个删除
+      for (const id of ids) {
+        const result = await creativeIdeasApi.deleteCreativeIdea(id);
+        if (!result.success) {
+          console.error(`删除ID ${id} 失败:`, result.error);
+        }
+      }
+      await loadDataFromLocal();
+    } catch (e) {
+      console.error('批量删除创意失败:', e);
       alert(`删除失败: ${e instanceof Error ? e.message : 'Unknown error'}`);
     }
   };
@@ -3266,6 +3286,7 @@ const App: React.FC = () => {
           onBack={() => setView('editor')}
           onAdd={handleAddNewIdea}
           onDelete={handleDeleteCreativeIdea}
+          onDeleteMultiple={handleDeleteMultipleCreativeIdeas}
           onEdit={handleStartEditIdea}
           onUse={handleUseCreativeIdea}
           status={status}

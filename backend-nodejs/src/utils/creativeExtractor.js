@@ -196,6 +196,10 @@ class CreativeExtractor {
     } else if (record.author) {
       author = record.author;
     }
+    // 去掉作者名首个@符号（因为前端显示时会自动添加@）
+    if (author && author.startsWith('@')) {
+      author = author.substring(1);
+    }
 
     // 处理来源URL：从source.url获取
     let sourceUrl = '';
