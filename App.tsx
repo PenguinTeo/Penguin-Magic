@@ -1840,18 +1840,32 @@ const App: React.FC = () => {
         setGenerationHistory([]);
       }
       
-      // 加载桌面状态，并恢复图片URL
+      // 加载桌面状态，并恢复图片URL，清除卡住的loading状态
       if (desktopResult.success && desktopResult.data) {
         const restoredItems = desktopResult.data.map(item => {
           if (item.type === 'image') {
             const imageItem = item as DesktopImageItem;
-            // 如果 imageUrl 为空且有 historyId，从历史记录恢复
-            if ((!imageItem.imageUrl || imageItem.imageUrl === '') && imageItem.historyId) {
-              const historyEntry = loadedHistory.find(h => h.id === imageItem.historyId);
-              if (historyEntry) {
-                return { ...imageItem, imageUrl: historyEntry.imageUrl };
+            let restored = { ...imageItem };
+            
+            // 清除卡住的loading状态（重启后不应该还在loading）
+            if (imageItem.isLoading) {
+              restored.isLoading = false;
+              // 如果没有图片URL，标记为加载失败
+              if (!imageItem.imageUrl) {
+                restored.loadingError = '加载中断，请重新生成';
               }
             }
+            
+            // 如果 imageUrl 为空且有 historyId，从历史记录恢复
+            if ((!restored.imageUrl || restored.imageUrl === '') && restored.historyId) {
+              const historyEntry = loadedHistory.find(h => h.id === restored.historyId);
+              if (historyEntry) {
+                restored.imageUrl = historyEntry.imageUrl;
+                restored.loadingError = undefined; // 恢复成功，清除错误
+              }
+            }
+            
+            return restored;
           }
           return item;
         });
