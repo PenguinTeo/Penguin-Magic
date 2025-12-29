@@ -13,7 +13,7 @@ let isSmartImporting = false;
 
 /**
  * 处理创意图片：将base64保存为文件
- * 添加了错误处理，防止图片处理失败导致崩溃
+ * 改进错误处理，避免因图片保存失败导致创意无法保存
  */
 function processCreativeImage(idea) {
   try {
@@ -32,16 +32,16 @@ function processCreativeImage(idea) {
         console.log(`  ✓ 创意图片已保存: ${result.data.filename}`);
       } else {
         console.error(`  ✗ 创意图片保存失败: ${result.error}`);
-        // 保存失败时清空图片URL，避免存储巨大的base64字符串
-        idea.imageUrl = '';
+        // 保存失败时保留原始图片URL，避免完全丢失图片
+        console.log(`  ⚠️ 保留原始图片URL以避免丢失`);
       }
     }
     
     return idea;
   } catch (error) {
     console.error(`  ✗ 处理创意图片时发生错误: ${error.message}`);
-    // 发生错误时清空图片URL
-    idea.imageUrl = '';
+    // 发生错误时保留原始图片URL，避免完全丢失图片
+    console.log(`  ⚠️ 保留原始图片URL以避免丢失`);
     return idea;
   }
 }

@@ -6,9 +6,10 @@
 /**
  * 统一处理 imageUrl，兼容多种格式：
  * 1. 文件路径格式: /files/output/xxx.jpg
- * 2. 纯 base64 数据格式: /9j/4AAQ... (需要添加 data:image 前缀)
- * 3. 完整 data URL 格式: data:image/jpeg;base64,... (直接返回)
- * 4. HTTP/HTTPS URL: 直接返回
+ * 2. 创意库文件路径: /files/creative_images/xxx.jpg
+ * 3. 纯 base64 数据格式: /9j/4AAQ... (需要添加 data:image 前缀)
+ * 4. 完整 data URL 格式: data:image/jpeg;base64,... (直接返回)
+ * 5. HTTP/HTTPS URL: 直接返回
  */
 export const normalizeImageUrl = (url: string | undefined | null): string => {
   if (!url) return '';

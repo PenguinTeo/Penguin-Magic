@@ -65,6 +65,13 @@ app.use('/files/thumbnails', express.static(config.THUMBNAILS_DIR));
 app.use('/files/creative', express.static(config.CREATIVE_IMAGES_DIR));
 app.use('/files/creative_images', express.static(config.CREATIVE_IMAGES_DIR)); // 兼容旧路径
 
+// 确保目录存在并输出调试信息
+console.log('📁 静态文件托管配置:');
+console.log(`   - Output: ${config.OUTPUT_DIR}`);
+console.log(`   - Input: ${config.INPUT_DIR}`);
+console.log(`   - Thumbnails: ${config.THUMBNAILS_DIR}`);
+console.log(`   - Creative Images: ${config.CREATIVE_IMAGES_DIR}`);
+
 // ============== API路由 ==============
 app.use('/api/creative-ideas', creativeRouter);
 app.use('/api/history', historyRouter);
