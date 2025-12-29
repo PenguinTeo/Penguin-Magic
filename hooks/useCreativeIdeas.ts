@@ -3,7 +3,7 @@
  * 封装创意模板的 CRUD 操作和状态
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { CreativeIdea } from '../types';
 import * as creativeIdeasApi from '../services/api/creativeIdeas';
 

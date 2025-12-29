@@ -3,7 +3,7 @@
  * 封装桌面 items 的 CRUD 操作和状态
  */
 
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { DesktopItem, DesktopImageItem, DesktopFolderItem, GenerationHistory } from '../types';
 import * as desktopApi from '../services/api/desktop';
 

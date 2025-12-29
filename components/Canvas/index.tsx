@@ -24,7 +24,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useTheme } from '../../contexts/ThemeContext';
 import { CreativeIdea, DesktopImageItem, GeneratedContent } from '../../types';
-import { normalizeImageUrl } from '../../App';
+import { normalizeImageUrl } from '../../utils/image';
 
 // 自定义节点组件
 import CreativeNode from './nodes/CreativeNode';
