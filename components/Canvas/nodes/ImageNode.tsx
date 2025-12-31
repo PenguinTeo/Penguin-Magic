@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import type { CanvasNodeData } from '../index';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { normalizeImageUrl } from '../../../App';
+import { normalizeImageUrl } from '../../../utils/image';
 
 const ImageNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const { theme } = useTheme();

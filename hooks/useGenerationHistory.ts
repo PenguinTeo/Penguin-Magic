@@ -3,7 +3,7 @@
  * 封装历史记录的 CRUD 操作和状态
  */
 
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { GenerationHistory, SmartPlusConfig } from '../types';
 import * as historyApi from '../services/api/history';
 import { saveToOutput, downloadRemoteToOutput } from '../services/api/files';

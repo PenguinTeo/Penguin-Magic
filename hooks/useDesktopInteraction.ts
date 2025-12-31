@@ -3,7 +3,7 @@
  * 处理拖拽、选择框、键盘操作、右键菜单等交互
  */
 
-import { useState, useCallback, useEffect, RefObject } from 'react';
+import React, { useState, useCallback, useEffect, RefObject } from 'react';
 import { DesktopItem, DesktopPosition, DesktopFolderItem, DesktopImageItem } from '../types';
 import { ICON_SIZE, TOP_OFFSET, PADDING } from './useDesktopLayout';
 

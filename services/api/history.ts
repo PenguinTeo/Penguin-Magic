@@ -35,7 +35,7 @@ export const getHistoryList = async (page: number = 1, limit: number = 20): Prom
       },
     };
   }
-  return { success: false, error: result.error };
+  return { success: false, error: 'error' in result ? result.error : '请求失败' };
 };
 
 // 获取单条历史记录
@@ -48,7 +48,7 @@ export const getHistoryById = async (id: number): Promise<{ success: boolean; da
     }
     return { success: false, error: '记录不存在' };
   }
-  return { success: false, error: result.error };
+  return { success: false, error: 'error' in result ? result.error : '请求失败' };
 };
 
 // 创建历史记录
