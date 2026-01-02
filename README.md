@@ -1,4 +1,4 @@
-<div align="center">
+<img width="1024" height="1024" alt="企鹅工坊 Logo" src="./微信图片_20260102125827_1310_63.png" /><div align="center">
 
 # 🐧 企鹅工坊 Penguin Magic
 
