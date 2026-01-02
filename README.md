@@ -102,7 +102,7 @@
 ### 方式一：桌面版（推荐 ⭐）
 
 **下载安装包**
-1. 前往 [Releases](https://github.com/yzz05220-rgb/Penguin-Magic/releases) 页面
+1. 前往 [Releases](https://github.com/PenguinTeo/Penguin-Magic/releases) 页面
 2. 下载最新版 `企鹅工坊-Setup-x.x.x.exe`
 3. 双击安装，启动即用
 
