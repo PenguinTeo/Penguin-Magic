@@ -1,0 +1,9 @@
+请将微信群二维码图片保存为：wechat-qr.jpg
+
+图片要求：
+- 文件名：wechat-qr.jpg
+- 位置：Penguin-Magic-main 根目录
+- 格式：JPG 或 PNG
+- 建议尺寸：300x300 或更大
+
+保存后，README.md 中的二维码图片链接将自动生效。

@@ -1,0 +1,96 @@
+# 应用程序配置
+appId: com.penguin-magic.app
+productName: 企鹅工坊
+copyright: Copyright © 2025 PenguinTeo
+
+# 目录配置
+directories:
+  buildResources: build/resources
+  output: release
+
+# 包含的文件
+files:
+  - dist/**/*
+  - electron/**/*
+  - "!**/*.ts"
+  - "!**/node_modules/**/*"
+  - "!**/.git/**/*"
+
+# 额外资源 - 后端和 Node.js 运行时
+extraResources:
+  # Node.js 运行时
+  - from: build/nodejs
+    to: nodejs
+    filter:
+      - "**/*"
+  # 后端源码和依赖
+  - from: backend-nodejs/src
+    to: backend/src
+    filter:
+      - "**/*"
+  - from: backend-nodejs/node_modules
+    to: backend/node_modules
+    filter:
+      - "**/*"
+  - from: backend-nodejs/package.json
+    to: backend/package.json
+
+# ASAR 配置 - 不打包成 asar，方便调试
+asar: false
+
+# Windows 配置
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # 图标配置 - 如果不存在会使用默认图标
+  # icon: build/resources/icon.ico
+  # 禁用代码签名
+  sign: null
+  signingHashAlgorithms: []
+
+# NSIS 安装器配置
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 企鹅工坊
+  perMachine: false
+  allowElevation: true
+  # installerIcon: build/resources/icon.ico
+  # uninstallerIcon: build/resources/icon.ico
+  artifactName: ${productName}-Setup-${version}.${ext}
+
+# macOS 配置
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  # icon: build/resources/icon.icns
+  category: public.app-category.utilities
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+# DMG 配置
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+# Linux 配置
+linux:
+  target:
+    - AppImage
+    - deb
+  # icon: build/resources/icon.png
+  category: Utility
+  artifactName: ${productName}-${version}.${ext}
+
+# Electron 下载配置
+electronDownload:
+  cache: ./electron-cache
+  mirror: https://npmmirror.com/mirrors/electron/
+
+# 不重新编译原生模块
+npmRebuild: false

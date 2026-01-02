@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "title": "风景画",
+    "prompts": ["风景画，山水，自然"],
+    "images": ["/test-images/landscape.jpg"],
+    "author": "test",
+    "cost": 1,
+    "isBP": false,
+    "isSmart": true
+  },
+  {
+    "id": 2,
+    "title": "人物肖像",
+    "prompts": ["人物肖像，写实风格"],
+    "images": ["/test-images/portrait.jpg"],
+    "author": "test",
+    "cost": 1,
+    "isBP": false,
+    "isSmart": true
+  },
+  {
+    "id": 3,
+    "title": "抽象艺术",
+    "prompts": ["抽象艺术，色彩斑斓"],
+    "images": ["/test-images/abstract.jpg"],
+    "author": "test",
+    "cost": 1,
+    "isBP": false,
+    "isSmart": true
+  }
+]

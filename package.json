@@ -1,0 +1,35 @@
+{
+  "name": "penguin-magic",
+  "productName": "企鹅工坊",
+  "private": true,
+  "version": "0.3.1",
+  "description": "企鹅艾洛魔法世界 - 创意工具应用",
+  "type": "module",
+  "main": "electron/main.js",
+  "author": "PenguinTeo",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "cross-env NODE_ENV=development electron .",
+    "build": "vite build",
+    "build:all": "node scripts/build.js",
+    "build:win": "npm run build && electron-builder --win --config electron-builder.yml",
+    "preview": "vite preview",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@google/genai": "^1.16.0",
+    "@xyflow/react": "^12.10.0",
+    "jszip": "^3.10.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^25.1.1",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

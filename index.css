@@ -1,0 +1,971 @@
+/* ===========================================
+   PenguinMagic UI - 现代暗色精致样式系统
+   =========================================== */
+
+/* 基础重置和全局样式 */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* 核心颜色 - 冰雪极光主题 */
+  --color-background: #0a0a0a;
+  --color-surface: #171717;
+  --color-primary: #ffffff;
+  --color-secondary: #a3a3a3;
+  --color-accent: #3b82f6; /* 蓝色 */
+  --color-accent-light: #60a5fa; /* 浅蓝 */
+  
+  /* 中性色阶 */
+  --color-neutral-100: #f5f5f5;
+  --color-neutral-400: #a3a3a3;
+  --color-neutral-500: #737373;
+  --color-neutral-600: #525252;
+  
+  /* 透明度规范 */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-emphasis: rgba(255, 255, 255, 0.2);
+  --overlay-default: rgba(0, 0, 0, 0.5);
+  --overlay-heavy: rgba(0, 0, 0, 0.8);
+  
+  /* 缓动函数 */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* 液态组件变量 */
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-hover: rgba(255, 255, 255, 0.08);
+  --glass-glow: rgba(59, 130, 246, 0.15); /* 冰蓝发光 */
+  
+  /* 阴影系统 */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16), 0 4px 8px rgba(0, 0, 0, 0.08);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 24px rgba(59, 130, 246, 0.2); /* 冰蓝发光 */
+  --shadow-white-glow: 0 4px 20px rgba(255, 255, 255, 0.1);
+  --shadow-inner: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* 全局字体 */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #171717;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 亮色主题变量 */
+.theme-light {
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-hover: rgba(0, 0, 0, 0.04);
+  --glass-glow: rgba(59, 130, 246, 0.1);
+  
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* 现代化滚动条 - 极细 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--glass-border);
+  border-radius: 100px;
+  transition: background 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--glass-hover);
+}
+
+/* ============================================
+   液态组件系统 - Liquid Glass Style
+   ============================================ */
+
+/* 液态组件卡片 - 核心样式 */
+.liquid-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s var(--ease-smooth);
+}
+
+.liquid-card:hover {
+  border-color: var(--glass-hover);
+  box-shadow: var(--shadow-md);
+}
+
+/* 液态组件按钮 */
+.liquid-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: white;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-smooth);
+  overflow: hidden;
+}
+
+.liquid-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.liquid-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-glow), var(--shadow-sm);
+}
+
+.liquid-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.liquid-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 小型按钮 */
+.liquid-btn-sm {
+  padding: 5px 10px;
+  font-size: 11px;
+  border-radius: 6px;
+  gap: 4px;
+}
+
+/* 图标按钮 */
+.liquid-btn-icon {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+/* 幽灵按钮 */
+.liquid-btn-ghost {
+  background: transparent;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.7));
+  border: 1px solid var(--glass-border);
+}
+
+.liquid-btn-ghost::before {
+  display: none;
+}
+
+.liquid-btn-ghost:hover {
+  background: var(--glass-hover);
+  border-color: var(--glass-hover);
+  box-shadow: none;
+}
+
+.theme-light .liquid-btn-ghost {
+  color: #475569;
+}
+
+.theme-light .liquid-btn-ghost:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #0f172a;
+}
+
+/* 液态组件输入框 */
+.liquid-input {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-primary, white);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.2s var(--ease-smooth);
+}
+
+.liquid-input:hover {
+  border-color: var(--glass-hover);
+}
+
+.liquid-input:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.liquid-input::placeholder {
+  color: var(--color-text-muted, rgba(255, 255, 255, 0.3));
+  font-size: 12px;
+}
+
+.theme-light .liquid-input {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #0f172a;
+}
+
+.theme-light .liquid-input::placeholder {
+  color: #94a3b8;
+}
+
+/* 小型输入框 */
+.liquid-input-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+/* 液态组件标签 */
+.liquid-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  backdrop-filter: blur(20px);
+}
+
+.liquid-tab {
+  position: relative;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted, rgba(255, 255, 255, 0.5));
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-smooth);
+}
+
+.liquid-tab:hover {
+  color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+  background: var(--glass-hover);
+}
+
+.liquid-tab.active {
+  color: white;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(59, 130, 246, 0.7) 100%);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.theme-light .liquid-tabs {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-light .liquid-tab {
+  color: #64748b;
+}
+
+.theme-light .liquid-tab:hover {
+  color: #0f172a;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* 液态组件徽章 */
+.liquid-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border-radius: 5px;
+  backdrop-filter: blur(8px);
+}
+
+.liquid-badge.primary {
+  color: #a5b4fc;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.liquid-badge.success {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.liquid-badge.warning {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.theme-light .liquid-badge.primary {
+  color: #2563eb;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.theme-light .liquid-badge.success {
+  color: #16a34a;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+/* 液态组件面板 */
+.liquid-panel {
+  background: linear-gradient(180deg, 
+    rgba(18, 18, 26, 0.98) 0%, 
+    rgba(14, 14, 20, 0.96) 100%);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid var(--glass-border);
+}
+
+.liquid-panel-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.liquid-panel-section:last-child {
+  border-bottom: none;
+}
+
+.theme-light .liquid-panel {
+  background: linear-gradient(180deg, 
+    rgba(255, 255, 255, 0.98) 0%, 
+    rgba(248, 250, 252, 0.96) 100%);
+}
+
+/* 日间模式综合修复 */
+.theme-light .modern-card,
+.theme-light .liquid-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+.theme-light .modern-input,
+.theme-light textarea.liquid-input {
+  background: rgba(248, 250, 252, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #0f172a;
+}
+
+.theme-light .modern-input::placeholder,
+.theme-light textarea.liquid-input::placeholder {
+  color: #94a3b8;
+}
+
+/* 日间模式按钮 */
+.theme-light .bg-white\/4,
+.theme-light .bg-white\/5 {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+.theme-light .bg-white\/8,
+.theme-light .hover\:bg-white\/8:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+.theme-light .bg-white\/3 {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+/* 日间模式文字 */
+.theme-light .text-white {
+  color: #0f172a !important;
+}
+
+.theme-light .text-gray-300 {
+  color: #475569 !important;
+}
+
+.theme-light .text-gray-400 {
+  color: #64748b !important;
+}
+
+.theme-light .text-gray-500 {
+  color: #64748b !important;
+}
+
+.theme-light .hover\:text-gray-300:hover {
+  color: #334155 !important;
+}
+
+/* 日间模式背景 */
+.theme-light .bg-gray-700 {
+  background: #e2e8f0 !important;
+}
+
+.theme-light .bg-gray-800 {
+  background: #f1f5f9 !important;
+}
+
+.theme-light .bg-gray-900 {
+  background: #ffffff !important;
+}
+
+/* 日间模式边框 */
+.theme-light .border-gray-700 {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.theme-light .border-gray-700\/50 {
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 日间模式开关 */
+.theme-light .peer-checked\:bg-blue-500 {
+  background: #3b82f6 !important;
+}
+
+/* 日间模式弹窗 */
+.theme-light .bg-black\/85 {
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 日间模式卡片悬浮 */
+.theme-light .hover\:bg-gray-700:hover {
+  background: #e2e8f0 !important;
+}
+
+.theme-light .hover\:bg-gray-800:hover {
+  background: #f1f5f9 !important;
+}
+
+/* 日间模式 placeholder */
+.theme-light .placeholder-gray-500::placeholder,
+.theme-light .placeholder-gray-600::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* 日间模式滑动条 */
+.theme-light .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.theme-light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* 日间模式标签颜色 */
+.theme-light .text-blue-400 {
+  color: #3b82f6 !important;
+}
+
+.theme-light .text-blue-300 {
+  color: #60a5fa !important;
+}
+
+.theme-light .text-blue-400 {
+  color: #3b82f6 !important;
+}
+
+/* 日间模式半透明背景 */
+.theme-light .bg-blue-500\/15 {
+  background: rgba(59, 130, 246, 0.12) !important;
+}
+
+.theme-light .bg-blue-400\/10,
+.theme-light .bg-blue-400\/15 {
+  background: rgba(59, 130, 246, 0.1) !important;
+}
+
+.theme-light .bg-blue-500\/10,
+.theme-light .bg-blue-500\/20 {
+  background: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* 日间模式 ReactFlow 控件 */
+.theme-light .react-flow__controls-button {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: #475569 !important;
+}
+
+.theme-light .react-flow__controls-button:hover {
+  background-color: rgba(241, 245, 249, 1) !important;
+  color: #0f172a !important;
+}
+
+/* 日间模式标签边框 */
+.theme-light .border-blue-500\/30,
+.theme-light .border-blue-500\/20 {
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+
+/* 日间模式弹窗背景 */
+.theme-light .bg-gray-800\/50 {
+  background: rgba(248, 250, 252, 0.95) !important;
+}
+
+/* 日间模式 focus 状态 */
+.theme-light .focus\:border-blue-500:focus,
+.theme-light .focus\:border-blue-500\/50:focus {
+  border-color: rgba(59, 130, 246, 0.6) !important;
+}
+
+.theme-light .focus\:ring-blue-500\/20:focus {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+}
+
+/* 液态组件标题 */
+.liquid-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted, rgba(255, 255, 255, 0.4));
+}
+
+.theme-light .liquid-title {
+  color: #64748b;
+}
+
+/* 渐变文字 - 冰雪极光 */
+.gradient-text {
+  background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 50%, #ffffff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ============================================
+   新版组件样式 - Modern Dark UI
+   ============================================ */
+
+/* 卡片样式 */
+.modern-card {
+  position: relative;
+  background: var(--color-surface);
+  border-radius: 1rem; /* rounded-2xl */
+  box-shadow: var(--shadow-2xl);
+  transition: transform 200ms ease-out;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.modern-card:hover {
+  transform: translateY(-2px);
+}
+
+/* 主要按钮（激活状态） */
+.btn-primary {
+  background: white;
+  color: black;
+  box-shadow: var(--shadow-white-glow);
+  border-radius: 0.75rem; /* rounded-xl */
+  font-weight: 500;
+  transition: all 200ms ease-out;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(255, 255, 255, 0.15);
+}
+
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* 次要按钮 */
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 9999px; /* rounded-full */
+  transition: all 200ms ease-out;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 导航按钮 */
+.btn-nav {
+  padding: 0.5rem 0.75rem;
+  border-radius: 9999px;
+  color: var(--color-secondary);
+  transition: all 200ms ease-out;
+}
+
+.btn-nav:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* 标签样式 */
+.tag {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  backdrop-filter: blur(16px);
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg);
+}
+
+/* 输入框样式 */
+.input-modern {
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: white;
+  transition: border-color 300ms ease-out;
+}
+
+.input-modern::placeholder {
+  color: var(--color-neutral-600);
+}
+
+.input-modern:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 动效规范 */
+.animate-fast { transition-duration: 200ms; }
+.animate-normal { transition-duration: 300ms; }
+.animate-slow { transition-duration: 500ms; }
+.animate-slower { transition-duration: 1500ms; }
+
+/* 悬浮效果 */
+.hover-scale:hover {
+  transform: scale(1.1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* 图标动画 */
+.icon-animate {
+  transition: transform 200ms ease-out;
+}
+
+.group:hover .icon-animate {
+  transform: translateY(-2px) translateX(2px);
+}
+
+/* 3D 效果 */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+/* 页面进入动画 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 1000ms ease-out;
+}
+
+/* 亮色主题的背景渐变覆盖 */
+.theme-light .bg-gradient-to-br {
+  --tw-gradient-from: rgba(59, 130, 246, 0.05);
+  --tw-gradient-to: rgba(59, 130, 246, 0.03);
+}
+
+/* 光晕效果 */
+.glow-effect {
+  position: relative;
+}
+
+.glow-effect::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 50%, #ffffff 100%);
+  border-radius: inherit;
+  opacity: 0;
+  filter: blur(12px);
+  z-index: -1;
+  transition: opacity 0.3s ease;
+}
+
+.glow-effect:hover::after {
+  opacity: 0.4;
+}
+
+/* 猁璃效果背景 */
+.glass-bg {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.2s ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.15s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* 微交互效果 */
+.hover-lift {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.hover-glow {
+  transition: box-shadow 0.15s ease;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+}
+
+/* 加载动画 */
+.loading-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* 焦点状态优化 */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* 禁用状态 */
+.disabled-state {
+  opacity: 0.4;
+  pointer-events: none;
+  filter: grayscale(0.3);
+}
+
+/* ReactFlow 画布样式增强 */
+
+/* 连接点样式 - 增强吸附感 */
+.react-flow__handle {
+  transition: all 0.15s ease-out !important;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.4) !important;
+  box-shadow: 0 0 12px currentColor !important;
+}
+
+/* 连接中的连接点高亮 */
+.react-flow__handle.connecting {
+  animation: pulse-glow 0.8s ease-in-out infinite !important;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px currentColor;
+    transform: scale(1.2);
+  }
+  50% {
+    box-shadow: 0 0 16px currentColor;
+    transform: scale(1.5);
+  }
+}
+
+/* 有效连接目标高亮 */
+.react-flow__handle.valid {
+  background-color: #22c55e !important;
+  box-shadow: 0 0 16px #22c55e !important;
+  transform: scale(1.5) !important;
+}
+
+/* 连接线拖拽时的样式 */
+.react-flow__connection-line {
+  stroke-width: 3 !important;
+}
+
+/* 边的交互效果 */
+.react-flow__edge {
+  cursor: pointer;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 4 !important;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+
+/* 选中的边 */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 4 !important;
+  stroke: #f43f5e !important;
+}
+
+/* 节点选中效果 */
+.react-flow__node.selected {
+  z-index: 10 !important;
+}
+
+/* MiniMap 样式 */
+.react-flow__minimap {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+/* Controls 样式 */
+.react-flow__controls {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+.react-flow__controls-button {
+  background-color: rgba(30, 30, 40, 0.8) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  transition: all 0.15s ease !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: rgba(60, 60, 80, 0.9) !important;
+  color: white !important;
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+}
+
+/* 背景网格 */
+.react-flow__background {
+  opacity: 0.8;
+}
+
+/* 节点拖拽时的效果 */
+.react-flow__node.dragging {
+  cursor: grabbing !important;
+  z-index: 100 !important;
+}
+
+/* 边删除按钮样式增强 */
+.react-flow__edgelabel-renderer button {
+  opacity: 0 !important;
+  transition: all 0.2s ease !important;
+}
+
+.react-flow__edge:hover + .react-flow__edgelabel-renderer button,
+.react-flow__edgelabel-renderer:hover button {
+  opacity: 1 !important;
+}
+
+/* 连接线动画 */
+.react-flow__edge-path {
+  transition: stroke-width 0.15s ease, stroke 0.15s ease !important;
+}
+
+/* 吸附提示 */
+.react-flow__handle[data-handlepos="left"]::before,
+.react-flow__handle[data-handlepos="right"]::before {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: transparent;
+  pointer-events: all;
+}
+
+/* 增大连接点的可点击区域 */
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  pointer-events: all;
+}

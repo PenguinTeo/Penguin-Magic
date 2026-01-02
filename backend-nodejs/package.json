@@ -1,0 +1,40 @@
+{
+  "name": "penguin-magic-backend",
+  "version": "1.0.0",
+  "description": "企鹅艾洛魔法世界 - Node.js后端服务",
+  "main": "src/server.js",
+  "bin": {
+    "penguin-backend": "src/server.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "build": "npx @yao-pkg/pkg ./src/server.js --targets node20-win-x64 --output penguin-backend.exe --config package.json"
+  },
+  "keywords": [
+    "penguin",
+    "magic",
+    "backend"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.0"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^5.15.0"
+  },
+  "pkg": {
+    "targets": [
+      "node20-win-x64"
+    ],
+    "scripts": [
+      "src/**/*.js"
+    ],
+    "assets": [
+      "../dist/**/*"
+    ],
+    "outputPath": "."
+  }
+}

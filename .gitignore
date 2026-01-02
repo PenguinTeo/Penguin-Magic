@@ -1,0 +1,61 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+dist-electron
+*.local
+doc
+
+# Electron build
+release/
+out/
+electron-cache/
+build/nodejs/
+build/backend/node_modules/
+
+# 安装包和大文件
+*.exe
+*.zip
+*.msi
+*.dmg
+*.AppImage
+
+# 用户数据（不上传内容，保留目录结构）
+data/*.json
+creative_images/*
+output/*
+input/*
+thumbnails/*
+!data/.gitkeep
+!creative_images/.gitkeep
+!output/.gitkeep
+!input/.gitkeep
+!thumbnails/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 环境变量
+.env
+.env.*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
