@@ -162,14 +162,44 @@ export const useCreativeIdeas = (): UseCreativeIdeasReturn => {
     }
   }, [isImporting, loadCreativeIdeas]);
   
-  // 导出创意
-  const exportCreativeIdeas = useCallback(() => {
+  // 导出创意（将本地图片转换为base64，方便跨设备导入）
+  const exportCreativeIdeas = useCallback(async () => {
     if (creativeIdeas.length === 0) {
       alert('库是空的 / Library is empty.');
       return;
     }
     
-    const dataStr = JSON.stringify(creativeIdeas, null, 2);
+    // 转换本地图片为base64
+    const convertImageToBase64 = async (url: string): Promise<string> => {
+      // 如果已经是base64或远程URL，直接返回
+      if (!url || url.startsWith('data:') || url.startsWith('http')) {
+        return url;
+      }
+      
+      try {
+        // 本地文件路径，转换为base64
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(url); // 失败时保留原始URL
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return url; // 转换失败时保留原始URL
+      }
+    };
+    
+    // 并行转换所有图片
+    const exportData = await Promise.all(
+      creativeIdeas.map(async (idea) => ({
+        ...idea,
+        imageUrl: await convertImageToBase64(idea.imageUrl)
+      }))
+    );
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     

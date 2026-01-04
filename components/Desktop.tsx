@@ -1444,19 +1444,28 @@ export const Desktop: React.FC<DesktopProps> = ({
                     <p className="mt-2 text-[10px] text-gray-400 font-medium">生成中...</p>
                   </div>
                 ) : (item as DesktopImageItem).loadingError ? (
-                  // 错误状态：显示错误信息
+                  // 错误状态：统一简洁格式，按空格查看详情
                   <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-red-900/80 to-gray-900 p-2">
-                    <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center mb-1">
-                      <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center mb-1">
+                      <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
-                    <p className="text-[9px] text-red-300 text-center leading-tight font-medium">
-                      {((item as DesktopImageItem).loadingError || '').length > 30 
-                        ? (item as DesktopImageItem).loadingError?.slice(0, 30) + '...' 
-                        : (item as DesktopImageItem).loadingError}
+                    <p className="text-[9px] text-red-300 text-center font-medium line-clamp-2 px-1">
+                      {(item as DesktopImageItem).loadingError}
                     </p>
                     <p className="mt-1 text-[8px] text-gray-500">右键重新生成</p>
+                  </div>
+                ) : !((item as DesktopImageItem).imageUrl) ? (
+                  // 图片丢失状态：统一格式
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-yellow-900/60 to-gray-900 p-2">
+                    <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center mb-1">
+                      <svg className="w-6 h-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <p className="text-[9px] text-yellow-300 text-center font-medium line-clamp-2 px-1">图片已丢失</p>
+                    <p className="mt-1 text-[8px] text-gray-500">可删除此项</p>
                   </div>
                 ) : (
                   // 正常状态：显示图片
@@ -1652,69 +1661,124 @@ export const Desktop: React.FC<DesktopProps> = ({
           >
             {/* 毛玻璃背景卡片 */}
             <div className="bg-black/60 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
-              {/* 放大的图片预览 - 按实际比例显示 */}
-              <div 
-                className="relative cursor-pointer group flex items-center justify-center p-4"
-                onClick={() => onImagePreview?.(selectedImageItem)}
-              >
-                <img
-                  src={normalizeImageUrl(selectedImageItem.imageUrl)}
-                  alt={selectedImageItem.name}
-                  className="rounded-lg"
-                  style={{
-                    maxWidth: PREVIEW_WIDTH - 32,
-                    maxHeight: 300,
-                    width: 'auto',
-                    height: 'auto',
-                    objectFit: 'contain',
-                  }}
-                  draggable={false}
-                />
-                {/* 悬浮放大提示 */}
-                <div className="absolute inset-4 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
-                  <div className="bg-white/20 backdrop-blur-sm rounded-full p-3">
-                    <ZoomInIcon className="w-6 h-6 text-white" />
+              {/* 错误状态显示完整信息 */}
+              {selectedImageItem.loadingError ? (
+                <div className="p-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-red-300 font-medium text-sm mb-1">生成失败</p>
+                      <p className="text-gray-300 text-xs leading-relaxed break-words">{selectedImageItem.loadingError}</p>
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-gray-500 border-t border-white/10 pt-3">
+                    <p>提示：可以右键选择“重新生成”或删除此项</p>
                   </div>
                 </div>
-              </div>
-              
-              {/* 底部操作按钮 */}
-              <div className="px-4 pb-4 flex items-center justify-center gap-2 flex-wrap">
-                {/* 下载 - 浓琉璃#004097 */}
-                <button
-                  onClick={() => handleDownloadImage(selectedImageItem)}
-                  className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
-                  style={{ backgroundColor: '#004097', color: '#feffef' }}
-                  title="下载图片"
-                >
-                  <DownloadIcon className="w-4 h-4" />
-                  <span>下载</span>
-                </button>
-                {/* 再编辑 - 玄青#3b3c50 */}
-                {onImageEditAgain && (
-                  <button
-                    onClick={() => onImageEditAgain(selectedImageItem)}
-                    className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
-                    style={{ backgroundColor: '#3b3c50', color: '#feffef' }}
-                    title="再次编辑"
+              ) : !selectedImageItem.imageUrl ? (
+                /* 图片丢失状态 */
+                <div className="p-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-6 h-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-yellow-300 font-medium text-sm mb-1">图片丢失</p>
+                      <p className="text-gray-300 text-xs leading-relaxed">本地文件不存在或已被删除</p>
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-gray-500 border-t border-white/10 pt-3">
+                    <p>提示：可以删除此项或尝试重新生成</p>
+                  </div>
+                </div>
+              ) : (
+                /* 正常图片预览 */
+                <>
+                  <div 
+                    className="relative cursor-pointer group flex items-center justify-center p-4"
+                    onClick={() => onImagePreview?.(selectedImageItem)}
                   >
-                    <EditIcon className="w-4 h-4" />
-                    <span>编辑</span>
-                  </button>
-                )}
-                {/* 重新生成 - 玄青#3b3c50 */}
-                {onImageRegenerate && (
-                  <button
-                    onClick={() => onImageRegenerate(selectedImageItem)}
-                    className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
-                    style={{ backgroundColor: '#3b3c50', color: '#feffef' }}
-                    title="重新生成"
-                  >
-                    <RefreshIcon className="w-4 h-4" />
-                    <span>重生成</span>
-                  </button>
-                )}
-              </div>
+                    <img
+                      src={normalizeImageUrl(selectedImageItem.imageUrl)}
+                      alt={selectedImageItem.name}
+                      className="rounded-lg"
+                      style={{
+                        maxWidth: PREVIEW_WIDTH - 32,
+                        maxHeight: 300,
+                        width: 'auto',
+                        height: 'auto',
+                        objectFit: 'contain',
+                      }}
+                      draggable={false}
+                      onError={(e) => {
+                        // 图片加载失败时显示错误提示
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const errorDiv = target.parentElement?.querySelector('.load-error');
+                        if (errorDiv) (errorDiv as HTMLElement).style.display = 'flex';
+                      }}
+                    />
+                    {/* 图片加载失败时显示 */}
+                    <div className="load-error hidden flex-col items-center justify-center text-center py-8" style={{display: 'none'}}>
+                      <svg className="w-12 h-12 text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <p className="text-gray-400 text-sm">图片加载失败</p>
+                      <p className="text-gray-500 text-xs mt-1">文件可能已被移动或删除</p>
+                    </div>
+                    {/* 悬浮放大提示 */}
+                    <div className="absolute inset-4 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg">
+                      <div className="bg-white/20 backdrop-blur-sm rounded-full p-3">
+                        <ZoomInIcon className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 底部操作按钮 */}
+                  <div className="px-4 pb-4 flex items-center justify-center gap-2 flex-wrap">
+                    {/* 下载 - 浓琉璃#004097 */}
+                    <button
+                      onClick={() => handleDownloadImage(selectedImageItem)}
+                      className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
+                      style={{ backgroundColor: '#004097', color: '#feffef' }}
+                      title="下载图片"
+                    >
+                      <DownloadIcon className="w-4 h-4" />
+                      <span>下载</span>
+                    </button>
+                    {/* 再编辑 - 玄青#3b3c50 */}
+                    {onImageEditAgain && (
+                      <button
+                        onClick={() => onImageEditAgain(selectedImageItem)}
+                        className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
+                        style={{ backgroundColor: '#3b3c50', color: '#feffef' }}
+                        title="再次编辑"
+                      >
+                        <EditIcon className="w-4 h-4" />
+                        <span>编辑</span>
+                      </button>
+                    )}
+                    {/* 重新生成 - 玄青#3b3c50 */}
+                    {onImageRegenerate && (
+                      <button
+                        onClick={() => onImageRegenerate(selectedImageItem)}
+                        className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
+                        style={{ backgroundColor: '#3b3c50', color: '#feffef' }}
+                        title="重新生成"
+                      >
+                        <RefreshIcon className="w-4 h-4" />
+                        <span>重生成</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         );

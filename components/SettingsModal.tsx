@@ -1,7 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
-import { CloudIcon, PlugIcon, DiamondIcon } from './icons/PIcon';
+import { PlugIcon, DiamondIcon } from './icons/PIcon';
+import { EyeIcon, EyeOffIcon } from './icons/EyeIcon';
+import { KeyIcon } from './icons/KeyIcon';
+import { 
+  MoonIcon, 
+  SunIcon, 
+  ChristmasTreeIcon, 
+  ForestIcon, 
+  FlowerIcon, 
+  SunsetIcon, 
+  WaveIcon,
+  SaveIcon,
+  CpuIcon,
+  InfoIcon
+} from './icons/ThemeIcons';
+
+// 应用版本号
+const APP_VERSION = '1.0.0';
+
+// 主题图标映射
+const themeIconMap: Record<ThemeName, React.FC<{ className?: string }>> = {
+  dark: MoonIcon,
+  light: SunIcon,
+  christmas: ChristmasTreeIcon,
+  forest: ForestIcon,
+  lavender: FlowerIcon,
+  sunset: SunsetIcon,
+  ocean: WaveIcon,
+};
+
+// 主题颜色预览 - 用于展示主题特色
+const themePreviewColors: Record<ThemeName, string[]> = {
+  dark: ['#3b82f6', '#1a1a24', '#60a5fa'],
+  light: ['#3b82f6', '#f1f5f9', '#818cf8'],
+  christmas: ['#dc2626', '#16a34a', '#eab308'],
+  forest: ['#22c55e', '#1a3a23', '#84cc16'],
+  lavender: ['#a78bfa', '#2a1a40', '#e879f9'],
+  sunset: ['#f97316', '#3d1818', '#f43f5e'],
+  ocean: ['#0ea5e9', '#164e63', '#3b82f6'],
+};
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -77,13 +116,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       apiKey: localThirdPartyKey,
       baseUrl: localThirdPartyUrl,
     });
-    setSaveSuccessMessage('贞贞 API 配置已保存 ✅');
+    setSaveSuccessMessage('贞贞 API 配置已保存');
     setTimeout(() => setSaveSuccessMessage(null), 2000);
   };
 
   const handleSaveGeminiKey = () => {
     onGeminiApiKeySave(localGeminiKey);
-    setSaveSuccessMessage('Gemini API Key 已保存 ✅');
+    setSaveSuccessMessage('Gemini API Key 已保存');
     setTimeout(() => setSaveSuccessMessage(null), 2000);
   };
 
@@ -105,8 +144,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       >
         {/* 保存成功提示 */}
         {saveSuccessMessage && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 text-white text-sm font-medium rounded-lg shadow-lg animate-fade-in"
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 text-white text-sm font-medium rounded-lg shadow-lg animate-fade-in flex items-center gap-2"
             style={{ background: colors.primary }}>
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
             {saveSuccessMessage}
           </div>
         )}
@@ -205,10 +247,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
                       style={{ color: colors.textSecondary }}
                     >
-                      {showApiKey ? '🙈' : '👁️'}
+                      {showApiKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -223,7 +265,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     border: `1px solid ${colors.border}`
                   }}
                 >
-                  🔑 获取Key
+                  <KeyIcon className="w-3.5 h-3.5" />
+                  <span>获取 Key</span>
                 </a>
                 <button
                   onClick={handleSaveLocalThirdParty}
@@ -287,10 +330,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
                       style={{ color: colors.textSecondary }}
                     >
-                      {showApiKey ? '🙈' : '👁️'}
+                      {showApiKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -310,39 +353,82 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* 主题设置 */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.textSecondary }}>主题设置</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.textSecondary }}>主题外观</h3>
             
-            <div className="grid grid-cols-4 gap-2">
-              {allThemes.map((t) => (
-                <button
-                  key={t.name}
-                  onClick={() => setTheme(t.name)}
-                  className="relative p-3 rounded-xl border-2 transition-all hover:opacity-90"
-                  style={{
-                    borderColor: themeName === t.name ? colors.primary : colors.border,
-                    background: themeName === t.name ? `${colors.primary}15` : colors.bgTertiary
-                  }}
-                >
-                  <div className="text-2xl text-center mb-1">{t.icon}</div>
-                  <p className="text-xs text-center font-medium" style={{ color: colors.textSecondary }}>{t.displayName}</p>
-                  {themeName === t.name && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
-                      style={{ background: colors.primary }}>
-                      <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
+            <div className="grid grid-cols-2 gap-3">
+              {allThemes.map((t) => {
+                const ThemeIcon = themeIconMap[t.name];
+                const previewColors = themePreviewColors[t.name];
+                const isActive = themeName === t.name;
+                
+                return (
+                  <button
+                    key={t.name}
+                    onClick={() => setTheme(t.name)}
+                    className="relative p-3 rounded-xl border-2 transition-all hover:scale-[1.02] group"
+                    style={{
+                      borderColor: isActive ? colors.primary : colors.border,
+                      background: isActive ? `${colors.primary}10` : colors.bgTertiary
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* 图标容器 */}
+                      <div 
+                        className="w-10 h-10 rounded-xl flex items-center justify-center transition-all group-hover:scale-110"
+                        style={{ 
+                          background: isActive 
+                            ? `linear-gradient(135deg, ${previewColors[0]}, ${previewColors[2]})`
+                            : colors.bgSecondary,
+                          boxShadow: isActive ? `0 4px 12px ${previewColors[0]}40` : 'none'
+                        }}
+                      >
+                        <ThemeIcon className={`w-5 h-5 ${isActive ? 'text-white' : ''}`} />
+                      </div>
+                      
+                      {/* 主题信息 */}
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-semibold" style={{ color: colors.textPrimary }}>
+                          {t.displayName}
+                        </p>
+                        {/* 颜色预览条 */}
+                        <div className="flex gap-1 mt-1.5">
+                          {previewColors.map((color, i) => (
+                            <div 
+                              key={i}
+                              className="h-1.5 rounded-full flex-1 transition-all"
+                              style={{ 
+                                background: color,
+                                opacity: isActive ? 1 : 0.5
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </button>
-              ))}
+                    
+                    {/* 选中标记 */}
+                    {isActive && (
+                      <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow-lg"
+                        style={{ background: colors.primary }}>
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             
-            {/* 圣诞主题提示 */}
+            {/* 圣诞主题特别提示 */}
             {themeName === 'christmas' && (
-              <div className="flex items-center gap-2 p-3 rounded-xl animate-fade-in"
-                style={{ background: `${colors.primary}15`, border: `1px solid ${colors.border}` }}>
-                <span className="text-2xl">🎄</span>
-                <p className="text-xs" style={{ color: colors.textSecondary }}>圣诞快乐！🎁</p>
+              <div className="flex items-center gap-3 p-3 rounded-xl animate-fade-in"
+                style={{ 
+                  background: 'linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(22, 163, 74, 0.1))',
+                  border: `1px solid ${colors.border}` 
+                }}>
+                <ChristmasTreeIcon className="w-5 h-5" style={{ color: '#16a34a' }} />
+                <p className="text-xs" style={{ color: colors.textSecondary }}>已启用节日特效，祝你圣诞快乐！</p>
               </div>
             )}
           </div>
@@ -352,13 +438,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* 其他设置 */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.textSecondary }}>其他设置</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.textSecondary }}>功能设置</h3>
             
             {/* 自动保存 */}
             <div className="flex items-center justify-between p-3 rounded-xl border"
               style={{ background: colors.bgTertiary, borderColor: colors.border }}>
               <div className="flex items-center gap-3">
-                <span className="text-xl">💾</span>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center"
+                  style={{ background: `${colors.primary}15` }}>
+                  <SaveIcon className="w-4.5 h-4.5" style={{ color: colors.primary }} />
+                </div>
                 <div>
                   <h4 className="text-sm font-medium" style={{ color: colors.textPrimary }}>自动保存</h4>
                   <p className="text-xs" style={{ color: colors.textSecondary }}>生成图片后自动下载到本地</p>
@@ -380,19 +469,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center justify-between p-3 rounded-xl border"
               style={{ background: colors.bgTertiary, borderColor: colors.border }}>
               <div className="flex items-center gap-3">
-                <span className="text-xl">🤖</span>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center"
+                  style={{ background: `${colors.accent}15` }}>
+                  <CpuIcon className="w-4.5 h-4.5" style={{ color: colors.accent }} />
+                </div>
                 <div>
                   <h4 className="text-sm font-medium" style={{ color: colors.textPrimary }}>当前模型</h4>
                   <p className="text-xs" style={{ color: colors.textSecondary }}>正在使用的 AI 模型</p>
                 </div>
               </div>
-              <span className="text-xs font-medium px-3 py-1 rounded-full"
-                style={{ background: `${colors.primary}20`, color: colors.primaryLight, border: `1px solid ${colors.primary}30` }}>
+              <span className="text-xs font-medium px-3 py-1.5 rounded-lg"
+                style={{ background: `${colors.primary}15`, color: colors.primaryLight, border: `1px solid ${colors.primary}25` }}>
                 {activeMode === 'local-thirdparty' 
                   ? thirdPartyConfig.model || 'nano-banana-2' 
                   : 'Gemini 3 Pro'}
               </span>
             </div>
+          </div>
+
+          {/* 分割线 */}
+          <div style={{ borderTop: `1px solid ${colors.border}` }} />
+
+          {/* 关于信息 */}
+          <div className="flex items-center justify-between p-3 rounded-xl"
+            style={{ background: colors.bgTertiary, border: `1px solid ${colors.border}` }}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center"
+                style={{ background: `${colors.textMuted}15` }}>
+                <InfoIcon className="w-4.5 h-4.5" style={{ color: colors.textMuted }} />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium" style={{ color: colors.textPrimary }}>企鹅魔法</h4>
+                <p className="text-xs" style={{ color: colors.textSecondary }}>Penguin Magic Creative</p>
+              </div>
+            </div>
+            <span className="text-xs font-mono px-2.5 py-1 rounded-md"
+              style={{ background: colors.bgSecondary, color: colors.textMuted, border: `1px solid ${colors.border}` }}>
+              v{APP_VERSION}
+            </span>
           </div>
         </div>
 
