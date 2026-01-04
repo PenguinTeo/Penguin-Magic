@@ -34,11 +34,32 @@ __pycache__/
 .env
 .env.*
 
+# 可执行文件和打包产物
+*.exe
+penguin-backend.exe
+*.app
+*.dmg
+
+# 系统临时文件
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# 备份文件
+*.bak
+*.backup
+*.old
+*.tmp
+
+# 压缩文件（如果用于导出）
+*.zip
+*.tar.gz
+*.rar
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj

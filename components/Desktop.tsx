@@ -20,6 +20,7 @@ import { LayersIcon } from './icons/GridIcon';
 // JSZip 导出逻辑已迁移到 services/export/desktopExporter.ts
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
 import { normalizeImageUrl, getThumbnailUrl, parseErrorMessage, extractErrorCode } from '../utils/image';
+import { mergeImages } from '../services/api/imageOps';
 
 interface DesktopProps {
   items: DesktopItem[];
@@ -1232,6 +1233,56 @@ export const Desktop: React.FC<DesktopProps> = ({
     return { x: 0, y: 0 };
   };
 
+  // 图片合并处理函数
+  const handleMergeImages = useCallback(async (layout: 'horizontal' | 'vertical') => {
+    const selectedImages = selectedIds
+      .map(id => items.find(i => i.id === id) as DesktopImageItem)
+      .filter(i => i && i.type === 'image');
+      
+    if (selectedImages.length < 2) {
+      alert('请选中至少 2 张图片进行合并');
+      return;
+    }
+      
+    const imagePaths = selectedImages.map(img => img.imageUrl);
+      
+    try {
+      setIsExporting(true);
+      const result = await mergeImages({
+        imagePaths,
+        layout,
+        spacing: 10,
+        backgroundColor: '#FFFFFF',
+      });
+        
+      if (result.success) {
+        // 在桌面上创建新图片
+        const newImage: DesktopImageItem = {
+          id: generateId(),
+          type: 'image',
+          name: `合并图片_${Date.now()}`,
+          imageUrl: result.data.imageUrl,
+          position: findNextFreePosition(),
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        onItemsChange([...items, newImage]);
+        onSelectionChange([newImage.id]);
+        alert(`图片合并成功！尺寸: ${result.data.width}x${result.data.height}`);
+      } else {
+        // result.success === false
+        // @ts-ignore - TypeScript doesn't narrow the union type correctly in else branch
+        alert(`合并失败: ${result.error || '未知错误'}`);
+      }
+    } catch (error: any) {
+      console.error('图片合并失败:', error);
+      alert(`合并失败: ${error.message || '未知错误'}`);
+    } finally {
+      setIsExporting(false);
+      setContextMenu(null);
+    }
+  }, [selectedIds, items, onItemsChange, onSelectionChange, maxX, maxY, gridSize]);
+
   return (
     <div
       ref={containerRef}
@@ -2079,14 +2130,36 @@ export const Desktop: React.FC<DesktopProps> = ({
               )}
               {/* 选中多个图片时可以叠放 */}
               {selectedIds.length >= 2 && selectedIds.every(id => items.find(i => i.id === id)?.type === 'image') && (
-                <button
-                  onClick={handleCreateStack}
-                  className="w-full px-3 py-2 text-left text-[12px] hover:bg-indigo-500/10 transition-colors flex items-center gap-2"
-                  style={{ color: theme.colors.textPrimary }}
-                >
-                  <LayersIcon className="w-4 h-4 text-indigo-400" />
-                  <span>叠放选中图片 ({selectedIds.length})</span>
-                </button>
+                <>
+                  <button
+                    onClick={handleCreateStack}
+                    className="w-full px-3 py-2 text-left text-[12px] hover:bg-indigo-500/10 transition-colors flex items-center gap-2"
+                    style={{ color: theme.colors.textPrimary }}
+                  >
+                    <LayersIcon className="w-4 h-4 text-indigo-400" />
+                    <span>叠放选中图片 ({selectedIds.length})</span>
+                  </button>
+                  {/* 图片合并选项 */}
+                  <div className="h-px my-1" style={{ background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }} />
+                  <button
+                    onClick={() => handleMergeImages('horizontal')}
+                    disabled={isExporting}
+                    className="w-full px-3 py-2 text-left text-[12px] hover:bg-teal-500/10 transition-colors flex items-center gap-2 disabled:opacity-50"
+                    style={{ color: theme.colors.textPrimary }}
+                  >
+                    <span className="w-4 h-4 flex items-center justify-center text-teal-400">↔</span>
+                    <span>{isExporting ? '合并中...' : '左右合并图片'}</span>
+                  </button>
+                  <button
+                    onClick={() => handleMergeImages('vertical')}
+                    disabled={isExporting}
+                    className="w-full px-3 py-2 text-left text-[12px] hover:bg-teal-500/10 transition-colors flex items-center gap-2 disabled:opacity-50"
+                    style={{ color: theme.colors.textPrimary }}
+                  >
+                    <span className="w-4 h-4 flex items-center justify-center text-teal-400">↕</span>
+                    <span>{isExporting ? '合并中...' : '上下合并图片'}</span>
+                  </button>
+                </>
               )}
               {/* 选中图片时的导出选项 */}
               {selectedIds.some(id => items.find(i => i.id === id)?.type === 'image') && (
