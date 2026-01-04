@@ -3224,6 +3224,7 @@ const App: React.FC = () => {
   }, [generationHistory, creativeIdeas]);
 
   const { theme, themeName } = useTheme();
+  const isDark = themeName !== 'light';
 
   return (
     <div 
@@ -3346,22 +3347,59 @@ const App: React.FC = () => {
         {view === 'editor' && (
              <div className="absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-300 bottom-6 flex items-center gap-3">
                 {/* 批量生成数量选择器 - 简洁设计 */}
-                <div className="flex items-center bg-black/40 backdrop-blur-xl rounded-full px-1.5 py-1 border border-white/10">
+                <div 
+                  className="flex items-center backdrop-blur-xl rounded-full px-1.5 py-1 border transition-colors"
+                  style={{
+                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.8)',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                  }}
+                >
                   {/* 减少按钮 */}
                   <button
                     onClick={() => setBatchCount(Math.max(1, batchCount - 1))}
                     disabled={batchCount <= 1}
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="w-5 h-5 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    style={{
+                      color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!(batchCount <= 1)) {
+                        e.currentTarget.style.color = isDark ? 'white' : 'black';
+                        e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
                   >
                     <Minus className="w-3 h-3" />
                   </button>
                   {/* 数量显示 */}
-                  <span className="w-6 text-center text-xs font-medium text-white">{batchCount}</span>
+                  <span 
+                    className="w-6 text-center text-xs font-medium"
+                    style={{ color: isDark ? 'white' : 'black' }}
+                  >
+                    {batchCount}
+                  </span>
                   {/* 增加按钮 */}
                   <button
                     onClick={() => setBatchCount(Math.min(20, batchCount + 1))}
                     disabled={batchCount >= 20}
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="w-5 h-5 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    style={{
+                      color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!(batchCount >= 20)) {
+                        e.currentTarget.style.color = isDark ? 'white' : 'black';
+                        e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
                   >
                     <Plus className="w-3 h-3" />
                   </button>
