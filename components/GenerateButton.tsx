@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sparkles as SparklesIcon, AlertTriangle, Check } from 'lucide-react';
 import { ApiStatus } from '../types';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface GenerateButtonProps {
     onClick: () => void;
@@ -19,6 +20,7 @@ export const GenerateButton: React.FC<GenerateButtonProps> = ({
     hasMinimizedResult,
     onExpandResult
 }) => {
+    const { theme, isDark } = useTheme();
     // 判断状态
     const isError = status === ApiStatus.Error;
     const isLoading = status === ApiStatus.Loading;
@@ -90,13 +92,26 @@ export const GenerateButton: React.FC<GenerateButtonProps> = ({
                 disabled={disabled || status === ApiStatus.Loading}
                 className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ease-out
                     ${disabled 
-                        ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed border border-neutral-700' 
-                        : 'bg-white text-black shadow-2xl shadow-white/20 hover:scale-105 active:scale-95 border border-white/20'
+                        ? 'cursor-not-allowed border' 
+                        : isDark
+                            ? 'bg-white text-black shadow-2xl shadow-white/20 hover:scale-105 active:scale-95 border border-white/20'
+                            : 'bg-blue-500 text-white shadow-2xl shadow-blue-500/30 hover:scale-105 active:scale-95 border border-blue-400/30'
                     }
                 `}
+                style={disabled ? {
+                    backgroundColor: isDark ? theme.colors.bgTertiary : theme.colors.bgSecondary,
+                    color: isDark ? theme.colors.textMuted : theme.colors.textMuted,
+                    borderColor: theme.colors.border
+                } : {}}
             >
                 {status === ApiStatus.Loading ? (
-                    <div className="w-8 h-8 border-2 border-neutral-300 border-t-neutral-800 rounded-full animate-spin"></div>
+                    <div 
+                        className="w-8 h-8 border-2 rounded-full animate-spin"
+                        style={{
+                            borderColor: isDark ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.3)',
+                            borderTopColor: isDark ? '#000' : '#fff'
+                        }}
+                    ></div>
                 ) : (
                     <SparklesIcon className={`w-8 h-8 transform transition-transform duration-500 ${disabled ? '' : 'group-hover:rotate-12'}`} />
                 )}
