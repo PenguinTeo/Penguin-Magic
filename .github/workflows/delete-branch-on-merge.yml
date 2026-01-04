@@ -1,0 +1,45 @@
+name: Delete Branch on PR Merge
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  delete-branch:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branchName = context.payload.pull_request.head.ref;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            
+            // 保护分支列表（不会被删除）
+            const protectedBranches = ['main', 'master', 'develop', 'dev'];
+            
+            // 如果分支是保护分支，则不删除
+            if (protectedBranches.includes(branchName)) {
+              console.log(`Branch ${branchName} is protected, skipping deletion.`);
+              return;
+            }
+            
+            try {
+              await github.rest.git.deleteRef({
+                owner: owner,
+                repo: repo,
+                ref: `heads/${branchName}`
+              });
+              console.log(`Successfully deleted branch: ${branchName}`);
+            } catch (error) {
+              // 如果分支已经被删除，忽略错误
+              if (error.status === 422) {
+                console.log(`Branch ${branchName} may have been already deleted.`);
+              } else {
+                console.error(`Error deleting branch ${branchName}:`, error);
+              }
+            }
