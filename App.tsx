@@ -13,8 +13,6 @@ import { CreativeLibrary } from './components/CreativeLibrary';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { Library as LibraryIcon, Settings as SettingsIcon, Zap as BoltIcon, PlusCircle as PlusCircleIcon, Image as ImageIcon, Lightbulb as LightbulbIcon, AlertTriangle as WarningIcon, Plug as PlugIcon, Gem as DiamondIcon, Sun, Moon, HelpCircle, Home, Database, Maximize2, X, Lock, Edit as EditIcon, Star, Trash2, Clock, Grid3x3, Monitor, Folder, Check, ChevronDown, Minus, Plus } from 'lucide-react';
 import { GenerateButton } from './components/GenerateButton';
-import { PenguinIcon } from './components/icons/PenguinIcon';
-import { PIcon } from './components/icons/PIcon';
 import { HistoryStrip } from './components/HistoryStrip';
 import * as creativeIdeasApi from './services/api/creativeIdeas';
 import * as historyApi from './services/api/history';
@@ -260,7 +258,11 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
               ringColor: theme.colors.border
             }}
           >
-            <PIcon className="w-5 h-5" style={{ strokeWidth: 3, color: theme.colors.textPrimary }} />
+            <img 
+              src={isDark ? "/icons/p-icon-white.svg" : "/icons/p-icon-black.svg"} 
+              alt="P" 
+              className="w-5 h-5" 
+            />
           </div>
           <div>
             <h1 className="text-sm font-bold" style={{ color: theme.colors.textPrimary }}>Penguin UI</h1>
@@ -636,7 +638,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                    {smartPromptGenStatus === ApiStatus.Loading ? (
                       <X className="w-4 h-4" />
                    ) : (
-                     <PenguinIcon className="w-4 h-4" />
+                     <img src="/icons/penguin-icon-white.svg" alt="Penguin" className="w-4 h-4" />
                    )}
                </button>
             </div>
@@ -3440,7 +3442,7 @@ const App: React.FC = () => {
             <div className="relative w-12 h-12">
               <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 animate-pulse" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <PIcon className="w-7 h-7 text-white/80" />
+                <img src="/icons/p-icon-white.svg" alt="P" className="w-7 h-7 opacity-80" />
               </div>
               <div className="absolute inset-0 rounded-xl border border-white/10 animate-spin" style={{ animationDuration: '3s' }}>
                 <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-400" />
