@@ -1,22 +1,30 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem, DesktopPosition, GenerationHistory } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
-import { TrashIcon } from './icons/TrashIcon';
-import { ZoomInIcon } from './icons/ZoomInIcon';
-import { DownloadIcon } from './icons/DownloadIcon';
-import { EditIcon } from './icons/EditIcon';
-import { RefreshIcon } from './icons/RefreshIcon';
-import { FolderIcon, FolderOpenIcon } from './icons/FolderIcon';
-import { StackIcon, StackExpandIcon, UnstackIcon } from './icons/StackIcon';
-import { SearchIcon } from './icons/SearchIcon';
-import { EyeIcon, EyeOffIcon } from './icons/EyeIcon';
-import { CopyIcon, ScissorsIcon, ClipboardIcon } from './icons/CopyIcon';
-import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
-import { PackageIcon } from './icons/PackageIcon';
-import { MoveOutIcon } from './icons/MoveOutIcon';
-import { RenameIcon } from './icons/RenameIcon';
-import { LibraryIcon } from './icons/LibraryIcon';
-import { LayersIcon } from './icons/GridIcon';
+import { 
+  Trash2 as TrashIcon, 
+  ZoomIn as ZoomInIcon, 
+  Download as DownloadIcon, 
+  Edit as EditIcon, 
+  RefreshCw as RefreshIcon, 
+  Folder as FolderIcon, 
+  FolderOpen as FolderOpenIcon, 
+  Layers as StackIcon, 
+  Maximize2 as StackExpandIcon, 
+  Ungroup as UnstackIcon, 
+  Search as SearchIcon, 
+  Eye as EyeIcon, 
+  EyeOff as EyeOffIcon, 
+  Copy as CopyIcon, 
+  Scissors as ScissorsIcon, 
+  Clipboard as ClipboardIcon, 
+  ChevronLeft as ChevronLeftIcon, 
+  Package as PackageIcon, 
+  MoveRight as MoveOutIcon, 
+  Type as RenameIcon, 
+  Library as LibraryIcon, 
+  LayoutGrid as LayersIcon 
+} from 'lucide-react';
 // JSZip 导出逻辑已迁移到 services/export/desktopExporter.ts
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
 import { normalizeImageUrl, getThumbnailUrl, parseErrorMessage, extractErrorCode } from '../utils/image';
