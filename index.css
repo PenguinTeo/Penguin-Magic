@@ -560,6 +560,87 @@ body {
   color: #64748b;
 }
 
+/* 日间模式按钮悬浮效果 */
+.theme-light .hover\:bg-white\/10:hover,
+.theme-light .hover\:bg-white\/5:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+.theme-light .hover\:bg-white\/8:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+.theme-light .hover\:bg-gray-500\/20:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 日间模式文本悬浮 */
+.theme-light .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
+.theme-light .text-neutral-400,
+.theme-light .text-neutral-500 {
+  color: #64748b !important;
+}
+
+/* 日间模式边框 */
+.theme-light .border-white\/20,
+.theme-light .border-white\/10,
+.theme-light .border-white\/30 {
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+.theme-light .ring-white\/20,
+.theme-light .ring-white\/10 {
+  --tw-ring-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+/* 日间模式阴影优化 */
+.theme-light .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.theme-light .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.15) !important;
+}
+
+/* 日间模式次要按钮 */
+.theme-light .btn-secondary {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.theme-light .btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+/* 日间模式导航按钮 */
+.theme-light .btn-nav {
+  color: #64748b;
+}
+
+.theme-light .btn-nav:hover {
+  color: #0f172a;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* 日间模式输入框 */
+.theme-light .input-modern {
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  color: #0f172a;
+}
+
+.theme-light .input-modern:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.theme-light .input-modern::placeholder {
+  color: #94a3b8;
+}
+
 /* 渐变文字 - 冰雪极光 */
 .gradient-text {
   background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 50%, #ffffff 100%);

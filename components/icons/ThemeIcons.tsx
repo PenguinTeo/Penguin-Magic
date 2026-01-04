@@ -4,7 +4,7 @@ interface IconProps {
   className?: string;
 }
 
-// 月亮图标 - 深色主题
+// 月亮图标 - 深夜主题
 export const MoonIcon: React.FC<IconProps> = ({ className = "w-6 h-6" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path 
@@ -19,101 +19,11 @@ export const MoonIcon: React.FC<IconProps> = ({ className = "w-6 h-6" }) => (
   </svg>
 );
 
-// 太阳图标 - 浅色主题
+// 太阳图标 - 白天主题
 export const SunIcon: React.FC<IconProps> = ({ className = "w-6 h-6" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.15"/>
     <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-  </svg>
-);
-
-// 圣诞树图标 - 圣诞主题
-export const ChristmasTreeIcon: React.FC<IconProps> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path 
-      d="M12 2L8 8h2L6 14h3l-2 6h10l-2-6h3l-4-6h2L12 2z" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-      fill="currentColor"
-      fillOpacity="0.15"
-    />
-    <rect x="10" y="20" width="4" height="2" rx="1" fill="currentColor"/>
-  </svg>
-);
-
-// 松树图标 - 森林主题
-export const ForestIcon: React.FC<IconProps> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path 
-      d="M12 3L7 10h2l-3 5h2l-2 4h12l-2-4h2l-3-5h2L12 3z" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-      fill="currentColor"
-      fillOpacity="0.15"
-    />
-    <rect x="10" y="19" width="4" height="3" rx="1" fill="currentColor" fillOpacity="0.5"/>
-  </svg>
-);
-
-// 花朵图标 - 薄荷/薰衣草主题
-export const FlowerIcon: React.FC<IconProps> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.3"/>
-    <path 
-      d="M12 2c1.5 2 1.5 4 0 6M12 16c-1.5 2-1.5 4 0 6M2 12c2 1.5 4 1.5 6 0M16 12c2-1.5 4-1.5 6 0M5.64 5.64c2.12.71 3.54 2.12 4.24 4.24M14.12 14.12c.7 2.12 2.12 3.54 4.24 4.24M5.64 18.36c2.12-.71 3.54-2.12 4.24-4.24M14.12 9.88c.7-2.12 2.12-3.54 4.24-4.24" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-// 日落图标 - 日落主题
-export const SunsetIcon: React.FC<IconProps> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path 
-      d="M17 18a5 5 0 1 0-10 0" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round"
-      fill="currentColor"
-      fillOpacity="0.15"
-    />
-    <path d="M12 2v3M4.22 10.22l2.12 2.12M1 18h4M19 18h4M17.66 12.34l2.12-2.12M12 9v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-    <path d="M3 21h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-  </svg>
-);
-
-// 海浪图标 - 海洋主题
-export const WaveIcon: React.FC<IconProps> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path 
-      d="M2 6c2-2 4-2 6 0s4 2 6 0 4-2 6 0" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    />
-    <path 
-      d="M2 12c2-2 4-2 6 0s4 2 6 0 4-2 6 0" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-      fill="currentColor"
-      fillOpacity="0.1"
-    />
-    <path 
-      d="M2 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    />
   </svg>
 );
 

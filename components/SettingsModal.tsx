@@ -7,39 +7,24 @@ import { KeyIcon } from './icons/KeyIcon';
 import { 
   MoonIcon, 
   SunIcon, 
-  ChristmasTreeIcon, 
-  ForestIcon, 
-  FlowerIcon, 
-  SunsetIcon, 
-  WaveIcon,
   SaveIcon,
   CpuIcon,
   InfoIcon
 } from './icons/ThemeIcons';
 
 // 应用版本号
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.3';
 
-// 主题图标映射
+// 主题图标映射 - 只保留深夜和白天
 const themeIconMap: Record<ThemeName, React.FC<{ className?: string }>> = {
   dark: MoonIcon,
   light: SunIcon,
-  christmas: ChristmasTreeIcon,
-  forest: ForestIcon,
-  lavender: FlowerIcon,
-  sunset: SunsetIcon,
-  ocean: WaveIcon,
 };
 
 // 主题颜色预览 - 用于展示主题特色
 const themePreviewColors: Record<ThemeName, string[]> = {
   dark: ['#3b82f6', '#1a1a24', '#60a5fa'],
-  light: ['#3b82f6', '#f1f5f9', '#818cf8'],
-  christmas: ['#dc2626', '#16a34a', '#eab308'],
-  forest: ['#22c55e', '#1a3a23', '#84cc16'],
-  lavender: ['#a78bfa', '#2a1a40', '#e879f9'],
-  sunset: ['#f97316', '#3d1818', '#f43f5e'],
-  ocean: ['#0ea5e9', '#164e63', '#3b82f6'],
+  light: ['#2563eb', '#ffffff', '#3b82f6'],
 };
 
 interface SettingsModalProps {
@@ -420,17 +405,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               })}
             </div>
             
-            {/* 圣诞主题特别提示 */}
-            {themeName === 'christmas' && (
-              <div className="flex items-center gap-3 p-3 rounded-xl animate-fade-in"
-                style={{ 
-                  background: 'linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(22, 163, 74, 0.1))',
-                  border: `1px solid ${colors.border}` 
-                }}>
-                <ChristmasTreeIcon className="w-5 h-5" style={{ color: '#16a34a' }} />
-                <p className="text-xs" style={{ color: colors.textSecondary }}>已启用节日特效，祝你圣诞快乐！</p>
-              </div>
-            )}
+            {/* 圣诞主题特别提示 - 已移除 */}
           </div>
 
           {/* 分割线 */}

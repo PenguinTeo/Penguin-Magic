@@ -178,3 +178,75 @@ export const compressImage = (imageUrl: string, maxSize: number = 512): Promise<
     img.src = normalizeImageUrl(imageUrl);
   });
 };
+
+/**
+ * 提取错误代码
+ * 从错误信息中提取 HTTP 状态码或错误代码
+ */
+export const extractErrorCode = (errorStr: string | undefined | null): string | null => {
+  if (!errorStr) return null;
+  
+  // 匹配 "API 请求失败 (422):" 或 "(500)" 等格式
+  const codeMatch = errorStr.match(/\((\d{3})\)/);
+  if (codeMatch) {
+    return codeMatch[1];
+  }
+  
+  // 匹配 "status": 422 或 "code": 500 等 JSON 格式
+  const jsonCodeMatch = errorStr.match(/["'](?:status|code)["']\s*:\s*(\d{3})/);
+  if (jsonCodeMatch) {
+    return jsonCodeMatch[1];
+  }
+  
+  return null;
+};
+
+/**
+ * 解析错误信息，提取核心错误描述
+ * 支持多种错误格式：
+ * 1. API 请求失败 (422): {"error":{"message":"..."}}
+ * 2. 纯 JSON 格式: {"message":"..."}
+ * 3. 普通文本错误信息
+ */
+export const parseErrorMessage = (errorStr: string | undefined | null): string => {
+  if (!errorStr) return '未知错误';
+  
+  // 尝试提取 JSON 部分
+  const jsonMatch = errorStr.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const jsonData = JSON.parse(jsonMatch[0]);
+      // 尝试从常见结构中提取 message
+      const message = 
+        jsonData?.error?.message || 
+        jsonData?.message || 
+        (typeof jsonData?.error === 'string' ? jsonData.error : null);
+      
+      if (message && typeof message === 'string') {
+        return message;
+      }
+    } catch {
+      // JSON 解析失败，继续处理
+    }
+  }
+  
+  // 尝试提取 "API 请求失败 (xxx):" 后面的内容
+  const apiErrorMatch = errorStr.match(/API\s*请求失败.*?:\s*(.+)/);
+  if (apiErrorMatch && apiErrorMatch[1]) {
+    // 递归解析后面的内容
+    return parseErrorMessage(apiErrorMatch[1]);
+  }
+  
+  // 如果错误信息太长，截取第一句
+  if (errorStr.length > 150) {
+    // 尝试找到第一个句号或句点
+    const firstSentence = errorStr.match(/^[^.!?！？。]*[.!?！？。]/);
+    if (firstSentence) {
+      return firstSentence[0];
+    }
+    // 否则截取前150个字符
+    return errorStr.slice(0, 150) + '...';
+  }
+  
+  return errorStr;
+};

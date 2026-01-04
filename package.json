@@ -1,7 +1,7 @@
 {
-  "name": "🐧企鹅艾洛魔法世界🧙‍本地版本",
+  "name": "penguin-magic",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
     "dev": "vite",

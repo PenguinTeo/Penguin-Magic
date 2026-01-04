@@ -19,7 +19,7 @@ import { LibraryIcon } from './icons/LibraryIcon';
 import { LayersIcon } from './icons/GridIcon';
 // JSZip 导出逻辑已迁移到 services/export/desktopExporter.ts
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
-import { normalizeImageUrl, getThumbnailUrl } from '../utils/image';
+import { normalizeImageUrl, getThumbnailUrl, parseErrorMessage, extractErrorCode } from '../utils/image';
 
 interface DesktopProps {
   items: DesktopItem[];
@@ -1451,8 +1451,8 @@ export const Desktop: React.FC<DesktopProps> = ({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
-                    <p className="text-[9px] text-red-300 text-center font-medium line-clamp-2 px-1">
-                      {(item as DesktopImageItem).loadingError}
+                    <p className="text-[9px] text-red-300 text-center font-medium">
+                      生成失败{extractErrorCode((item as DesktopImageItem).loadingError) ? ` (${extractErrorCode((item as DesktopImageItem).loadingError)})` : ''}
                     </p>
                     <p className="mt-1 text-[8px] text-gray-500">右键重新生成</p>
                   </div>
@@ -1660,7 +1660,13 @@ export const Desktop: React.FC<DesktopProps> = ({
             onMouseDown={(e) => e.stopPropagation()}
           >
             {/* 毛玻璃背景卡片 */}
-            <div className="bg-black/60 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
+            <div 
+              className="backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden"
+              style={{
+                background: isLight ? 'rgba(255,255,255,0.95)' : 'rgba(0,0,0,0.6)',
+                border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)'}`,
+              }}
+            >
               {/* 错误状态显示完整信息 */}
               {selectedImageItem.loadingError ? (
                 <div className="p-4">
@@ -1671,11 +1677,14 @@ export const Desktop: React.FC<DesktopProps> = ({
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-red-300 font-medium text-sm mb-1">生成失败</p>
-                      <p className="text-gray-300 text-xs leading-relaxed break-words">{selectedImageItem.loadingError}</p>
+                      <p className="font-medium text-sm mb-1" style={{ color: isLight ? '#dc2626' : '#fca5a5' }}>生成失败</p>
+                      <p className="text-xs leading-relaxed break-words" style={{ color: isLight ? '#4b5563' : '#d1d5db' }}>{parseErrorMessage(selectedImageItem.loadingError)}</p>
                     </div>
                   </div>
-                  <div className="text-[11px] text-gray-500 border-t border-white/10 pt-3">
+                  <div className="text-[11px] pt-3" style={{ 
+                    color: isLight ? '#6b7280' : '#6b7280',
+                    borderTop: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`,
+                  }}>
                     <p>提示：可以右键选择“重新生成”或删除此项</p>
                   </div>
                 </div>
@@ -1689,11 +1698,14 @@ export const Desktop: React.FC<DesktopProps> = ({
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-yellow-300 font-medium text-sm mb-1">图片丢失</p>
-                      <p className="text-gray-300 text-xs leading-relaxed">本地文件不存在或已被删除</p>
+                      <p className="font-medium text-sm mb-1" style={{ color: isLight ? '#ca8a04' : '#fcd34d' }}>图片丢失</p>
+                      <p className="text-xs leading-relaxed" style={{ color: isLight ? '#4b5563' : '#d1d5db' }}>本地文件不存在或已被删除</p>
                     </div>
                   </div>
-                  <div className="text-[11px] text-gray-500 border-t border-white/10 pt-3">
+                  <div className="text-[11px] pt-3" style={{ 
+                    color: isLight ? '#6b7280' : '#6b7280',
+                    borderTop: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`,
+                  }}>
                     <p>提示：可以删除此项或尝试重新生成</p>
                   </div>
                 </div>
@@ -1742,34 +1754,43 @@ export const Desktop: React.FC<DesktopProps> = ({
                   
                   {/* 底部操作按钮 */}
                   <div className="px-4 pb-4 flex items-center justify-center gap-2 flex-wrap">
-                    {/* 下载 - 浓琉璃#004097 */}
+                    {/* 下载 */}
                     <button
                       onClick={() => handleDownloadImage(selectedImageItem)}
                       className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
-                      style={{ backgroundColor: '#004097', color: '#feffef' }}
+                      style={{ 
+                        backgroundColor: isLight ? '#2563eb' : '#004097', 
+                        color: '#ffffff' 
+                      }}
                       title="下载图片"
                     >
                       <DownloadIcon className="w-4 h-4" />
                       <span>下载</span>
                     </button>
-                    {/* 再编辑 - 玄青#3b3c50 */}
+                    {/* 再编辑 */}
                     {onImageEditAgain && (
                       <button
                         onClick={() => onImageEditAgain(selectedImageItem)}
                         className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
-                        style={{ backgroundColor: '#3b3c50', color: '#feffef' }}
+                        style={{ 
+                          backgroundColor: isLight ? '#475569' : '#3b3c50', 
+                          color: '#ffffff' 
+                        }}
                         title="再次编辑"
                       >
                         <EditIcon className="w-4 h-4" />
                         <span>编辑</span>
                       </button>
                     )}
-                    {/* 重新生成 - 玄青#3b3c50 */}
+                    {/* 重新生成 */}
                     {onImageRegenerate && (
                       <button
                         onClick={() => onImageRegenerate(selectedImageItem)}
                         className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
-                        style={{ backgroundColor: '#3b3c50', color: '#feffef' }}
+                        style={{ 
+                          backgroundColor: isLight ? '#475569' : '#3b3c50', 
+                          color: '#ffffff' 
+                        }}
                         title="重新生成"
                       >
                         <RefreshIcon className="w-4 h-4" />

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-// 主题类型定义
-export type ThemeName = 'dark' | 'light' | 'christmas' | 'forest' | 'lavender' | 'sunset' | 'ocean';
+// 主题类型定义 - 只保留深夜和白天两个主题
+export type ThemeName = 'dark' | 'light';
 
 export interface ThemeColors {
   // 主色调
@@ -60,10 +60,10 @@ export interface Theme {
   decorations: ThemeDecorations;
 }
 
-// 黑暗主题 - 默认
+// 深夜主题 - 默认
 const darkTheme: Theme = {
   name: 'dark',
-  displayName: '深色',
+  displayName: '深夜',
   icon: '🌙',
   colors: {
     primary: '#3b82f6',
@@ -93,215 +93,54 @@ const darkTheme: Theme = {
   }
 };
 
-// 明亮主题
+// 白天主题 - 精细设计的浅色模式
 const lightTheme: Theme = {
   name: 'light',
-  displayName: '浅色',
+  displayName: '白天',
   icon: '☀️',
   colors: {
-    primary: '#3b82f6',
-    primaryLight: '#818cf8',
-    primaryDark: '#2563eb',
-    accent: '#3b82f6',
-    accentLight: '#3b82f6',
-    bgPrimary: '#f8fafc',
-    bgSecondary: '#f1f5f9',
-    bgTertiary: '#e2e8f0',
-    bgPanel: 'rgba(255, 255, 255, 0.95)',
-    textPrimary: '#0f172a',
-    textSecondary: '#475569',
-    textMuted: '#94a3b8',
-    border: 'rgba(0, 0, 0, 0.08)',
-    borderLight: 'rgba(0, 0, 0, 0.04)',
-    gradientStart: '#3b82f6',
-    gradientMiddle: '#60a5fa',
-    gradientEnd: '#ffffff',
-    glow: 'rgba(59, 130, 246, 0.2)',
-    shadow: 'rgba(0, 0, 0, 0.1)',
-  },
-  decorations: {
-    snowflakes: false,
-    particles: false,
-    sparkles: false,
-  }
-};
-
-// 圣诞主题 🎄
-const christmasTheme: Theme = {
-  name: 'christmas',
-  displayName: '圣诞节',
-  icon: '🎄',
-  colors: {
-    primary: '#dc2626', // 红色
-    primaryLight: '#ef4444',
-    primaryDark: '#b91c1c',
-    accent: '#16a34a', // 绿色
-    accentLight: '#22c55e',
-    bgPrimary: '#0f172a', // 深蓝夜空
-    bgSecondary: '#1e293b',
-    bgTertiary: '#334155',
-    bgPanel: 'rgba(15, 23, 42, 0.6)',
-    textPrimary: '#f8fafc',
-    textSecondary: '#e2e8f0',
-    textMuted: '#94a3b8',
-    border: 'rgba(255, 255, 255, 0.15)',
-    borderLight: 'rgba(255, 255, 255, 0.08)',
-    gradientStart: '#dc2626',
-    gradientMiddle: '#16a34a',
-    gradientEnd: '#eab308',
-    glow: 'rgba(220, 38, 38, 0.4)',
-    shadow: 'rgba(0, 0, 0, 0.6)',
-  },
-  decorations: {
-    snowflakes: true,
-    particles: true,
-    sparkles: true,
-    decorations: ['🎄', '⭐', '🎁', '❄️', '🔔', '🎅'],
-  }
-};
-
-// 森林主题 🌲
-const forestTheme: Theme = {
-  name: 'forest',
-  displayName: '森林',
-  icon: '🌲',
-  colors: {
-    primary: '#22c55e',
-    primaryLight: '#4ade80',
-    primaryDark: '#16a34a',
-    accent: '#84cc16',
-    accentLight: '#a3e635',
-    bgPrimary: '#0a1a0f',
-    bgSecondary: '#0f2416',
-    bgTertiary: '#1a3a23',
-    bgPanel: 'rgba(10, 26, 15, 0.95)',
-    textPrimary: '#f0fdf4',
-    textSecondary: '#bbf7d0',
-    textMuted: '#86efac',
-    border: 'rgba(34, 197, 94, 0.2)',
-    borderLight: 'rgba(34, 197, 94, 0.1)',
-    gradientStart: '#22c55e',
-    gradientMiddle: '#84cc16',
-    gradientEnd: '#fbbf24',
-    glow: 'rgba(34, 197, 94, 0.5)',
-    shadow: 'rgba(0, 20, 10, 0.6)',
-  },
-  decorations: {
-    snowflakes: false,
-    particles: false,
-    sparkles: false,
-  }
-};
-
-// 薄荷主题 💜
-const lavenderTheme: Theme = {
-  name: 'lavender',
-  displayName: '薄荷',
-  icon: '💜',
-  colors: {
-    primary: '#a78bfa',
-    primaryLight: '#c4b5fd',
-    primaryDark: '#8b5cf6',
-    accent: '#e879f9',
-    accentLight: '#f0abfc',
-    bgPrimary: '#0f0a1a',
-    bgSecondary: '#1a1029',
-    bgTertiary: '#2a1a40',
-    bgPanel: 'rgba(15, 10, 26, 0.95)',
-    textPrimary: '#faf5ff',
-    textSecondary: '#e9d5ff',
-    textMuted: '#c4b5fd',
-    border: 'rgba(167, 139, 250, 0.2)',
-    borderLight: 'rgba(167, 139, 250, 0.1)',
-    gradientStart: '#a78bfa',
-    gradientMiddle: '#e879f9',
-    gradientEnd: '#f472b6',
-    glow: 'rgba(167, 139, 250, 0.5)',
-    shadow: 'rgba(15, 0, 30, 0.6)',
-  },
-  decorations: {
-    snowflakes: false,
-    particles: false,
-    sparkles: true,
-  }
-};
-
-// 日落主题 🌅
-const sunsetTheme: Theme = {
-  name: 'sunset',
-  displayName: '日落',
-  icon: '🌅',
-  colors: {
-    primary: '#f97316',
-    primaryLight: '#fb923c',
-    primaryDark: '#ea580c',
-    accent: '#f43f5e',
-    accentLight: '#fb7185',
-    bgPrimary: '#1a0a0a',
-    bgSecondary: '#2a1010',
-    bgTertiary: '#3d1818',
-    bgPanel: 'rgba(26, 10, 10, 0.95)',
-    textPrimary: '#fff7ed',
-    textSecondary: '#fed7aa',
-    textMuted: '#fdba74',
-    border: 'rgba(249, 115, 22, 0.2)',
-    borderLight: 'rgba(249, 115, 22, 0.1)',
-    gradientStart: '#f97316',
-    gradientMiddle: '#f43f5e',
-    gradientEnd: '#fbbf24',
-    glow: 'rgba(249, 115, 22, 0.5)',
-    shadow: 'rgba(30, 10, 0, 0.6)',
-  },
-  decorations: {
-    snowflakes: false,
-    particles: false,
-    sparkles: false,
-  }
-};
-
-// 海洋主题
-const oceanTheme: Theme = {
-  name: 'ocean',
-  displayName: '深海',
-  icon: '🌊',
-  colors: {
-    primary: '#0ea5e9',
-    primaryLight: '#38bdf8',
-    primaryDark: '#0284c7',
-    accent: '#3b82f6',
-    accentLight: '#3b82f6',
-    bgPrimary: '#0c1929',
-    bgSecondary: '#0f2942',
-    bgTertiary: '#164e63',
-    bgPanel: 'rgba(12, 25, 41, 0.6)',
-    textPrimary: '#f0f9ff',
-    textSecondary: '#bae6fd',
-    textMuted: '#7dd3fc',
-    border: 'rgba(14, 165, 233, 0.2)',
-    borderLight: 'rgba(14, 165, 233, 0.1)',
-    gradientStart: '#0ea5e9',
+    // 主色调 - 使用更深的蓝色确保在浅色背景上有足够对比度
+    primary: '#2563eb',
+    primaryLight: '#3b82f6',
+    primaryDark: '#1d4ed8',
+    accent: '#6366f1',
+    accentLight: '#818cf8',
+    
+    // 背景色 - 使用温暖的白色色调，不是纯灰
+    bgPrimary: '#f8f9fc',      // 最底层背景 - 带一点蓝色调的白
+    bgSecondary: '#ffffff',    // 卡片背景 - 纯白色，与底层形成对比
+    bgTertiary: '#f1f5f9',     // 输入框、按钮背景 - 柔和的灰
+    bgPanel: 'rgba(255, 255, 255, 0.98)',  // 弹窗面板
+    
+    // 文字颜色 - 确保可读性
+    textPrimary: '#1e293b',    // 主要文字 - 深灰而不是纯黑
+    textSecondary: '#475569',  // 次要文字
+    textMuted: '#64748b',      // 辅助文字
+    
+    // 边框 - 浅色模式下使用更明显的边框
+    border: 'rgba(15, 23, 42, 0.1)',      // 主边框
+    borderLight: 'rgba(15, 23, 42, 0.06)', // 轻边框
+    
+    // 渐变
+    gradientStart: '#2563eb',
     gradientMiddle: '#3b82f6',
-    gradientEnd: '#14b8a6',
-    glow: 'rgba(14, 165, 233, 0.5)',
-    shadow: 'rgba(0, 20, 40, 0.6)',
+    gradientEnd: '#60a5fa',
+    
+    // 特殊效果 - 浅色模式用更重的阴影营造层次
+    glow: 'rgba(37, 99, 235, 0.15)',
+    shadow: 'rgba(15, 23, 42, 0.08)',  // 柔和的阴影
   },
   decorations: {
     snowflakes: false,
-    particles: true,
+    particles: false,
     sparkles: false,
-    backgroundAnimation: 'waves',
   }
 };
 
-// 所有可用主题
+// 所有可用主题 - 只保留深夜和白天
 export const themes: Record<ThemeName, Theme> = {
   dark: darkTheme,
   light: lightTheme,
-  christmas: christmasTheme,
-  forest: forestTheme,
-  lavender: lavenderTheme,
-  sunset: sunsetTheme,
-  ocean: oceanTheme,
 };
 
 // Context
@@ -322,9 +161,12 @@ interface ThemeProviderProps {
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [themeName, setThemeName] = useState<ThemeName>(() => {
     const saved = localStorage.getItem('app_theme');
-    // 处理旧版本的 'default' 主题名
-    if (saved === 'default') return 'dark';
-    // 默认使用深色主题
+    // 处理旧版本主题名，统一返回有效主题
+    if (saved === 'default' || saved === 'christmas' || saved === 'forest' || 
+        saved === 'lavender' || saved === 'sunset' || saved === 'ocean') {
+      return 'dark';
+    }
+    // 默认使用深夜主题
     return (saved as ThemeName) || 'dark';
   });
 

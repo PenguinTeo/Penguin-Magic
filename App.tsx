@@ -277,7 +277,18 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
           {/* 明暗切换 */}
           <button
             onClick={toggleDarkMode}
-            className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 hover:bg-white/10 text-neutral-400 hover:text-white"
+            className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200"
+            style={{
+              color: isDark ? '#9ca3af' : '#64748b',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+              e.currentTarget.style.color = isDark ? '#fff' : '#0f172a';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = isDark ? '#9ca3af' : '#64748b';
+            }}
             title={isDark ? '浅色' : '深色'}
           >
             {isDark ? (
@@ -293,7 +304,18 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
           {/* 帮助按钮 */}
           <button
             onClick={() => setIsHelpOpen(true)}
-            className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 hover:bg-white/10 text-neutral-400 hover:text-white"
+            className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200"
+            style={{
+              color: isDark ? '#9ca3af' : '#64748b',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+              e.currentTarget.style.color = isDark ? '#fff' : '#0f172a';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = isDark ? '#9ca3af' : '#64748b';
+            }}
             title="帮助"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -303,7 +325,18 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
           {/* 设置按钮 */}
           <button
             onClick={onSettingsClick}
-            className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 hover:bg-white/10 text-neutral-400 hover:text-white"
+            className="w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200"
+            style={{
+              color: isDark ? '#9ca3af' : '#64748b',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+              e.currentTarget.style.color = isDark ? '#fff' : '#0f172a';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = isDark ? '#9ca3af' : '#64748b';
+            }}
             title="设置"
           >
             <SettingsIcon className="w-3.5 h-3.5" />
@@ -397,7 +430,16 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
            {/* 可点击的标题栏 */}
            <button
              onClick={() => setIsParamsExpanded(!isParamsExpanded)}
-             className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
+             className="w-full flex items-center justify-between p-4 transition-colors"
+             style={{
+               background: 'transparent',
+             }}
+             onMouseEnter={(e) => {
+               e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)';
+             }}
+             onMouseLeave={(e) => {
+               e.currentTarget.style.background = 'transparent';
+             }}
            >
              <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-lg bg-blue-500/20 flex items-center justify-center ring-1 ring-blue-500/20">
@@ -433,8 +475,12 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                               className={`py-1.5 text-[9px] font-semibold rounded-lg transition-all duration-200 ${
                                   aspectRatio === ratio
                                       ? 'bg-blue-500 text-white shadow-md shadow-blue-500/25'
-                                      : 'bg-white/5 text-neutral-500 hover:bg-white/10 hover:text-white'
+                                      : ''
                               }`}
+                              style={aspectRatio !== ratio ? {
+                                background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                                color: isDark ? '#737373' : '#6b7280',
+                              } : undefined}
                           >
                               {ratio}
                           </button>
@@ -448,8 +494,12 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                               className={`py-1.5 text-[9px] font-semibold rounded-lg transition-all duration-200 ${
                                   aspectRatio === ratio
                                       ? 'bg-blue-500 text-white shadow-md shadow-blue-500/25'
-                                      : 'bg-white/5 text-neutral-500 hover:bg-white/10 hover:text-white'
+                                      : ''
                               }`}
+                              style={aspectRatio !== ratio ? {
+                                background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                                color: isDark ? '#737373' : '#6b7280',
+                              } : undefined}
                           >
                               {ratio}
                           </button>
@@ -494,8 +544,16 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                {canViewPrompt && (
                  <button
                    onClick={() => setIsPromptExpanded(true)}
-                   className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:scale-110 hover:bg-white/10"
-                   style={{ color: isDark ? '#6b7280' : '#9ca3af' }}
+                   className="w-5 h-5 rounded-md flex items-center justify-center transition-all hover:scale-110"
+                   style={{ 
+                     color: isDark ? '#6b7280' : '#9ca3af',
+                   }}
+                   onMouseEnter={(e) => {
+                     e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+                   }}
+                   onMouseLeave={(e) => {
+                     e.currentTarget.style.background = 'transparent';
+                   }}
                    title="放大查看 (Esc关闭)"
                  >
                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
