@@ -1,9 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { XCircleIcon } from './icons/XCircleIcon';
-import { ZoomInIcon } from './icons/ZoomInIcon';
-import { ZoomOutIcon } from './icons/ZoomOutIcon';
-import { ResetZoomIcon } from './icons/ResetZoomIcon';
-import { DownloadIcon } from './icons/DownloadIcon';
+import { XCircle as XCircleIcon, ZoomIn as ZoomInIcon, ZoomOut as ZoomOutIcon, RotateCcw as ResetZoomIcon, Download as DownloadIcon } from 'lucide-react';
 import { normalizeImageUrl } from '../utils/image';
 
 

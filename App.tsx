@@ -11,15 +11,8 @@ import { AddCreativeIdeaModal } from './components/AddCreativeIdeaModal';
 import { SettingsModal } from './components/SettingsModal';
 import { CreativeLibrary } from './components/CreativeLibrary';
 import { WelcomeScreen } from './components/WelcomeScreen';
-import { LibraryIcon } from './components/icons/LibraryIcon';
-import { SettingsIcon } from './components/icons/SettingsIcon';
-import { BoltIcon } from './components/icons/BoltIcon';
-import { PlusCircleIcon } from './components/icons/PlusCircleIcon';
+import { Library as LibraryIcon, Settings as SettingsIcon, Zap as BoltIcon, PlusCircle as PlusCircleIcon, Image as ImageIcon, Lightbulb as LightbulbIcon, AlertTriangle as WarningIcon, Plug as PlugIcon, Gem as DiamondIcon, Sun, Moon, HelpCircle, Home, Database, Maximize2, X, Lock, Edit as EditIcon, Star, Trash2, Clock, Grid3x3, Monitor, Folder, Check, ChevronDown, Minus, Plus } from 'lucide-react';
 import { GenerateButton } from './components/GenerateButton';
-import { PenguinIcon } from './components/icons/PenguinIcon';
-import { PIcon, PlugIcon, DiamondIcon, WarningIcon } from './components/icons/PIcon';
-import { ImageIcon } from './components/icons/ImageIcon';
-import { LightbulbIcon } from './components/icons/LightbulbIcon';
 import { HistoryStrip } from './components/HistoryStrip';
 import * as creativeIdeasApi from './services/api/creativeIdeas';
 import * as historyApi from './services/api/history';
@@ -265,7 +258,11 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
               ringColor: theme.colors.border
             }}
           >
-            <PIcon className="w-5 h-5" style={{ strokeWidth: 3, color: theme.colors.textPrimary }} />
+            <img 
+              src={isDark ? "/icons/p-icon-white.svg" : "/icons/p-icon-black.svg"} 
+              alt="P" 
+              className="w-5 h-5" 
+            />
           </div>
           <div>
             <h1 className="text-sm font-bold" style={{ color: theme.colors.textPrimary }}>Penguin UI</h1>
@@ -292,13 +289,9 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             title={isDark ? '浅色' : '深色'}
           >
             {isDark ? (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
+              <Sun className="w-3.5 h-3.5" />
             ) : (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-              </svg>
+              <Moon className="w-3.5 h-3.5" />
             )}
           </button>
           {/* 帮助按钮 */}
@@ -318,9 +311,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             }}
             title="帮助"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <HelpCircle className="w-3.5 h-3.5" />
           </button>
           {/* 设置按钮 */}
           <button
@@ -365,9 +356,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             }`}
             title={backendStatus === 'connected' ? '后端连接正常' : backendStatus === 'checking' ? '正在检测后端...' : '后端已断开连接'}
           >
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
+            <Home className="w-5 h-5 text-white" />
           </div>
           
           {/* 模式信息 */}
@@ -396,9 +385,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             }}
             title="数据存储在本地"
           >
-            <svg className="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-            </svg>
+            <Database className="w-3.5 h-3.5 text-green-400" />
             <span className="text-[10px] font-medium text-green-400">本地</span>
           </div>
         </div>
@@ -447,15 +434,10 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                 </div>
                 <h3 className="text-[11px] font-semibold" style={{ color: theme.colors.textPrimary }}>参数配置</h3>
              </div>
-             <svg 
+             <ChevronDown 
                className={`w-4 h-4 transition-transform duration-200 ${isParamsExpanded ? 'rotate-180' : ''}`}
                style={{ color: theme.colors.textMuted }}
-               fill="none" 
-               stroke="currentColor" 
-               viewBox="0 0 24 24"
-             >
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-             </svg>
+             />
            </button>
            
            {/* 可折叠内容 */}
@@ -556,9 +538,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                    }}
                    title="放大查看 (Esc关闭)"
                  >
-                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                   </svg>
+                   <Maximize2 className="w-3 h-3" />
                  </button>
                )}
              </div>
@@ -595,9 +575,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                      }}
                      title="卸载 (Esc)"
                    >
-                     <svg className="w-3 h-3 hover:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                     </svg>
+                     <X className="w-3 h-3 hover:text-gray-400" />
                    </button>
                  </div>
                )}
@@ -658,11 +636,9 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                  title={smartPromptGenStatus === ApiStatus.Loading ? "取消" : "生成"}
                >
                    {smartPromptGenStatus === ApiStatus.Loading ? (
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <X className="w-4 h-4" />
                    ) : (
-                     <PenguinIcon className="w-4 h-4" />
+                     <img src="/icons/penguin-icon-white.svg" alt="Penguin" className="w-4 h-4" />
                    )}
                </button>
             </div>
@@ -679,9 +655,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                   className="w-6 h-6 rounded-lg flex items-center justify-center"
                   style={{ background: 'rgba(59,130,246,0.15)' }}
                 >
-                  <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
+                  <Lock className="w-3.5 h-3.5 text-blue-400" />
                 </div>
                 <span className="text-xs font-semibold text-blue-400">提示词已加密</span>
               </div>
@@ -744,9 +718,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                   {activeBPTemplate ? (
                     <BoltIcon className="w-3.5 h-3.5" style={{ color: '#eed16d' }} />
                   ) : (
-                    <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
+                    <EditIcon className="w-3.5 h-3.5 text-blue-400" />
                   )}
                 </div>
                 <h3 className="text-sm font-semibold" style={{ color: isDark ? '#fff' : '#0f172a' }}>
@@ -772,9 +744,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                 style={{ color: isDark ? '#9ca3af' : '#6b7280' }}
                 title="关闭 (Esc)"
               >
-                <svg className="w-4 h-4 hover:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-4 h-4 hover:text-gray-400" />
               </button>
             </div>
             
@@ -941,9 +911,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center ring-1 ring-blue-500/20">
-                  <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <HelpCircle className="w-4 h-4 text-blue-400" />
                 </div>
                 <h3 className="text-base font-bold" style={{ color: isDark ? '#fff' : '#0f172a' }}>
                   使用帮助
@@ -954,9 +922,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                 className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-105 hover:bg-gray-500/20"
                 style={{ color: isDark ? '#9ca3af' : '#6b7280' }}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-5 h-5" />
               </button>
             </div>
             
@@ -1293,9 +1259,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
               }`}
               title={idea.isFavorite ? '取消收藏' : '收藏'}
             >
-              <svg className="w-3 h-3" fill={idea.isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
+              <Star className={`w-3 h-3 ${idea.isFavorite ? 'fill-current' : ''}`} />
             </button>
           )}
           <button
@@ -1303,9 +1267,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
             className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
             title="编辑"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
+            <EditIcon className="w-3 h-3" />
           </button>
           {showDelete && (
             <button
@@ -1313,9 +1275,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
               className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
               title="删除创意"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
+              <Trash2 className="w-3 h-3" />
             </button>
           )}
           {/* 清除使用记录按钮（最近使用列表专用） */}
@@ -1325,9 +1285,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
               className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-orange-400 hover:bg-orange-500/10 transition-all"
               title="清除使用记录"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Clock className="w-3 h-3" />
             </button>
           )}
         </div>
@@ -1364,9 +1322,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
      <div className="liquid-panel-section flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 rounded bg-blue-500/15 flex items-center justify-center">
-            <svg className="w-3 h-3 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-            </svg>
+            <Star className="w-3 h-3 text-blue-400 fill-current" />
           </div>
           <h2 className="text-[12px] font-semibold" style={{ color: theme.colors.textPrimary }}>收藏创意</h2>
         </div>
@@ -1391,9 +1347,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
             }}
             title="全部创意库"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-            </svg>
+            <Grid3x3 className="w-3 h-3" />
           </button>
         </div>
      </div>
@@ -1416,9 +1370,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
         {favoriteIdeas.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center py-8">
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-              </svg>
+              <Star className="w-6 h-6 text-blue-400 fill-current" />
             </div>
             <p className="text-[11px] font-medium" style={{ color: theme.colors.textPrimary }}>还没有收藏</p>
             <p className="text-[10px] mt-1" style={{ color: theme.colors.textMuted }}>在创意库中点击星标收藏</p>
@@ -1543,9 +1495,7 @@ const Canvas: React.FC<CanvasProps> = ({
             view === 'editor' ? 'active' : ''
           }`}
         >
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
+          <Monitor className="w-3 h-3" />
           桌面
         </button>
         <button
@@ -1554,9 +1504,7 @@ const Canvas: React.FC<CanvasProps> = ({
             view === 'local-library' ? 'active' : ''
           }`}
         >
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
+          <Folder className="w-3 h-3" />
           本地创意
           {localCreativeIdeas.length > 0 && (
             <span className="px-1 py-0.5 text-[8px] rounded bg-white/20 font-medium">
@@ -1637,15 +1585,11 @@ const Canvas: React.FC<CanvasProps> = ({
                           </div>
                         ) : status === ApiStatus.Success ? (
                           <div className="w-8 h-8 rounded-full bg-blue-500/30 flex items-center justify-center">
-                            <svg className="w-4 h-4 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <Check className="w-4 h-4 text-blue-300" />
                           </div>
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-gray-500/30 flex items-center justify-center">
-                            <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
+                            <WarningIcon className="w-4 h-4 text-gray-300" />
                           </div>
                         )}
                         <div>
@@ -1663,9 +1607,7 @@ const Canvas: React.FC<CanvasProps> = ({
                           className="w-8 h-8 rounded-lg flex items-center justify-center text-blue-300 hover:text-white hover:bg-white/10 transition-all"
                           title="收起到按钮旁"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
+                          <ChevronDown className="w-4 h-4" />
                         </button>
                         {status !== ApiStatus.Loading && onDismissResult && (
                           <button
@@ -1673,9 +1615,7 @@ const Canvas: React.FC<CanvasProps> = ({
                             className="w-8 h-8 rounded-lg flex items-center justify-center text-blue-300 hover:text-gray-300 hover:bg-gray-500/20 transition-all"
                             title="关闭"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                            <X className="w-4 h-4" />
                           </button>
                         )}
                       </div>
@@ -3284,6 +3224,7 @@ const App: React.FC = () => {
   }, [generationHistory, creativeIdeas]);
 
   const { theme, themeName } = useTheme();
+  const isDark = themeName !== 'light';
 
   return (
     <div 
@@ -3406,24 +3347,61 @@ const App: React.FC = () => {
         {view === 'editor' && (
              <div className="absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-300 bottom-6 flex items-center gap-3">
                 {/* 批量生成数量选择器 - 简洁设计 */}
-                <div className="flex items-center bg-black/40 backdrop-blur-xl rounded-full px-1.5 py-1 border border-white/10">
+                <div 
+                  className="flex items-center backdrop-blur-xl rounded-full px-1.5 py-1 border transition-colors"
+                  style={{
+                    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.8)',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                  }}
+                >
                   {/* 减少按钮 */}
                   <button
                     onClick={() => setBatchCount(Math.max(1, batchCount - 1))}
                     disabled={batchCount <= 1}
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="w-5 h-5 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    style={{
+                      color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!(batchCount <= 1)) {
+                        e.currentTarget.style.color = isDark ? 'white' : 'black';
+                        e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                    <Minus className="w-3 h-3" />
                   </button>
                   {/* 数量显示 */}
-                  <span className="w-6 text-center text-xs font-medium text-white">{batchCount}</span>
+                  <span 
+                    className="w-6 text-center text-xs font-medium"
+                    style={{ color: isDark ? 'white' : 'black' }}
+                  >
+                    {batchCount}
+                  </span>
                   {/* 增加按钮 */}
                   <button
                     onClick={() => setBatchCount(Math.min(20, batchCount + 1))}
                     disabled={batchCount >= 20}
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="w-5 h-5 rounded-full flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    style={{
+                      color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!(batchCount >= 20)) {
+                        e.currentTarget.style.color = isDark ? 'white' : 'black';
+                        e.currentTarget.style.backgroundColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    <Plus className="w-3 h-3" />
                   </button>
                 </div>
                 <GenerateButton 
@@ -3502,7 +3480,7 @@ const App: React.FC = () => {
             <div className="relative w-12 h-12">
               <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 animate-pulse" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <PIcon className="w-7 h-7 text-white/80" />
+                <img src="/icons/p-icon-white.svg" alt="P" className="w-7 h-7 opacity-80" />
               </div>
               <div className="absolute inset-0 rounded-xl border border-white/10 animate-spin" style={{ animationDuration: '3s' }}>
                 <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-400" />

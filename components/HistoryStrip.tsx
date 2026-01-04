@@ -1,7 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { GenerationHistory } from '../types';
-import { TrashIcon } from './icons/TrashIcon';
-import { ClockIcon } from './icons/ClockIcon';
+import { Trash2 as TrashIcon, Clock as ClockIcon, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { normalizeImageUrl } from '../utils/image';
 
 interface HistoryStripProps {
@@ -164,9 +163,7 @@ export const HistoryStrip: React.FC<HistoryStripProps> = ({
             onClick={() => smoothScroll('left')}
             className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-blue-600/80 hover:border-blue-500/50 transition-all opacity-0 group-hover/strip:opacity-100"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <ChevronLeft className="w-4 h-4" />
           </button>
         )}
 
@@ -181,9 +178,7 @@ export const HistoryStrip: React.FC<HistoryStripProps> = ({
             onClick={() => smoothScroll('right')}
             className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-blue-600/80 hover:border-blue-500/50 transition-all opacity-0 group-hover/strip:opacity-100"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <ChevronRight className="w-4 h-4" />
           </button>
         )}
 
@@ -266,9 +261,7 @@ export const HistoryStrip: React.FC<HistoryStripProps> = ({
                 {selectedId === item.id && (
                   <div className="absolute inset-0 border-2 border-blue-500 rounded-xl pointer-events-none">
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                      <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
+                      <Check className="w-2.5 h-2.5 text-white" fill="currentColor" />
                     </div>
                   </div>
                 )}

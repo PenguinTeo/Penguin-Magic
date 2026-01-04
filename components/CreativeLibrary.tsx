@@ -2,12 +2,7 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import type { CreativeIdea } from '../types';
-import { PlusCircleIcon } from './icons/PlusCircleIcon';
-import { TrashIcon } from './icons/TrashIcon';
-import { LibraryIcon } from './icons/LibraryIcon';
-import { EditIcon } from './icons/EditIcon';
-import { DownloadIcon } from './icons/DownloadIcon';
-import { UploadIcon } from './icons/UploadIcon';
+import { PlusCircle as PlusCircleIcon, Trash2 as TrashIcon, Library as LibraryIcon, Edit as EditIcon, Download as UploadIcon, Upload as DownloadIcon, TrendingUp, Clipboard, Check, Star, Search as SearchIconLucide } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { normalizeImageUrl } from '../utils/image';
 import { ImportCreativeModal } from './ImportCreativeModal';
@@ -304,9 +299,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                </svg>
+                <TrendingUp className="w-4 h-4" />
                 <span>智能导入</span>
               </>
             )}
@@ -346,7 +339,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
 
       <div className="flex-shrink-0 flex items-center justify-between gap-3 py-3">
         <div className="relative flex-grow">
-          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: theme.colors.textMuted }} />
+          <SearchIconLucide className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: theme.colors.textMuted }} />
           <input
             type="text"
             placeholder="搜索标题..."
@@ -389,9 +382,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
             color: isMultiSelectMode ? undefined : theme.colors.textPrimary
           }}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
+          <Clipboard className="w-4 h-4" />
           <span>{isMultiSelectMode ? '取消多选' : '多选'}</span>
         </button>
         
@@ -508,9 +499,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                       }`}
                     >
                       {isSelected && (
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Check className="w-3 h-3 text-white" strokeWidth={3} />
                       )}
                     </div>
                   )}
@@ -539,9 +528,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                           }}
                           title="收藏"
                       >
-                          <svg className="w-3 h-3" fill={idea.isFavorite ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                          </svg>
+                          <Star className={`w-3 h-3 ${idea.isFavorite ? 'fill-current' : ''}`} />
                       </button>
                      )}
                      <button
@@ -652,8 +639,3 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
   );
 };
 
-const SearchIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-  </svg>
-);
