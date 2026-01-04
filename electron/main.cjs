@@ -63,7 +63,7 @@ function startBackendServer() {
 
     const backendPath = CONFIG.isDev
       ? path.join(__dirname, '../backend-nodejs/src/server.js')
-      : path.join(process.resourcesPath, 'app.asar/backend-nodejs/src/server.js');
+      : path.join(process.resourcesPath, 'app.asar.unpacked/backend-nodejs/src/server.js');
 
     console.log('后端路径:', backendPath);
 

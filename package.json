@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "electron:dev": "concurrently \"cd backend-nodejs && npm start\" \"npm run dev\" \"wait-on http://localhost:5176 http://localhost:8765 && cross-env NODE_ENV=development electron .\"",
     "electron:build": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
-    "package": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64 --dir",
+    "package": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
     "package:all": "npm run build && electron-builder -mwl"
   },
   "dependencies": {
@@ -22,10 +22,14 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/pngjs": "^6.0.5",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
+    "icojs": "^0.20.1",
+    "png-to-ico": "^3.0.1",
+    "pngjs": "^7.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "wait-on": "^9.0.3"
@@ -47,12 +51,21 @@
     "extraResources": [
       {
         "from": "backend-nodejs/node_modules",
-        "to": "backend-nodejs/node_modules",
-        "filter": ["**/*"]
+        "to": "app.asar.unpacked/backend-nodejs/node_modules",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
+    "asarUnpack": [
+      "backend-nodejs/**/*",
+      "dist/**/*"
+    ],
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "resources/icon.png",
       "signAndEditExecutable": false
     },
@@ -63,12 +76,18 @@
       "createStartMenuShortcut": true
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "resources/icon.png",
       "category": "public.app-category.graphics-design"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "resources/icon.png",
       "category": "Graphics"
     }

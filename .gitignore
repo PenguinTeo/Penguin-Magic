@@ -39,6 +39,10 @@ __pycache__/
 penguin-backend.exe
 *.app
 *.dmg
+release/
+
+# 构建生成的图标文件
+resources/icon.ico
 
 # 系统临时文件
 Thumbs.db
