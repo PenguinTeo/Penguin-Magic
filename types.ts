@@ -176,15 +176,8 @@ export interface GenerationHistory {
   timestamp: number;
   model: string; // 使用的模型
   isThirdParty: boolean; // 是否使用第三方API
-  inputImageData?: string; // 原始输入图片的 base64 数据（用于重新生成）
-  inputImageName?: string; // 原始输入图片的文件名
-  inputImageType?: string; // 原始输入图片的 MIME 类型
-  // 多图支持：保存所有输入图片
-  inputImages?: Array<{
-    data: string;
-    name: string;
-    type: string;
-  }>;
+  // 输入图片本地路径（用于重新生成）
+  inputImagePaths?: string[];
   // 创意库相关信息（用于重新生成时恢复）
   creativeTemplateId?: number; // 使用的创意库模板 ID
   creativeTemplateType?: 'smart' | 'smartPlus' | 'bp' | 'none'; // 创意库类型

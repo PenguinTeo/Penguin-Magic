@@ -19,21 +19,14 @@ const ThumbnailImage = memo<{ imageUrl: string; alt: string }>(({ imageUrl, alt 
   const [useThumbnail, setUseThumbnail] = useState(true);
   const [hasError, setHasError] = useState(false);
   
-  // 缩略图URL
   const thumbnailUrl = getThumbnailUrl(imageUrl);
-  // 原图URL
   const originalUrl = normalizeImageUrl(imageUrl);
-  
-  // 如果不是本地文件路径，直接使用原图
   const shouldUseThumbnail = useThumbnail && imageUrl?.startsWith('/files/');
   
   const handleError = () => {
     if (shouldUseThumbnail && useThumbnail) {
-      // 缩略图加载失败，回退到原图
-      console.log('[Thumbnail] 加载失败，回退到原图:', thumbnailUrl);
       setUseThumbnail(false);
     } else {
-      // 原图也加载失败，显示占位图
       setHasError(true);
     }
   };
@@ -51,6 +44,76 @@ const ThumbnailImage = memo<{ imageUrl: string; alt: string }>(({ imageUrl, alt 
 });
 
 ThumbnailImage.displayName = 'ThumbnailImage';
+
+/**
+ * 加载中状态组件 - 进度条动画
+ */
+const LoadingOverlay = memo(() => (
+  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+    <div className="w-12 h-12 relative">
+      <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+        <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
+        <circle
+          cx="18" cy="18" r="14"
+          fill="none"
+          stroke="url(#progressGradient)"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray="60 28"
+          className="animate-spin"
+          style={{ animationDuration: '1.5s', transformOrigin: 'center' }}
+        />
+        <defs>
+          <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#3b82f6" />
+            <stop offset="100%" stopColor="#8b5cf6" />
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+    <p className="mt-2 text-[10px] text-gray-400 font-medium">生成中...</p>
+  </div>
+));
+
+LoadingOverlay.displayName = 'LoadingOverlay';
+
+/**
+ * 错误状态组件 - 显示错误信息
+ */
+const ErrorOverlay = memo<{ error: string }>(({ error }) => {
+  const shortError = error.length > 30 ? error.slice(0, 30) + '...' : error;
+  
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-red-900/80 to-gray-900 p-2">
+      <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center mb-1">
+        <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <p className="text-[9px] text-red-300 text-center leading-tight font-medium">{shortError}</p>
+      <p className="mt-1 text-[8px] text-gray-500">右键重新生成</p>
+    </div>
+  );
+});
+
+ErrorOverlay.displayName = 'ErrorOverlay';
+
+/**
+ * 数据丢失状态组件
+ */
+const MissingDataOverlay = memo(() => (
+  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-yellow-900/60 to-gray-900 p-2">
+    <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center mb-1">
+      <svg className="w-5 h-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+    </div>
+    <p className="text-[9px] text-yellow-300 text-center leading-tight font-medium">图片已丢失</p>
+    <p className="mt-1 text-[8px] text-gray-500">可删除此项</p>
+  </div>
+));
+
+MissingDataOverlay.displayName = 'MissingDataOverlay';
 
 interface DesktopItemProps {
   item: DesktopItem;
@@ -75,8 +138,27 @@ interface DesktopItemProps {
 }
 
 /**
+ * 渲染图片内容 - 根据状态显示不同内容
+ */
+const renderImageContent = (imageItem: DesktopImageItem, itemName: string) => {
+  // 加载中状态
+  if (imageItem.isLoading) {
+    return <LoadingOverlay />;
+  }
+  // 错误状态
+  if (imageItem.loadingError) {
+    return <ErrorOverlay error={imageItem.loadingError} />;
+  }
+  // 数据丢失状态（无图片URL且无历史记录ID）
+  if (!imageItem.imageUrl && !imageItem.historyId) {
+    return <MissingDataOverlay />;
+  }
+  // 正常显示图片
+  return <ThumbnailImage imageUrl={imageItem.imageUrl} alt={itemName} />;
+};
+
+/**
  * 使用 React.memo 包装的桌面项目组件
- * 仅在 props 变化时才重新渲染
  */
 export const DesktopItemComponent = memo<DesktopItemProps>(({
   item,
@@ -135,15 +217,9 @@ export const DesktopItemComponent = memo<DesktopItemProps>(({
         }}
       >
         {item.type === 'image' ? (
-          <ThumbnailImage
-            imageUrl={(item as DesktopImageItem).imageUrl}
-            alt={item.name}
-          />
+          renderImageContent(item as DesktopImageItem, item.name)
         ) : item.type === 'stack' ? (
-          <StackPreview 
-            stack={item as DesktopStackItem} 
-            allItems={allItems} 
-          />
+          <StackPreview stack={item as DesktopStackItem} allItems={allItems} />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <FolderIcon className="w-10 h-10 text-blue-500/80" />
@@ -200,7 +276,6 @@ export const DesktopItemComponent = memo<DesktopItemProps>(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // 自定义比较函数，只有关键属性变化时才重新渲染
   return (
     prevProps.item === nextProps.item &&
     prevProps.isSelected === nextProps.isSelected &&
@@ -219,10 +294,7 @@ DesktopItemComponent.displayName = 'DesktopItemComponent';
 /**
  * 叠放预览组件
  */
-const StackPreview = memo<{ stack: DesktopStackItem; allItems: DesktopItem[] }>(({ 
-  stack, 
-  allItems 
-}) => {
+const StackPreview = memo<{ stack: DesktopStackItem; allItems: DesktopItem[] }>(({ stack, allItems }) => {
   const stackImages = stack.itemIds
     .slice(0, 4)
     .map(id => allItems.find(i => i.id === id) as DesktopImageItem)
@@ -231,7 +303,6 @@ const StackPreview = memo<{ stack: DesktopStackItem; allItems: DesktopItem[] }>(
   return (
     <div className="w-full h-full relative">
       {stackImages.map((img, idx) => {
-        // 使用缩略图
         const thumbnailUrl = getThumbnailUrl(img.imageUrl);
         const originalUrl = normalizeImageUrl(img.imageUrl);
         const shouldUseThumbnail = img.imageUrl?.startsWith('/files/');
@@ -254,7 +325,6 @@ const StackPreview = memo<{ stack: DesktopStackItem; allItems: DesktopItem[] }>(
             draggable={false}
             loading="lazy"
             onError={(e) => {
-              // 缩略图失败时回退到原图
               if (shouldUseThumbnail && (e.target as HTMLImageElement).src === thumbnailUrl) {
                 (e.target as HTMLImageElement).src = originalUrl;
               }
@@ -262,7 +332,6 @@ const StackPreview = memo<{ stack: DesktopStackItem; allItems: DesktopItem[] }>(
           />
         );
       })}
-      {/* 叠放数量标记 */}
       <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded-full z-10">
         {stack.itemIds.length}
       </div>

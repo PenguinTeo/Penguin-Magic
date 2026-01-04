@@ -1418,24 +1418,45 @@ export const Desktop: React.FC<DesktopProps> = ({
               {item.type === 'image' ? (
                 // 检查是否正在加载中
                 (item as DesktopImageItem).isLoading ? (
-                  // Loading 状态：简洁暗色风格
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-neutral-900/80 backdrop-blur-sm">
-                    <div className="relative w-10 h-10">
-                      {/* 外圈旋转 */}
-                      <div className="absolute inset-0 rounded-full border-2 border-neutral-700" />
-                      <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-blue-500 animate-spin" />
-                      {/* 中心图标 */}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-lg">🐧</span>
-                      </div>
+                  // Loading 状态：进度条动画
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+                    <div className="w-12 h-12 relative">
+                      <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="3" />
+                        <circle
+                          cx="18" cy="18" r="14"
+                          fill="none"
+                          stroke="url(#progressGradient)"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeDasharray="60 28"
+                          className="animate-spin"
+                          style={{ animationDuration: '1.5s', transformOrigin: 'center' }}
+                        />
+                        <defs>
+                          <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#3b82f6" />
+                            <stop offset="100%" stopColor="#8b5cf6" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
                     </div>
+                    <p className="mt-2 text-[10px] text-gray-400 font-medium">生成中...</p>
                   </div>
                 ) : (item as DesktopImageItem).loadingError ? (
-                  // 错误状态：简洁暗色风格
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-neutral-900/80 backdrop-blur-sm">
-                    <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                      <span className="text-red-400 text-lg">✗</span>
+                  // 错误状态：显示错误信息
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-red-900/80 to-gray-900 p-2">
+                    <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center mb-1">
+                      <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
                     </div>
+                    <p className="text-[9px] text-red-300 text-center leading-tight font-medium">
+                      {((item as DesktopImageItem).loadingError || '').length > 30 
+                        ? (item as DesktopImageItem).loadingError?.slice(0, 30) + '...' 
+                        : (item as DesktopImageItem).loadingError}
+                    </p>
+                    <p className="mt-1 text-[8px] text-gray-500">右键重新生成</p>
                   </div>
                 ) : (
                   // 正常状态：显示图片

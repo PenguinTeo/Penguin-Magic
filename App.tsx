@@ -1995,25 +1995,22 @@ const App: React.FC = () => {
   
   // 历史记录操作
   const handleHistorySelect = async (item: GenerationHistory) => {
-    // 恢复原始输入图片（如果有）
-    let restoredInputFile: File | null = null;
-    if (item.inputImageData && item.inputImageType) {
+    // 从本地路径恢复输入图片
+    let restoredFiles: File[] = [];
+    if (item.inputImagePaths && item.inputImagePaths.length > 0) {
       try {
-        // 将 base64 转换回 File 对象
-        const byteCharacters = atob(item.inputImageData);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: item.inputImageType });
-        restoredInputFile = new File([blob], item.inputImageName || 'restored-input.png', { type: item.inputImageType });
-        
-        // 清空其他图片，仅保留恢复的输入图片
-        setFiles([restoredInputFile]);
+        restoredFiles = await Promise.all(item.inputImagePaths.map(async (path) => {
+          const response = await fetch(path);
+          const blob = await response.blob();
+          const filename = path.split('/').pop() || 'restored-input.png';
+          return new File([blob], filename, { type: blob.type });
+        }));
+        setFiles(restoredFiles);
         setActiveFileIndex(0);
       } catch (e) {
-        console.warn('恢复输入图片失败:', e);
+        console.warn('从本地路径恢复图片失败:', e);
+        setFiles([]);
+        setActiveFileIndex(null);
       }
     } else {
       // 没有输入图片，清空文件列表
@@ -2051,7 +2048,7 @@ const App: React.FC = () => {
     setGeneratedContent({ 
       imageUrl: item.imageUrl, 
       text: null,
-      originalFiles: restoredInputFile ? [restoredInputFile] : [] 
+      originalFiles: restoredFiles 
     });
     setPrompt(item.prompt);
     setStatus(ApiStatus.Success);
@@ -2089,34 +2086,27 @@ const App: React.FC = () => {
       smartPlusOverrides?: SmartPlusConfig;
     }
   ): Promise<{ historyId?: number; localImageUrl: string } | undefined> => {
-    // 将输入图片转换为 base64 保存
-    let inputImageData: string | undefined;
-    let inputImageName: string | undefined;
-    let inputImageType: string | undefined;
-    let inputImages: Array<{ data: string; name: string; type: string }> | undefined;
+    // 输入图片保存为本地文件，只存储路径（不再存base64）
+    let inputImagePaths: string[] | undefined;
     
-    // 保存所有输入图片（多图支持）
     if (inputFiles && inputFiles.length > 0) {
       try {
-        inputImages = await Promise.all(inputFiles.map(async (file) => {
+        // 并行保存所有输入图片到 input 目录
+        inputImagePaths = await Promise.all(inputFiles.map(async (file) => {
           const data = await new Promise<string>((resolve) => {
             const reader = new FileReader();
-            reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+            reader.onloadend = () => resolve(reader.result as string);
             reader.readAsDataURL(file);
           });
-          return {
-            data,
-            name: file.name,
-            type: file.type
-          };
+          // 保存到input目录
+          const saveResult = await saveToInput(data, file.name);
+          if (saveResult.success && saveResult.data) {
+            return saveResult.data.url; // 返回本地路径
+          }
+          return ''; // 保存失败返回空
         }));
-        
-        // 保持向后兼容：第一张图片也保存到单图字段
-        if (inputImages.length > 0) {
-          inputImageData = inputImages[0].data;
-          inputImageName = inputImages[0].name;
-          inputImageType = inputImages[0].type;
-        }
+        // 过滤掉保存失败的
+        inputImagePaths = inputImagePaths.filter(p => p);
       } catch (e) {
         console.warn('保存输入图片失败:', e);
       }
@@ -2159,10 +2149,8 @@ const App: React.FC = () => {
       timestamp: Date.now(),
       model: isThirdParty ? (thirdPartyApiConfig.model || 'nano-banana-2') : 'Gemini 3 Pro',
       isThirdParty,
-      inputImageData,
-      inputImageName,
-      inputImageType,
-      inputImages, // 多图支持
+      // 输入图片使用本地路径，不存base64
+      inputImagePaths,
       // 创意库信息
       creativeTemplateId: creativeInfo?.templateId,
       creativeTemplateType: creativeInfo?.templateType || 'none',
@@ -2842,12 +2830,17 @@ const App: React.FC = () => {
             const localImageUrl = saveResult?.localImageUrl || result.imageUrl;
             const historyId = saveResult?.historyId;
               
-            // 更新桌面项：设置图片URL，清除loading状态
-            setDesktopItems(prev => prev.map(item => 
-              item.id === placeholder.id 
-                ? { ...item, imageUrl: localImageUrl, isLoading: false, historyId } as DesktopImageItem
-                : item
-            ));
+            // 更新桌面项：设置图片URL，清除loading状态，并保存到磁盘
+            setDesktopItems(prev => {
+              const updatedItems = prev.map(item => 
+                item.id === placeholder.id 
+                  ? { ...item, imageUrl: localImageUrl, isLoading: false, historyId } as DesktopImageItem
+                  : item
+              );
+              // 立即保存更新后的状态到磁盘，避免数据丢失
+              safeDesktopSave(updatedItems);
+              return updatedItems;
+            });
               
             console.log(`[Batch Generate] #${index + 1} 成功`);
             return { success: true, index };
@@ -2857,12 +2850,17 @@ const App: React.FC = () => {
           const errorMessage = e instanceof Error ? e.message : '生成失败';
           console.error(`[Batch Generate] #${index + 1} 失败:`, errorMessage);
             
-          // 更新桌面项：设置错误状态
-          setDesktopItems(prev => prev.map(item => 
-            item.id === placeholder.id 
-              ? { ...item, isLoading: false, loadingError: errorMessage } as DesktopImageItem
-              : item
-          ));
+          // 更新桌面项：设置错误状态，并保存到磁盘
+          setDesktopItems(prev => {
+            const updatedItems = prev.map(item => 
+              item.id === placeholder.id 
+                ? { ...item, isLoading: false, loadingError: errorMessage } as DesktopImageItem
+                : item
+            );
+            // 保存错误状态到磁盘
+            safeDesktopSave(updatedItems);
+            return updatedItems;
+          });
             
           return { success: false, index, error: errorMessage };
         }
@@ -2880,8 +2878,8 @@ const App: React.FC = () => {
         console.warn(`[批量生成] 部分失败: ${successCount}/${batchCount}`);
       }
         
-      // 保存桌面状态
-      desktopApi.saveDesktopItems(desktopItems);
+      // 批量生成完成后的日志（单个生成结果已在各自回调中保存）
+      console.log('[Batch Generate] 所有任务处理完成，状态已分别保存');
       return;
     }
   
@@ -2931,12 +2929,17 @@ const App: React.FC = () => {
         const savedHistoryId = saveResult?.historyId;
         const localImageUrl = saveResult?.localImageUrl || result.imageUrl;
         
-        // 更新占位项：设置图片URL，清除loading状态
-        setDesktopItems(prev => prev.map(item => 
-          item.id === placeholderId 
-            ? { ...item, imageUrl: localImageUrl, isLoading: false, historyId: savedHistoryId } as DesktopImageItem
-            : item
-        ));
+        // 更新占位项：设置图片URL，清除loading状态，并保存到磁盘
+        setDesktopItems(prev => {
+          const updatedItems = prev.map(item => 
+            item.id === placeholderId 
+              ? { ...item, imageUrl: localImageUrl, isLoading: false, historyId: savedHistoryId } as DesktopImageItem
+              : item
+          );
+          // 立即保存更新后的状态到磁盘，避免数据丢失
+          safeDesktopSave(updatedItems);
+          return updatedItems;
+        });
         
         // 显示结果浮层
         setGeneratedContent({ ...result, originalFiles: [...files] });
@@ -2954,12 +2957,17 @@ const App: React.FC = () => {
         errorMessage = e.message;
       }
       
-      // 更新占位项：设置错误状态
-      setDesktopItems(prev => prev.map(item => 
-        item.id === placeholderId 
-          ? { ...item, isLoading: false, loadingError: errorMessage } as DesktopImageItem
-          : item
-      ));
+      // 更新占位项：设置错误状态，并保存到磁盘
+      setDesktopItems(prev => {
+        const updatedItems = prev.map(item => 
+          item.id === placeholderId 
+            ? { ...item, isLoading: false, loadingError: errorMessage } as DesktopImageItem
+            : item
+        );
+        // 保存错误状态到磁盘
+        safeDesktopSave(updatedItems);
+        return updatedItems;
+      });
       
       if (errorMessage.includes('🐧') || errorMessage.includes('Pebbling') || errorMessage.includes('鹅卵石') || errorMessage.includes('余额')) {
         setError(errorMessage);
@@ -3149,64 +3157,20 @@ const App: React.FC = () => {
     if (item.historyId) {
       const historyItem = generationHistory.find(h => h.id === item.historyId);
       if (historyItem) {
-        // 恢复所有输入图片（多图支持）
-        if (historyItem.inputImages && historyItem.inputImages.length > 0) {
+        // 从本地路径恢复输入图片（新版本）
+        if (historyItem.inputImagePaths && historyItem.inputImagePaths.length > 0) {
           try {
-            const restoredFiles = await Promise.all(historyItem.inputImages.map(async (img, index) => {
-              const byteCharacters = atob(img.data);
-              const byteNumbers = new Array(byteCharacters.length);
-              for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-              }
-              const byteArray = new Uint8Array(byteNumbers);
-              const blob = new Blob([byteArray], { type: img.type });
-              return new File([blob], img.name, { type: img.type });
+            const restoredFiles = await Promise.all(historyItem.inputImagePaths.map(async (path) => {
+              const response = await fetch(path);
+              const blob = await response.blob();
+              const filename = path.split('/').pop() || 'restored-input.png';
+              return new File([blob], filename, { type: blob.type });
             }));
             
             setFiles(restoredFiles);
             setActiveFileIndex(0);
           } catch (e) {
-            console.warn('恢复多图失败:', e);
-            // 回退到单图恢复
-            if (historyItem.inputImageData && historyItem.inputImageType) {
-              try {
-                const byteCharacters = atob(historyItem.inputImageData);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) {
-                  byteNumbers[i] = byteCharacters.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: historyItem.inputImageType });
-                const restoredFile = new File([blob], historyItem.inputImageName || 'restored-input.png', { type: historyItem.inputImageType });
-                
-                setFiles([restoredFile]);
-                setActiveFileIndex(0);
-              } catch (e2) {
-                console.warn('恢复单图也失败:', e2);
-                setFiles([]);
-                setActiveFileIndex(null);
-              }
-            } else {
-              setFiles([]);
-              setActiveFileIndex(null);
-            }
-          }
-        } else if (historyItem.inputImageData && historyItem.inputImageType) {
-          // 向后兼容：单图恢复
-          try {
-            const byteCharacters = atob(historyItem.inputImageData);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-              byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: historyItem.inputImageType });
-            const restoredFile = new File([blob], historyItem.inputImageName || 'restored-input.png', { type: historyItem.inputImageType });
-            
-            setFiles([restoredFile]);
-            setActiveFileIndex(0);
-          } catch (e) {
-            console.warn('恢复输入图片失败:', e);
+            console.warn('从本地路径恢复图片失败:', e);
             setFiles([]);
             setActiveFileIndex(null);
           }
