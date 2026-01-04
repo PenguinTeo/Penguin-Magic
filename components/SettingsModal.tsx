@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
-import { Plug, Gem, Eye as EyeIcon, EyeOff as EyeOffIcon, Key as KeyIcon, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Info as InfoIcon } from 'lucide-react';
+import { Plug, Gem, Eye as EyeIcon, EyeOff as EyeOffIcon, Key as KeyIcon, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Info as InfoIcon, Check, X } from 'lucide-react';
 
 // 应用版本号
 const APP_VERSION = '1.0.3';
@@ -122,9 +122,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         {saveSuccessMessage && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 text-white text-sm font-medium rounded-lg shadow-lg animate-fade-in flex items-center gap-2"
             style={{ background: colors.primary }}>
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-            </svg>
+            <Check className="w-4 h-4" fill="currentColor" />
             {saveSuccessMessage}
           </div>
         )}
@@ -143,9 +141,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 color: colors.textSecondary
               }}
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -180,9 +176,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {activeMode === 'local-thirdparty' && (
                 <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center"
                   style={{ background: colors.primary }}>
-                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
+                  <Check className="w-3 h-3 text-white" fill="currentColor" />
                 </div>
               )}
             </div>
@@ -278,9 +272,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {activeMode === 'local-gemini' && (
                 <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center"
                   style={{ background: colors.primary }}>
-                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
+                  <Check className="w-3 h-3 text-white" fill="currentColor" />
                 </div>
               )}
             </div>
@@ -386,9 +378,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {isActive && (
                       <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center shadow-lg"
                         style={{ background: colors.primary }}>
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                        <Check className="w-3 h-3 text-white" fill="currentColor" />
                       </div>
                     )}
                   </button>

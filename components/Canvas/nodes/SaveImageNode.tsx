@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import type { CanvasNodeData } from '../index';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { Play, X } from 'lucide-react';
 
 const SaveImageNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const { theme } = useTheme();
@@ -66,18 +67,14 @@ const SaveImageNode: React.FC<NodeProps> = ({ id, data, selected }) => {
           {isGenerating ? (
             <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           ) : (
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
+            <Play className="w-3.5 h-3.5" fill="currentColor" />
           )}
         </button>
         <button
           onClick={() => nodeData.onDelete?.(id)}
           className="w-6 h-6 rounded-lg bg-white/10 hover:bg-gray-500/30 flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all"
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <X className="w-3.5 h-3.5" />
         </button>
       </div>
 

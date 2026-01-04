@@ -25,6 +25,7 @@ import '@xyflow/react/dist/style.css';
 import { useTheme } from '../../contexts/ThemeContext';
 import { CreativeIdea, DesktopImageItem, GeneratedContent } from '../../types';
 import { normalizeImageUrl } from '../../utils/image';
+import { ChevronRight, X } from 'lucide-react';
 
 // 自定义节点组件
 import CreativeNode from './nodes/CreativeNode';
@@ -769,9 +770,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               <button className="w-full px-4 py-2.5 text-sm font-medium rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-300 hover:bg-blue-500/30 transition-all flex items-center gap-3">
                 <span className="text-lg">🎨</span>
                 <span>创意库</span>
-                <svg className="w-4 h-4 ml-auto opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <ChevronRight className="w-4 h-4 ml-auto opacity-50" />
               </button>
               <div className="absolute left-full top-0 ml-2 hidden group-hover:block z-50">
                 <div className="bg-gray-900/95 backdrop-blur-xl rounded-xl border border-white/10 p-2 max-h-72 overflow-y-auto min-w-[200px] shadow-2xl">
@@ -850,9 +849,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 onClick={handleCancelExecution}
                 className="w-full px-4 py-3 text-sm font-bold rounded-xl bg-gradient-to-r from-blue-500 to-blue-500 text-white hover:from-blue-600 hover:to-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-4 h-4" />
                 <span>取消执行</span>
               </button>
             ) : (

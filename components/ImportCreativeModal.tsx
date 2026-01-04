@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CreativeIdea } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
+import { CloudDownload, X } from 'lucide-react';
 
 interface ImportCreativeModalProps {
   isOpen: boolean;
@@ -75,9 +76,7 @@ export const ImportCreativeModal: React.FC<ImportCreativeModalProps> = ({
                 ringColor: theme.colors.border
               }}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-              </svg>
+              <CloudDownload className="w-4 h-4" />
             </div>
             <h3 className="text-base font-bold" style={{ color: theme.colors.textPrimary }}>
               智能导入
@@ -89,9 +88,7 @@ export const ImportCreativeModal: React.FC<ImportCreativeModalProps> = ({
             style={{ color: theme.colors.textMuted }}
             title="关闭"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-4 h-4" />
           </button>
         </div>
         

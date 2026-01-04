@@ -6,6 +6,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRunningHubTasks, RunningHubTask } from '../contexts/RunningHubTaskContext';
 import { normalizeImageUrl } from '../utils/image';
+import { ChevronUp, ChevronDown, X, Maximize2 } from 'lucide-react';
 
 // 通知提示组件
 const Toast: React.FC<{ message: string; type: 'success' | 'error'; onClose: () => void }> = ({ message, type, onClose }) => {
@@ -127,13 +128,9 @@ export const RunningHubProgress: React.FC = () => {
                                     title={isMinimized ? '展开任务' : '最小化'}
                                 >
                                     {isMinimized ? (
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                                        </svg>
+                                        <ChevronUp className="w-3.5 h-3.5" />
                                     ) : (
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                        </svg>
+                                        <ChevronDown className="w-3.5 h-3.5" />
                                     )}
                                 </button>
                                 {/* 放大/缩小按钮 */}
@@ -143,13 +140,9 @@ export const RunningHubProgress: React.FC = () => {
                                     title={isExpanded ? '缩小' : '放大'}
                                 >
                                     {isExpanded ? (
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
+                                        <X className="w-3.5 h-3.5" />
                                     ) : (
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                        </svg>
+                                        <Maximize2 className="w-3.5 h-3.5" />
                                     )}
                                 </button>
                             </div>
