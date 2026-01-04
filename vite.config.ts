@@ -4,6 +4,7 @@ import { defineConfig, loadEnv } from 'vite';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
+      base: './', // 使用相对路径，适用于 Electron
       server: {
         port: 5176,
         strictPort: true,
@@ -25,6 +26,16 @@ export default defineConfig(({ mode }) => {
           '/output': {
             target: 'http://localhost:8765',
             changeOrigin: true,
+          },
+        },
+      },
+      build: {
+        // Electron 渲染进程构建配置
+        outDir: 'dist',
+        assetsDir: 'assets',
+        rollupOptions: {
+          output: {
+            manualChunks: undefined,
           },
         },
       },

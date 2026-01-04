@@ -3,10 +3,15 @@
   "private": true,
   "version": "0.2.4",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"cd backend-nodejs && npm start\" \"npm run dev\" \"wait-on http://localhost:5176 http://localhost:8765 && cross-env NODE_ENV=development electron .\"",
+    "electron:build": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "package": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64 --dir",
+    "package:all": "npm run build && electron-builder -mwl"
   },
   "dependencies": {
     "@google/genai": "^1.16.0",
@@ -17,7 +22,55 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.penguin.magic",
+    "productName": "PenguinMagic",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "backend-nodejs/src/**/*",
+      "backend-nodejs/data/**/*",
+      "backend-nodejs/package.json",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend-nodejs/node_modules",
+        "to": "backend-nodejs/node_modules",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "resources/icon.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "icon": "resources/icon.png",
+      "category": "public.app-category.graphics-design"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "resources/icon.png",
+      "category": "Graphics"
+    }
   }
 }

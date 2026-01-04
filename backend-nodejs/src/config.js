@@ -1,7 +1,20 @@
 const path = require('path');
 
-// 获取项目根目录 (backend-nodejs的上一级)
-const BASE_DIR = path.resolve(__dirname, '..', '..');
+// 判断是否在 Electron 环境中运行
+const isElectron = process.env.IS_ELECTRON === 'true';
+const userDataPath = process.env.USER_DATA_PATH;
+
+// 获取项目根目录
+let BASE_DIR;
+if (isElectron && userDataPath) {
+  // Electron 环境：使用用户数据目录
+  BASE_DIR = userDataPath;
+  console.log('[Config] Electron 环境，使用用户数据目录:', BASE_DIR);
+} else {
+  // 开发环境：使用项目根目录 (backend-nodejs的上一级)
+  BASE_DIR = path.resolve(__dirname, '..', '..');
+  console.log('[Config] 开发环境，使用项目根目录:', BASE_DIR);
+}
 
 // 配置项
 const config = {
