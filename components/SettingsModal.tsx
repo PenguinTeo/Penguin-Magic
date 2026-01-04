@@ -1,16 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
-import { PlugIcon, DiamondIcon } from './icons/PIcon';
-import { EyeIcon, EyeOffIcon } from './icons/EyeIcon';
-import { KeyIcon } from './icons/KeyIcon';
-import { 
-  MoonIcon, 
-  SunIcon, 
-  SaveIcon,
-  CpuIcon,
-  InfoIcon
-} from './icons/ThemeIcons';
+import { Plug, Gem, Eye as EyeIcon, EyeOff as EyeOffIcon, Key as KeyIcon, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Info as InfoIcon } from 'lucide-react';
 
 // 应用版本号
 const APP_VERSION = '1.0.3';
@@ -177,7 +168,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center"
                   style={{ background: activeMode === 'local-thirdparty' ? colors.primary : colors.bgTertiary }}>
-                  <PlugIcon className="w-5 h-5 text-white" />
+                  <Plug className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1">
                   <h4 className="text-sm font-semibold" style={{ color: colors.textPrimary }}>贞贞 API</h4>
@@ -275,7 +266,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center"
                   style={{ background: activeMode === 'local-gemini' ? colors.primary : colors.bgTertiary }}>
-                  <DiamondIcon className="w-5 h-5 text-white" />
+                  <Gem className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1">
                   <h4 className="text-sm font-semibold" style={{ color: colors.textPrimary }}>Gemini API</h4>

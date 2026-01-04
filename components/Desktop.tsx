@@ -1,22 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem, DesktopPosition, GenerationHistory } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
-import { TrashIcon } from './icons/TrashIcon';
-import { ZoomInIcon } from './icons/ZoomInIcon';
-import { DownloadIcon } from './icons/DownloadIcon';
-import { EditIcon } from './icons/EditIcon';
-import { RefreshIcon } from './icons/RefreshIcon';
-import { FolderIcon, FolderOpenIcon } from './icons/FolderIcon';
-import { StackIcon, StackExpandIcon, UnstackIcon } from './icons/StackIcon';
-import { SearchIcon } from './icons/SearchIcon';
-import { EyeIcon, EyeOffIcon } from './icons/EyeIcon';
-import { CopyIcon, ScissorsIcon, ClipboardIcon } from './icons/CopyIcon';
-import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
-import { PackageIcon } from './icons/PackageIcon';
-import { MoveOutIcon } from './icons/MoveOutIcon';
-import { RenameIcon } from './icons/RenameIcon';
-import { LibraryIcon } from './icons/LibraryIcon';
-import { LayersIcon } from './icons/GridIcon';
+import { Trash2 as TrashIcon, ZoomIn as ZoomInIcon, Download as DownloadIcon, Edit as EditIcon, RefreshCw as RefreshIcon, Folder as FolderIcon, FolderOpen as FolderOpenIcon, Layers, Maximize2 as StackExpandIcon, Grid3x3 as UnstackIcon, Search as SearchIcon, Eye as EyeIcon, EyeOff as EyeOffIcon, Copy as CopyIcon, Scissors as ScissorsIcon, Clipboard as ClipboardIcon, ChevronLeft as ChevronLeftIcon, Package as PackageIcon, LogOut as MoveOutIcon, FileEdit as RenameIcon, Library as LibraryIcon } from 'lucide-react';
 // JSZip 导出逻辑已迁移到 services/export/desktopExporter.ts
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
 import { normalizeImageUrl, getThumbnailUrl, parseErrorMessage, extractErrorCode } from '../utils/image';
@@ -1325,7 +1310,7 @@ export const Desktop: React.FC<DesktopProps> = ({
           title="将同创意库生成的图片自动叠放在一起"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <LayersIcon className="w-3.5 h-3.5" />
+          <Layers className="w-3.5 h-3.5" />
           <span>自动叠放</span>
         </button>
         <button
@@ -1366,7 +1351,7 @@ export const Desktop: React.FC<DesktopProps> = ({
           </button>
           <span style={{ color: isLight ? '#cbd5e1' : '#52525b' }}>/</span>
           <span className="text-[13px] font-medium flex items-center gap-1.5" style={{ color: isLight ? '#0f172a' : 'white' }}>
-            {openFolderId ? <FolderOpenIcon className="w-4 h-4 text-blue-500" /> : <StackIcon className="w-4 h-4 text-blue-400" />}
+            {openFolderId ? <FolderOpenIcon className="w-4 h-4 text-blue-500" /> : <Layers className="w-4 h-4 text-blue-400" />}
             {openFolderId 
               ? (items.find(i => i.id === openFolderId)?.name || '文件夹')
               : (items.find(i => i.id === openStackId)?.name || '叠放')

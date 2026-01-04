@@ -1,7 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { GenerationHistory } from '../types';
-import { TrashIcon } from './icons/TrashIcon';
-import { ClockIcon } from './icons/ClockIcon';
+import { Trash2 as TrashIcon, Clock as ClockIcon } from 'lucide-react';
 import { normalizeImageUrl } from '../utils/image';
 
 interface HistoryStripProps {

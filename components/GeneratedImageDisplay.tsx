@@ -1,12 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ApiStatus } from '../types';
 import type { GeneratedContent } from '../types';
-import { DownloadIcon } from './icons/DownloadIcon';
-import { ZoomInIcon } from './icons/ZoomInIcon';
-import { RefreshIcon } from './icons/RefreshIcon';
-import { EditIcon } from './icons/EditIcon';
+import { Download as DownloadIcon, ZoomIn as ZoomInIcon, RefreshCw as RefreshIcon, Edit as EditIcon, Image as ImageIcon } from 'lucide-react';
 import { EmptyState } from './EmptyState';
-import { ImageIcon } from './icons/ImageIcon';
 import { getMatchedStory } from '../services/storyLibrary';
 import { normalizeImageUrl } from '../utils/image';
 

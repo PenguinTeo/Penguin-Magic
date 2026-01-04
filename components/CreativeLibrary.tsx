@@ -2,12 +2,7 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import type { CreativeIdea } from '../types';
-import { PlusCircleIcon } from './icons/PlusCircleIcon';
-import { TrashIcon } from './icons/TrashIcon';
-import { LibraryIcon } from './icons/LibraryIcon';
-import { EditIcon } from './icons/EditIcon';
-import { DownloadIcon } from './icons/DownloadIcon';
-import { UploadIcon } from './icons/UploadIcon';
+import { PlusCircle as PlusCircleIcon, Trash2 as TrashIcon, Library as LibraryIcon, Edit as EditIcon, Download as UploadIcon, Upload as DownloadIcon } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { normalizeImageUrl } from '../utils/image';
 import { ImportCreativeModal } from './ImportCreativeModal';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { SparklesIcon } from './icons/SparklesIcon';
+import { Sparkles as SparklesIcon } from 'lucide-react';
 import { ApiStatus } from '../types';
 
 interface GenerateButtonProps {

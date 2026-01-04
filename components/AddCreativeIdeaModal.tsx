@@ -1,10 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CreativeIdea, SmartPlusConfig, SmartPlusComponent, BPField, BPFieldType, BPAgentModel, AspectRatioType, ImageSizeType } from '../types';
-import { UploadIcon } from './icons/UploadIcon';
-import { XCircleIcon } from './icons/XCircleIcon';
-import { PlusCircleIcon } from './icons/PlusCircleIcon';
-import { LightbulbIcon } from './icons/LightbulbIcon';
+import { Upload as UploadIcon, XCircle as XCircleIcon, PlusCircle as PlusCircleIcon, Lightbulb as LightbulbIcon } from 'lucide-react';
 import { defaultSmartPlusConfig } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { compressImage } from '../utils/image';

@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { KeyIcon } from './icons/KeyIcon';
-import { CheckCircleIcon } from './icons/CheckCircleIcon';
+import { Key as KeyIcon, CheckCircle2 as CheckCircleIcon, ExternalLink as ExternalLinkIcon, Wallet as WalletIcon } from 'lucide-react';
 import { ThirdPartyApiConfig } from '../types';
-import { ExternalLinkIcon } from './icons/ExternalLinkIcon';
-import { WalletIcon } from './icons/WalletIcon';
 
 interface ApiKeyManagerProps {
   apiKey: string;

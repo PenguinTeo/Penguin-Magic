@@ -6,7 +6,7 @@
 import React, { memo, useState } from 'react';
 import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem } from '../../types';
 import { normalizeImageUrl, getThumbnailUrl } from '../../utils/image';
-import { FolderIcon } from '../icons/FolderIcon';
+import { Folder as FolderIcon } from 'lucide-react';
 
 // 默认占位图
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0NDQ0NDQiIHN0cm9rZS13aWR0aD0iMSI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjwvc3ZnPg==';
