@@ -1,10 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CreativeIdea, SmartPlusConfig, SmartPlusComponent, BPField, BPFieldType, BPAgentModel, AspectRatioType, ImageSizeType } from '../types';
-import { UploadIcon } from './icons/UploadIcon';
-import { XCircleIcon } from './icons/XCircleIcon';
-import { PlusCircleIcon } from './icons/PlusCircleIcon';
-import { LightbulbIcon } from './icons/LightbulbIcon';
+import { Upload as UploadIcon, XCircle as XCircleIcon, PlusCircle as PlusCircleIcon, Lightbulb as LightbulbIcon, AlertTriangle } from 'lucide-react';
 import { defaultSmartPlusConfig } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { compressImage } from '../utils/image';
@@ -339,9 +336,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-blue-500/15 flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+                <AlertTriangle className="w-5 h-5 text-blue-400" />
               </div>
               <div>
                 <h3 className="text-base font-semibold" style={{ color: theme.colors.textPrimary }}>确认关闭</h3>

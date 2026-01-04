@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { ChevronDown as ChevronDownIcon } from 'lucide-react';
 
 interface AccordionProps {
   title: string;

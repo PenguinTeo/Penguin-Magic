@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { SparklesIcon } from './icons/SparklesIcon';
-import { UploadIcon } from './icons/UploadIcon';
+import { Sparkles as SparklesIcon, Upload as UploadIcon } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface WelcomeScreenProps {

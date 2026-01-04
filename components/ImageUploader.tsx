@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { XCircleIcon } from './icons/XCircleIcon';
-import { PlusCircleIcon } from './icons/PlusCircleIcon';
+import { XCircle as XCircleIcon, PlusCircle as PlusCircleIcon } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface ImageUploaderProps {

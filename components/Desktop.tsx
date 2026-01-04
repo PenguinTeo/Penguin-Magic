@@ -1,22 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem, DesktopPosition, GenerationHistory } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
-import { TrashIcon } from './icons/TrashIcon';
-import { ZoomInIcon } from './icons/ZoomInIcon';
-import { DownloadIcon } from './icons/DownloadIcon';
-import { EditIcon } from './icons/EditIcon';
-import { RefreshIcon } from './icons/RefreshIcon';
-import { FolderIcon, FolderOpenIcon } from './icons/FolderIcon';
-import { StackIcon, StackExpandIcon, UnstackIcon } from './icons/StackIcon';
-import { SearchIcon } from './icons/SearchIcon';
-import { EyeIcon, EyeOffIcon } from './icons/EyeIcon';
-import { CopyIcon, ScissorsIcon, ClipboardIcon } from './icons/CopyIcon';
-import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
-import { PackageIcon } from './icons/PackageIcon';
-import { MoveOutIcon } from './icons/MoveOutIcon';
-import { RenameIcon } from './icons/RenameIcon';
-import { LibraryIcon } from './icons/LibraryIcon';
-import { LayersIcon } from './icons/GridIcon';
+import { Trash2 as TrashIcon, ZoomIn as ZoomInIcon, Download as DownloadIcon, Edit as EditIcon, RefreshCw as RefreshIcon, Folder as FolderIcon, FolderOpen as FolderOpenIcon, Layers, Maximize2 as StackExpandIcon, Grid3x3 as UnstackIcon, Search as SearchIcon, Eye as EyeIcon, EyeOff as EyeOffIcon, Copy as CopyIcon, Scissors as ScissorsIcon, Clipboard as ClipboardIcon, ChevronLeft as ChevronLeftIcon, Package as PackageIcon, LogOut as MoveOutIcon, FileEdit as RenameIcon, Library as LibraryIcon, Upload as UploadIcon, X, AlertCircle, AlertTriangle, ImageOff } from 'lucide-react';
 // JSZip 导出逻辑已迁移到 services/export/desktopExporter.ts
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
 import { normalizeImageUrl, getThumbnailUrl, parseErrorMessage, extractErrorCode } from '../utils/image';
@@ -1258,9 +1243,7 @@ export const Desktop: React.FC<DesktopProps> = ({
           <div className="absolute inset-0 bg-blue-500/20 border-4 border-dashed border-blue-500 rounded-xl" />
           <div className="relative flex flex-col items-center gap-4 p-8 bg-black/60 backdrop-blur-xl rounded-2xl border border-white/20">
             <div className="w-20 h-20 rounded-2xl bg-blue-500 flex items-center justify-center shadow-2xl">
-              <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <UploadIcon className="w-10 h-10 text-white" />
             </div>
             <div className="text-center">
               <p className="text-lg font-semibold text-white">拖放图片或文件夹到这里</p>
@@ -1308,9 +1291,7 @@ export const Desktop: React.FC<DesktopProps> = ({
               style={{ color: isLight ? '#64748b' : '#9ca3af' }}
               onMouseDown={(e) => e.stopPropagation()}
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
@@ -1325,7 +1306,7 @@ export const Desktop: React.FC<DesktopProps> = ({
           title="将同创意库生成的图片自动叠放在一起"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <LayersIcon className="w-3.5 h-3.5" />
+          <Layers className="w-3.5 h-3.5" />
           <span>自动叠放</span>
         </button>
         <button
@@ -1366,7 +1347,7 @@ export const Desktop: React.FC<DesktopProps> = ({
           </button>
           <span style={{ color: isLight ? '#cbd5e1' : '#52525b' }}>/</span>
           <span className="text-[13px] font-medium flex items-center gap-1.5" style={{ color: isLight ? '#0f172a' : 'white' }}>
-            {openFolderId ? <FolderOpenIcon className="w-4 h-4 text-blue-500" /> : <StackIcon className="w-4 h-4 text-blue-400" />}
+            {openFolderId ? <FolderOpenIcon className="w-4 h-4 text-blue-500" /> : <Layers className="w-4 h-4 text-blue-400" />}
             {openFolderId 
               ? (items.find(i => i.id === openFolderId)?.name || '文件夹')
               : (items.find(i => i.id === openStackId)?.name || '叠放')
@@ -1447,9 +1428,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                   // 错误状态：统一简洁格式，按空格查看详情
                   <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-red-900/80 to-gray-900 p-2">
                     <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center mb-1">
-                      <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <AlertCircle className="w-6 h-6 text-red-400" />
                     </div>
                     <p className="text-[9px] text-red-300 text-center font-medium">
                       生成失败{extractErrorCode((item as DesktopImageItem).loadingError) ? ` (${extractErrorCode((item as DesktopImageItem).loadingError)})` : ''}
@@ -1460,9 +1439,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                   // 图片丢失状态：统一格式
                   <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-yellow-900/60 to-gray-900 p-2">
                     <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center mb-1">
-                      <svg className="w-6 h-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
+                      <AlertTriangle className="w-6 h-6 text-yellow-400" />
                     </div>
                     <p className="text-[9px] text-yellow-300 text-center font-medium line-clamp-2 px-1">图片已丢失</p>
                     <p className="mt-1 text-[8px] text-gray-500">可删除此项</p>
@@ -1672,9 +1649,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                 <div className="p-4">
                   <div className="flex items-start gap-3 mb-3">
                     <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <AlertCircle className="w-6 h-6 text-red-400" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm mb-1" style={{ color: isLight ? '#dc2626' : '#fca5a5' }}>生成失败</p>
@@ -1693,9 +1668,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                 <div className="p-4">
                   <div className="flex items-start gap-3 mb-3">
                     <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-6 h-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
+                      <AlertTriangle className="w-6 h-6 text-yellow-400" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm mb-1" style={{ color: isLight ? '#ca8a04' : '#fcd34d' }}>图片丢失</p>
@@ -1738,9 +1711,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                     />
                     {/* 图片加载失败时显示 */}
                     <div className="load-error hidden flex-col items-center justify-center text-center py-8" style={{display: 'none'}}>
-                      <svg className="w-12 h-12 text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
+                      <ImageOff className="w-12 h-12 text-gray-500 mb-2" />
                       <p className="text-gray-400 text-sm">图片加载失败</p>
                       <p className="text-gray-500 text-xs mt-1">文件可能已被移动或删除</p>
                     </div>
@@ -1834,7 +1805,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                   className="w-full px-3 py-2 text-left text-[12px] hover:bg-blue-500/10 transition-colors flex items-center gap-2"
                   style={{ color: theme.colors.textPrimary }}
                 >
-                  <LayersIcon className="w-4 h-4 text-blue-400" />
+                  <Layers className="w-4 h-4 text-blue-400" />
                   <span>叠放选中图片 ({selectedIds.length})</span>
                 </button>
               )}
@@ -2084,7 +2055,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                   className="w-full px-3 py-2 text-left text-[12px] hover:bg-indigo-500/10 transition-colors flex items-center gap-2"
                   style={{ color: theme.colors.textPrimary }}
                 >
-                  <LayersIcon className="w-4 h-4 text-indigo-400" />
+                  <Layers className="w-4 h-4 text-indigo-400" />
                   <span>叠放选中图片 ({selectedIds.length})</span>
                 </button>
               )}

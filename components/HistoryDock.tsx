@@ -1,7 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { GenerationHistory, DesktopImageItem, DesktopPosition } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
-import { ClockIcon } from './icons/ClockIcon';
+import { Clock as ClockIcon } from 'lucide-react';
 import { createDesktopItemFromHistory } from './Desktop';
 import { normalizeImageUrl } from '../utils/image';
 

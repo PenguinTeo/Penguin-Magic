@@ -6,7 +6,7 @@
 import React, { memo, useState } from 'react';
 import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem } from '../../types';
 import { normalizeImageUrl, getThumbnailUrl } from '../../utils/image';
-import { FolderIcon } from '../icons/FolderIcon';
+import { Folder as FolderIcon, AlertCircle, AlertTriangle } from 'lucide-react';
 
 // 默认占位图
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0NDQ0NDQiIHN0cm9rZS13aWR0aD0iMSI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjwvc3ZnPg==';
@@ -86,9 +86,7 @@ const ErrorOverlay = memo<{ error: string }>(({ error }) => {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-red-900/80 to-gray-900 p-2">
       <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center mb-1">
-        <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <AlertCircle className="w-5 h-5 text-red-400" />
       </div>
       <p className="text-[9px] text-red-300 text-center leading-tight font-medium">{shortError}</p>
       <p className="mt-1 text-[8px] text-gray-500">右键重新生成</p>
@@ -104,9 +102,7 @@ ErrorOverlay.displayName = 'ErrorOverlay';
 const MissingDataOverlay = memo(() => (
   <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-yellow-900/60 to-gray-900 p-2">
     <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center mb-1">
-      <svg className="w-5 h-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
+      <AlertTriangle className="w-5 h-5 text-yellow-400" />
     </div>
     <p className="text-[9px] text-yellow-300 text-center leading-tight font-medium">图片已丢失</p>
     <p className="mt-1 text-[8px] text-gray-500">可删除此项</p>

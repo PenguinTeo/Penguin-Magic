@@ -1,7 +1,6 @@
 import React from 'react';
 import { GenerationHistory } from '../types';
-import { ClockIcon } from './icons/ClockIcon';
-import { TrashIcon } from './icons/TrashIcon';
+import { Clock as ClockIcon, Trash2 as TrashIcon } from 'lucide-react';
 import { normalizeImageUrl } from '../utils/image';
 
 interface HistoryPanelProps {

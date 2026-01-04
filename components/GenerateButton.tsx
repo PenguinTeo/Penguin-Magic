@@ -1,6 +1,7 @@
 import React from 'react';
-import { SparklesIcon } from './icons/SparklesIcon';
+import { Sparkles as SparklesIcon, AlertTriangle, Check } from 'lucide-react';
 import { ApiStatus } from '../types';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface GenerateButtonProps {
     onClick: () => void;
@@ -19,6 +20,7 @@ export const GenerateButton: React.FC<GenerateButtonProps> = ({
     hasMinimizedResult,
     onExpandResult
 }) => {
+    const { theme, isDark } = useTheme();
     // 判断状态
     const isError = status === ApiStatus.Error;
     const isLoading = status === ApiStatus.Loading;
@@ -62,16 +64,12 @@ export const GenerateButton: React.FC<GenerateButtonProps> = ({
                         </>
                     ) : isError ? (
                         <>
-                            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
+                            <AlertTriangle className="w-7 h-7" strokeWidth={2.5} />
                             <span className="text-[9px] font-bold mt-0.5 uppercase tracking-wide">查看</span>
                         </>
                     ) : (
                         <>
-                            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <Check className="w-7 h-7" strokeWidth={2.5} />
                             <span className="text-[9px] font-bold mt-0.5 uppercase tracking-wide">完成</span>
                         </>
                     )}
@@ -94,13 +92,26 @@ export const GenerateButton: React.FC<GenerateButtonProps> = ({
                 disabled={disabled || status === ApiStatus.Loading}
                 className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ease-out
                     ${disabled 
-                        ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed border border-neutral-700' 
-                        : 'bg-white text-black shadow-2xl shadow-white/20 hover:scale-105 active:scale-95 border border-white/20'
+                        ? 'cursor-not-allowed border' 
+                        : isDark
+                            ? 'bg-white text-black shadow-2xl shadow-white/20 hover:scale-105 active:scale-95 border border-white/20'
+                            : 'bg-blue-500 text-white shadow-2xl shadow-blue-500/30 hover:scale-105 active:scale-95 border border-blue-400/30'
                     }
                 `}
+                style={disabled ? {
+                    backgroundColor: isDark ? theme.colors.bgTertiary : theme.colors.bgSecondary,
+                    color: isDark ? theme.colors.textMuted : theme.colors.textMuted,
+                    borderColor: theme.colors.border
+                } : {}}
             >
                 {status === ApiStatus.Loading ? (
-                    <div className="w-8 h-8 border-2 border-neutral-300 border-t-neutral-800 rounded-full animate-spin"></div>
+                    <div 
+                        className="w-8 h-8 border-2 rounded-full animate-spin"
+                        style={{
+                            borderColor: isDark ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.3)',
+                            borderTopColor: isDark ? '#000' : '#fff'
+                        }}
+                    ></div>
                 ) : (
                     <SparklesIcon className={`w-8 h-8 transform transition-transform duration-500 ${disabled ? '' : 'group-hover:rotate-12'}`} />
                 )}
