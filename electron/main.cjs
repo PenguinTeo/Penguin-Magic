@@ -67,18 +67,39 @@ function startBackendServer() {
     process.env.IS_ELECTRON = 'true';
     process.env.USER_DATA_PATH = app.getPath('userData');
 
-    const backendPath = CONFIG.isDev
-      ? path.join(__dirname, '../backend-nodejs/src/server.js')
-      : path.join(process.resourcesPath, 'app.asar.unpacked/backend-nodejs/src/server.js');
+    // 计算后端路径
+    let backendPath;
+    if (CONFIG.isDev) {
+      backendPath = path.join(__dirname, '../backend-nodejs/src/server.js');
+    } else {
+      // 打包后，asar 未打包的文件在 resources/app.asar.unpacked/ 目录
+      backendPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'backend-nodejs', 'src', 'server.js');
+    }
 
+    console.log('resourcesPath:', process.resourcesPath);
     console.log('后端路径:', backendPath);
+    
+    // 检查文件是否存在
+    const fs = require('fs');
+    if (!fs.existsSync(backendPath)) {
+      console.error('❌ 后端文件不存在:', backendPath);
+      // 尝试其他可能的路径
+      const altPath1 = path.join(app.getAppPath(), 'backend-nodejs', 'src', 'server.js');
+      const altPath2 = path.join(process.resourcesPath, 'backend-nodejs', 'src', 'server.js');
+      console.log('尝试替代路径1:', altPath1, fs.existsSync(altPath1));
+      console.log('尝试替代路径2:', altPath2, fs.existsSync(altPath2));
+      
+      if (fs.existsSync(altPath1)) {
+        backendPath = altPath1;
+      } else if (fs.existsSync(altPath2)) {
+        backendPath = altPath2;
+      } else {
+        reject(new Error('找不到后端文件'));
+        return;
+      }
+    }
 
     try {
-      // 修改 require 的解析路径，确保后端模块能正确找到依赖
-      const backendDir = path.dirname(backendPath);
-      const Module = require('module');
-      const originalResolveFilename = Module._resolveFilename;
-      
       // 直接 require 后端模块（使用 Electron 内置的 Node.js）
       const backendApp = require(backendPath);
       

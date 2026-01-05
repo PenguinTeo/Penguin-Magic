@@ -1,7 +1,9 @@
 {
   "name": "penguin-magic",
   "private": true,
-  "version": "0.2.6",
+  "version": "0.2.8",
+  "description": "企鹅工坊 - AI 图像创意管理应用",
+  "author": "PenguinCreative",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
