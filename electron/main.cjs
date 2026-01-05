@@ -15,15 +15,29 @@ const CONFIG = {
 let mainWindow = null;
 let backendServer = null;
 
+// 获取图标路径（开发环境和打包环境不同）
+function getIconPath() {
+  if (!app.isPackaged) {
+    // 开发环境
+    return path.join(__dirname, '../resources/icon.png');
+  } else {
+    // 打包环境：图标在 resources 目录
+    return path.join(process.resourcesPath, 'icon.png');
+  }
+}
+
 // 创建主窗口
 function createWindow() {
+  const iconPath = getIconPath();
+  console.log('图标路径:', iconPath);
+  
   mainWindow = new BrowserWindow({
     width: CONFIG.windowWidth,
     height: CONFIG.windowHeight,
     minWidth: CONFIG.minWidth,
     minHeight: CONFIG.minHeight,
     title: 'PenguinMagic - 企鹅工坊',
-    icon: path.join(__dirname, '../resources/icon.png'),
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,

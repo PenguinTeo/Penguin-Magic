@@ -1,14 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#06B6D4;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="80" fill="url(#grad1)"/>
-  <text x="256" y="340" font-family="Arial" font-size="320" font-weight="bold" fill="white" text-anchor="middle">P</text>
-  <circle cx="380" cy="150" r="20" fill="white" opacity="0.8"/>
-  <circle cx="420" cy="200" r="15" fill="white" opacity="0.6"/>
-  <circle cx="360" cy="220" r="12" fill="white" opacity="0.7"/>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 黑色圆角背景 -->
+  <rect width="512" height="512" rx="80" fill="#000000"/>
+  <!-- 白色 P 字母 -->
+  <path d="M144 96h144a112 112 0 0 1 0 224h-80v96h-64V96z" fill="#ffffff"/>
+  <path d="M208 160h80a48 48 0 0 1 0 96h-80V160z" fill="#000000"/>
 </svg>

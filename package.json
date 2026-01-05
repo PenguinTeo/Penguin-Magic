@@ -1,7 +1,7 @@
 {
   "name": "penguin-magic",
   "private": true,
-  "version": "0.2.8",
+  "version": "0.3.0",
   "description": "企鹅工坊 - AI 图像创意管理应用",
   "author": "PenguinCreative",
   "type": "module",
@@ -52,6 +52,10 @@
       "package.json"
     ],
     "extraResources": [
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
+      },
       {
         "from": "backend-nodejs/node_modules",
         "to": "app.asar.unpacked/backend-nodejs/node_modules",
