@@ -1,11 +1,13 @@
 
 
 import React, { useState, useMemo, useRef } from 'react';
-import type { CreativeIdea } from '../types';
-import { PlusCircle as PlusCircleIcon, Trash2 as TrashIcon, Library as LibraryIcon, Edit as EditIcon, Download as UploadIcon, Upload as DownloadIcon, TrendingUp, Clipboard, Check, Star, Search as SearchIconLucide } from 'lucide-react';
+import type { CreativeIdea, CreativeCategoryType } from '../types';
+import { CREATIVE_CATEGORIES } from '../types';
+import { PlusCircle as PlusCircleIcon, Trash2 as TrashIcon, Library as LibraryIcon, Edit as EditIcon, Download as UploadIcon, Upload as DownloadIcon, TrendingUp, Clipboard, Check, Star, Search as SearchIconLucide, FolderOpen, Layers, Sparkles, Loader2 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { normalizeImageUrl } from '../utils/image';
 import { ImportCreativeModal } from './ImportCreativeModal';
+import { autoClassifyCreative } from '../services/geminiService';
 
 
 interface CreativeLibraryProps {
@@ -21,20 +23,28 @@ interface CreativeLibraryProps {
   onImportById: (idRange: string) => Promise<void>;
   onReorder: (reorderedIdeas: CreativeIdea[]) => void;
   onToggleFavorite?: (id: number) => void;
+  onUpdateCategory?: (id: number, category: CreativeCategoryType) => Promise<void>; // 新增：更新分类
   isImporting?: boolean; // 导入状态
   isImportingById?: boolean; // 按ID导入状态
 }
 
-type FilterType = 'all' | 'bp';
+type FilterType = 'all' | 'bp' | 'favorite';
 type SortType = 'time' | 'title' | 'manual'; // 添加排序类型
+type CategoryFilterType = 'all' | CreativeCategoryType;
 
-export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack, onAdd, onDelete, onDeleteMultiple, onEdit, onUse, onExport, onImport, onImportById, onReorder, onToggleFavorite, isImporting, isImportingById }) => {
+export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack, onAdd, onDelete, onDeleteMultiple, onEdit, onUse, onExport, onImport, onImportById, onReorder, onToggleFavorite, onUpdateCategory, isImporting, isImportingById }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const { themeName, theme } = useTheme();
   const isLight = themeName === 'light';
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilterType>('all');
   const [sortBy, setSortBy] = useState<SortType>('time'); // 默认按时间排序
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // AI 自动分类状态
+  const [isAutoClassifying, setIsAutoClassifying] = useState(false);
+  const [classifyProgress, setClassifyProgress] = useState({ current: 0, total: 0 });
   
   // 多选状态
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -191,12 +201,68 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
     }
   };
 
+  // AI 自动分类未分类的创意
+  const handleAutoClassify = async () => {
+    if (!onUpdateCategory) {
+      alert('分类更新功能未配置');
+      return;
+    }
+    
+    // 筛选未分类的创意
+    const uncategorized = ideas.filter(idea => !idea.category);
+    
+    if (uncategorized.length === 0) {
+      alert('所有创意已分类，无需操作');
+      return;
+    }
+    
+    if (!window.confirm(`发现 ${uncategorized.length} 个未分类的创意，是否用 AI 自动分类？`)) {
+      return;
+    }
+    
+    setIsAutoClassifying(true);
+    setClassifyProgress({ current: 0, total: uncategorized.length });
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (let i = 0; i < uncategorized.length; i++) {
+      const idea = uncategorized[i];
+      setClassifyProgress({ current: i + 1, total: uncategorized.length });
+      
+      try {
+        const category = await autoClassifyCreative(idea.title, idea.prompt);
+        await onUpdateCategory(idea.id, category);
+        successCount++;
+      } catch (e) {
+        console.error(`分类失败 [${idea.title}]:`, e);
+        failCount++;
+      }
+      
+      // 防止请求过快
+      if (i < uncategorized.length - 1) {
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+    
+    setIsAutoClassifying(false);
+    setClassifyProgress({ current: 0, total: 0 });
+    
+    alert(`分类完成！成功: ${successCount}，失败: ${failCount}`);
+  };
+
   const filteredIdeas = useMemo(() => {
     let result = ideas
       .filter(idea => {
-        if (filter === 'all') return true;
-        if (filter === 'bp') return !!idea.isBP;
+        // 类型筛选
+        if (filter === 'bp' && !idea.isBP) return false;
+        if (filter === 'favorite' && !idea.isFavorite) return false;
         return true;
+      })
+      .filter(idea => {
+        // 分类筛选
+        if (categoryFilter === 'all') return true;
+        return idea.category === categoryFilter;
       })
       .filter(idea =>
         idea.title.toLowerCase().includes(searchTerm.toLowerCase())
@@ -217,7 +283,18 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
     // manual 保持原有顺序
     
     return result;
-  }, [ideas, searchTerm, filter, sortBy]);
+  }, [ideas, searchTerm, filter, categoryFilter, sortBy]);
+
+  // 统计各分类数量
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: ideas.length };
+    CREATIVE_CATEGORIES.forEach(cat => {
+      counts[cat.key] = ideas.filter(idea => idea.category === cat.key).length;
+    });
+    // 未分类的数量
+    counts['uncategorized'] = ideas.filter(idea => !idea.category).length;
+    return counts;
+  }, [ideas]);
 
   const handleDragSort = () => {
     if (!dragItem.current || !dragOverItem.current || dragItem.current.id === dragOverItem.current.id) {
@@ -241,6 +318,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
 
   const filterButtons: { key: FilterType, label: string }[] = [
     { key: 'all', label: '全部' },
+    { key: 'favorite', label: '⭐ 收藏' },
     { key: 'bp', label: 'BP' },
   ];
 
@@ -459,9 +537,153 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
         </div>
       )}
       
-      <main className="flex-grow overflow-y-auto py-1 pr-1 -mr-1">
-        {filteredIdeas.length > 0 ? (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
+      {/* 主内容区域 - 左侧分类 + 右侧卡片 */}
+      <div className="flex-grow flex min-h-0 overflow-hidden">
+        {/* 左侧分类侧边栏 */}
+        <aside 
+          className={`flex-shrink-0 border-r overflow-y-auto transition-all duration-300 ${sidebarCollapsed ? 'w-12' : 'w-40'}`}
+          style={{ borderColor: theme.colors.border }}
+        >
+          {/* 侧边栏头部 */}
+          <div 
+            className="sticky top-0 flex items-center justify-between px-3 py-2 border-b"
+            style={{ background: theme.colors.bgPrimary, borderColor: theme.colors.border }}
+          >
+            {!sidebarCollapsed && (
+              <span className="text-xs font-medium" style={{ color: theme.colors.textMuted }}>分类</span>
+            )}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              style={{ color: theme.colors.textMuted }}
+              title={sidebarCollapsed ? '展开分类' : '收起分类'}
+            >
+              <Layers className="w-4 h-4" />
+            </button>
+          </div>
+          
+          {/* 分类列表 */}
+          <div className="py-1">
+            {/* 全部 */}
+            <button
+              onClick={() => setCategoryFilter('all')}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-all ${
+                categoryFilter === 'all' ? 'font-semibold' : ''
+              }`}
+              style={{ 
+                background: categoryFilter === 'all' 
+                  ? (isLight ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.2)') 
+                  : 'transparent',
+                color: categoryFilter === 'all' ? '#3b82f6' : theme.colors.textSecondary
+              }}
+            >
+              <FolderOpen className="w-4 h-4 flex-shrink-0" />
+              {!sidebarCollapsed && (
+                <>
+                  <span className="flex-grow text-left">全部</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ 
+                    background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)' 
+                  }}>
+                    {categoryCounts.all}
+                  </span>
+                </>
+              )}
+            </button>
+            
+            {/* 分类列表 */}
+            {CREATIVE_CATEGORIES.map(cat => (
+              <button
+                key={cat.key}
+                onClick={() => setCategoryFilter(cat.key)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-all ${
+                  categoryFilter === cat.key ? 'font-semibold' : ''
+                }`}
+                style={{ 
+                  background: categoryFilter === cat.key 
+                    ? (isLight ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.2)') 
+                    : 'transparent',
+                  color: categoryFilter === cat.key ? '#3b82f6' : theme.colors.textSecondary
+                }}
+                title={sidebarCollapsed ? `${cat.icon} ${cat.label} (${categoryCounts[cat.key] || 0})` : undefined}
+              >
+                <span className="text-sm flex-shrink-0">{cat.icon}</span>
+                {!sidebarCollapsed && (
+                  <>
+                    <span className="flex-grow text-left">{cat.label}</span>
+                    {(categoryCounts[cat.key] || 0) > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ 
+                        background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)' 
+                      }}>
+                        {categoryCounts[cat.key]}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+            ))}
+            
+            {/* 未分类 */}
+            {categoryCounts['uncategorized'] > 0 && (
+              <button
+                onClick={() => setCategoryFilter('other')}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-xs transition-all opacity-60 hover:opacity-100`}
+                style={{ color: theme.colors.textMuted }}
+              >
+                <span className="text-sm flex-shrink-0">❓</span>
+                {!sidebarCollapsed && (
+                  <>
+                    <span className="flex-grow text-left">未分类</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ 
+                      background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.1)' 
+                    }}>
+                      {categoryCounts['uncategorized']}
+                    </span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+          
+          {/* AI 自动分类按钮 */}
+          {categoryCounts['uncategorized'] > 0 && onUpdateCategory && (
+            <div className="px-2 py-2 border-t" style={{ borderColor: theme.colors.border }}>
+              <button
+                onClick={handleAutoClassify}
+                disabled={isAutoClassifying}
+                className={`w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-all ${
+                  sidebarCollapsed ? 'px-1' : ''
+                }`}
+                style={{
+                  background: isAutoClassifying 
+                    ? (isLight ? 'rgba(168,85,247,0.15)' : 'rgba(168,85,247,0.25)')
+                    : (isLight ? 'rgba(168,85,247,0.1)' : 'rgba(168,85,247,0.15)'),
+                  color: '#a855f7',
+                  border: '1px solid rgba(168,85,247,0.3)'
+                }}
+                title={sidebarCollapsed ? `AI 自动分类 (${categoryCounts['uncategorized']} 个未分类)` : undefined}
+              >
+                {isAutoClassifying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {!sidebarCollapsed && (
+                      <span>{classifyProgress.current}/{classifyProgress.total}</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    {!sidebarCollapsed && <span>AI 分类</span>}
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </aside>
+        
+        {/* 右侧卡片区域 */}
+        <main className="flex-grow overflow-y-auto py-2 px-3">
+          {filteredIdeas.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {filteredIdeas.map(idea => {
               const isSelected = selectedIds.has(idea.id);
               return (
@@ -616,18 +838,19 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
               );
             })}
           </div>
-        ) : (
-          <div className="text-center flex flex-col items-center justify-center h-full">
-            <LibraryIcon className="w-12 h-12 mb-3" style={{ color: theme.colors.textMuted }}/>
-            <h2 className="text-lg font-semibold" style={{ color: theme.colors.textSecondary }}>
-              {searchTerm || filter !== 'all' ? '未找到创意' : '创意库是空的'}
-            </h2>
-            <p className="mt-1 text-sm" style={{ color: theme.colors.textMuted }}>
-              {searchTerm || filter !== 'all' ? '请尝试其他关键词或筛选条件' : '点击 "新增" 来添加您的第一个灵感！'}
-            </p>
-          </div>
-        )}
-      </main>
+          ) : (
+            <div className="text-center flex flex-col items-center justify-center h-full">
+              <LibraryIcon className="w-12 h-12 mb-3" style={{ color: theme.colors.textMuted }}/>
+              <h2 className="text-lg font-semibold" style={{ color: theme.colors.textSecondary }}>
+                {searchTerm || filter !== 'all' || categoryFilter !== 'all' ? '未找到创意' : '创意库是空的'}
+              </h2>
+              <p className="mt-1 text-sm" style={{ color: theme.colors.textMuted }}>
+                {searchTerm || filter !== 'all' || categoryFilter !== 'all' ? '请尝试其他关键词或筛选条件' : '点击 “新增” 来添加您的第一个灵感！'}
+              </p>
+            </div>
+          )}
+        </main>
+      </div>
       
       <ImportCreativeModal
         isOpen={isImportModalOpen}

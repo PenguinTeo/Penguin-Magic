@@ -5,7 +5,7 @@ import { normalizeImageUrl } from './utils/image';
 import { GeneratedImageDisplay } from './components/GeneratedImageDisplay';
 import { editImageWithGemini, generateCreativePromptFromImage, initializeAiClient, processBPTemplate, setThirdPartyConfig, optimizePrompt } from './services/geminiService';
 import CreativeExtractor, { extractCreatives } from './services/creativeExtractor';
-import { ApiStatus, GeneratedContent, CreativeIdea, SmartPlusConfig, ThirdPartyApiConfig, GenerationHistory, DesktopItem, DesktopImageItem, DesktopFolderItem } from './types';
+import { ApiStatus, GeneratedContent, CreativeIdea, SmartPlusConfig, ThirdPartyApiConfig, GenerationHistory, DesktopItem, DesktopImageItem, DesktopFolderItem, CreativeCategoryType } from './types';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
 import { AddCreativeIdeaModal } from './components/AddCreativeIdeaModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -94,6 +94,7 @@ interface CanvasProps {
   isImportingById?: boolean; // 按ID导入状态
   onReorderIdeas: (ideas: CreativeIdea[]) => void;
   onToggleFavorite?: (id: number) => void;
+  onUpdateCategory?: (id: number, category: CreativeCategoryType) => Promise<void>; // 更新分类
   onEditAgain?: () => void; // 再次编辑
   onRegenerate?: () => void; // 重新生成
   onDismissResult?: () => void; // 关闭结果浮层
@@ -1462,6 +1463,7 @@ const Canvas: React.FC<CanvasProps> = ({
   isResultMinimized,
   setIsResultMinimized,
   onToggleFavorite,
+  onUpdateCategory,
   isImporting,
   isImportingById,
 }) => {
@@ -1531,6 +1533,7 @@ const Canvas: React.FC<CanvasProps> = ({
             onImportById={onImportById}
             onReorder={onReorderIdeas}
             onToggleFavorite={onToggleFavorite}
+            onUpdateCategory={onUpdateCategory}
             isImporting={isImporting}
             isImportingById={isImportingById}
           />
@@ -1897,6 +1900,21 @@ const App: React.FC = () => {
       await creativeIdeasApi.updateCreativeIdea(id, { isFavorite: !targetIdea.isFavorite });
     } catch (e) {
       console.error('保存收藏状态失败:', e);
+    }
+  }, [localCreativeIdeas]);
+
+  // 更新分类
+  const handleUpdateCategory = useCallback(async (id: number, category: CreativeCategoryType) => {
+    const updatedIdeas = localCreativeIdeas.map(idea => 
+      idea.id === id ? { ...idea, category } : idea
+    );
+    setLocalCreativeIdeas(updatedIdeas);
+    
+    // 保存到Node.js后端
+    try {
+      await creativeIdeasApi.updateCreativeIdea(id, { category });
+    } catch (e) {
+      console.error('保存分类失败:', e);
     }
   }, [localCreativeIdeas]);
 
@@ -3341,6 +3359,7 @@ const App: React.FC = () => {
                     isResultMinimized={isResultMinimized}
           setIsResultMinimized={setIsResultMinimized}
           onToggleFavorite={handleToggleFavorite}
+          onUpdateCategory={handleUpdateCategory}
           isImporting={isImporting}
           isImportingById={isImportingById}
         />

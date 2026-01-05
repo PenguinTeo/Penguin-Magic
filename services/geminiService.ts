@@ -1,7 +1,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import type { GenerateContentResponse, Part } from "@google/genai";
-import { GeneratedContent, CreativeIdea, SmartPlusConfig, BPField, BPAgentModel, ThirdPartyApiConfig, NanoBananaRequest, NanoBananaResponse, OpenAIChatRequest, OpenAIChatResponse } from '../types';
+import { GeneratedContent, CreativeIdea, SmartPlusConfig, BPField, BPAgentModel, ThirdPartyApiConfig, NanoBananaRequest, NanoBananaResponse, OpenAIChatRequest, OpenAIChatResponse, CreativeCategoryType, CREATIVE_CATEGORIES } from '../types';
 
 let ai: GoogleGenAI | null = null;
 
@@ -796,4 +796,73 @@ Output the optimized prompt directly:`;
   }
 
   return resultText.trim();
+};
+
+/**
+ * AI 自动分类 - 根据创意的标题和提示词自动分类
+ */
+export const autoClassifyCreative = async (title: string, prompt: string): Promise<CreativeCategoryType> => {
+  const useThirdParty = thirdPartyConfig && thirdPartyConfig.enabled && thirdPartyConfig.apiKey;
+  
+  if (!useThirdParty && !ai) {
+    throw new Error("请先设置 Gemini API Key 或配置贞贞API");
+  }
+  
+  const validCategories = CREATIVE_CATEGORIES.map(c => c.key).join(', ');
+  
+  const systemInstruction = `You are a creative content classifier. Your task is to classify creative templates into one of these categories:
+
+${CREATIVE_CATEGORIES.map(c => `- ${c.key}: ${c.label} (${c.icon})`).join('\n')}
+
+Rules:
+1. Analyze the title and prompt to determine the main subject
+2. character: For portraits, people, characters, figures
+3. scene: For landscapes, environments, backgrounds, places
+4. product: For commercial products, items, merchandise, food, objects
+5. art: For artistic styles, abstract art, paintings, illustrations
+6. tool: For utility templates, editing effects, filters, technical tools
+7. other: Only use when none of the above fit
+8. Output ONLY the category key (one of: ${validCategories}), nothing else`;
+
+  const userMessage = `Classify this creative template:
+
+Title: ${title}
+Prompt: ${prompt.slice(0, 500)}${prompt.length > 500 ? '...' : ''}
+
+Category:`;
+  
+  let result: string;
+  
+  if (useThirdParty) {
+    result = await chatWithThirdPartyApi(systemInstruction, userMessage);
+  } else {
+    const response: GenerateContentResponse = await withRetry(() => 
+      ai!.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: { parts: [{ text: userMessage }] },
+        config: {
+          systemInstruction: systemInstruction,
+          temperature: 0.1, // 低温度确保稳定输出
+        },
+      })
+    );
+    result = response.text || '';
+  }
+  
+  // 解析结果，确保返回有效分类
+  const cleanResult = result.trim().toLowerCase();
+  const validKeys = CREATIVE_CATEGORIES.map(c => c.key);
+  
+  if (validKeys.includes(cleanResult as CreativeCategoryType)) {
+    return cleanResult as CreativeCategoryType;
+  }
+  
+  // 如果返回的不是有效key，尝试模糊匹配
+  for (const cat of CREATIVE_CATEGORIES) {
+    if (cleanResult.includes(cat.key) || cleanResult.includes(cat.label)) {
+      return cat.key;
+    }
+  }
+  
+  return 'other';
 };

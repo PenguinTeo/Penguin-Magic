@@ -44,12 +44,26 @@ export type AspectRatioType = 'Auto' | '4:3' | '3:4' | '16:9' | '9:16' | '2:3' |
 // 支持的分辨率类型
 export type ImageSizeType = '1K' | '2K' | '4K';
 
+// 创意分类类型
+export type CreativeCategoryType = 'character' | 'scene' | 'product' | 'art' | 'tool' | 'other';
+
+// 分类配置
+export const CREATIVE_CATEGORIES: { key: CreativeCategoryType; label: string; icon: string }[] = [
+  { key: 'character', label: '人物', icon: '👤' },
+  { key: 'scene', label: '场景', icon: '🏞️' },
+  { key: 'product', label: '产品', icon: '📦' },
+  { key: 'art', label: '艺术', icon: '🎨' },
+  { key: 'tool', label: '工具', icon: '🔧' },
+  { key: 'other', label: '其他', icon: '📁' },
+];
+
 export interface CreativeIdea {
   id: number;
   title: string;
   prompt: string; // Template string
   imageUrl: string;
   author?: string; // 作者，显示为 @xxx
+  category?: CreativeCategoryType; // 分类
   isSmart?: boolean;
   isSmartPlus?: boolean;
   isBP?: boolean;
@@ -61,6 +75,7 @@ export interface CreativeIdea {
   runningHubConfig?: RunningHubConfig; // 新增：RunningHub 配置
   order?: number;
   cost?: number; // 使用此创意库生成图片需要扣除的 Pebbling 鹅卵石数量 🪨
+  createdAt?: string; // 创建时间
 
   // 建议的宽高比和分辨率
   suggestedAspectRatio?: AspectRatioType;

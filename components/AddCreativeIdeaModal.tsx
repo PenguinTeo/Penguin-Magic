@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { CreativeIdea, SmartPlusConfig, SmartPlusComponent, BPField, BPFieldType, BPAgentModel, AspectRatioType, ImageSizeType } from '../types';
+import { CreativeIdea, SmartPlusConfig, SmartPlusComponent, BPField, BPFieldType, BPAgentModel, AspectRatioType, ImageSizeType, CreativeCategoryType, CREATIVE_CATEGORIES } from '../types';
 import { Upload as UploadIcon, XCircle as XCircleIcon, PlusCircle as PlusCircleIcon, Lightbulb as LightbulbIcon, AlertTriangle } from 'lucide-react';
 import { defaultSmartPlusConfig } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
@@ -32,6 +32,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
   
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState(''); // 作者字段
+  const [category, setCategory] = useState<CreativeCategoryType | ''>(''); // 分类字段
   const [prompt, setPrompt] = useState('');
   const [ideaType, setIdeaType] = useState<'standard' | 'bp'>('standard');
   const [smartPlusConfig, setSmartPlusConfig] = useState<SmartPlusConfig>(() => JSON.parse(JSON.stringify(defaultSmartPlusConfig)));
@@ -77,6 +78,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
   const resetState = useCallback(() => {
     setTitle('');
     setAuthor(''); // 重置作者
+    setCategory(''); // 重置分类
     setPrompt('');
     setIdeaType('standard');
     setSmartPlusConfig(JSON.parse(JSON.stringify(defaultSmartPlusConfig)));
@@ -103,6 +105,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
         
         setTitle(ideaToEdit.title);
         setAuthor(ideaToEdit.author || ''); // 加载作者
+        setCategory(ideaToEdit.category || ''); // 加载分类
         setPrompt(ideaToEdit.prompt);
         setPreviewUrl(ideaToEdit.imageUrl);
         setCost(ideaToEdit.cost || 0);
@@ -247,6 +250,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
           order: ideaToEdit?.order,
           title: title.trim(),
           author: author.trim() || undefined, // 保存作者
+          category: category || undefined, // 保存分类
           prompt: prompt.trim(),
           imageUrl: imageUrl!,
           cost: cost,
@@ -429,6 +433,30 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
                 }}
                 placeholder="创意标题"
               />
+            </div>
+            
+            {/* 分类 */}
+            <div>
+              <label className="text-[10px] font-medium mb-1 block" style={{ color: theme.colors.textMuted }}>分类</label>
+              <div className="grid grid-cols-3 gap-1">
+                {CREATIVE_CATEGORIES.map(cat => (
+                  <button
+                    key={cat.key}
+                    onClick={() => setCategory(category === cat.key ? '' : cat.key)}
+                    className={`px-2 py-1.5 text-[10px] font-medium rounded-lg transition-all flex items-center justify-center gap-1`}
+                    style={category === cat.key ? {
+                      backgroundColor: '#3b82f6',
+                      color: 'white'
+                    } : {
+                      background: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)',
+                      color: theme.colors.textSecondary
+                    }}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
             
             {/* 作者 */}
