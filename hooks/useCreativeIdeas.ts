@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { CreativeIdea } from '../types';
+import { CreativeIdea, CreativeCategoryType } from '../types';
 import * as creativeIdeasApi from '../services/api/creativeIdeas';
 
 export interface UseCreativeIdeasReturn {
@@ -22,6 +22,7 @@ export interface UseCreativeIdeasReturn {
   saveCreativeIdea: (idea: Partial<CreativeIdea>) => Promise<boolean>;
   deleteCreativeIdea: (id: number) => Promise<boolean>;
   toggleFavorite: (id: number) => Promise<void>;
+  updateCategory: (id: number, category: CreativeCategoryType) => Promise<void>; // 新增
   reorderCreativeIdeas: (reorderedIdeas: CreativeIdea[]) => Promise<void>;
   importCreativeIdeas: (ideas: CreativeIdea[]) => Promise<{ success: boolean; message?: string }>;
   exportCreativeIdeas: () => void;
@@ -113,6 +114,27 @@ export const useCreativeIdeas = (): UseCreativeIdeasReturn => {
       await creativeIdeasApi.updateCreativeIdea(id, { isFavorite: !targetIdea.isFavorite });
     } catch (e) {
       console.error('保存收藏状态失败:', e);
+      // 回滚
+      setLocalCreativeIdeas(localCreativeIdeas);
+    }
+  }, [localCreativeIdeas]);
+  
+  // 更新分类
+  const updateCategory = useCallback(async (id: number, category: CreativeCategoryType) => {
+    const targetIdea = localCreativeIdeas.find(idea => idea.id === id);
+    if (!targetIdea) return;
+    
+    // 乐观更新
+    const updatedIdeas = localCreativeIdeas.map(idea => 
+      idea.id === id ? { ...idea, category } : idea
+    );
+    setLocalCreativeIdeas(updatedIdeas);
+    
+    // 保存到后端
+    try {
+      await creativeIdeasApi.updateCreativeIdea(id, { category });
+    } catch (e) {
+      console.error('更新分类失败:', e);
       // 回滚
       setLocalCreativeIdeas(localCreativeIdeas);
     }
@@ -227,6 +249,7 @@ export const useCreativeIdeas = (): UseCreativeIdeasReturn => {
     saveCreativeIdea,
     deleteCreativeIdea,
     toggleFavorite,
+    updateCategory,
     reorderCreativeIdeas,
     importCreativeIdeas,
     exportCreativeIdeas,
