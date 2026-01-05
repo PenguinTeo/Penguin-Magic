@@ -13,16 +13,126 @@ const CONFIG = {
 };
 
 let mainWindow = null;
+let splashWindow = null;
 let backendServer = null;
+
+// 创建启动画面
+function createSplashWindow() {
+  const iconPath = getIconPath();
+  const logoPath = iconPath.replace(/\\/g, '/'); // 路径转换为 URL 格式
+  
+  splashWindow = new BrowserWindow({
+    width: 400,
+    height: 300,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    icon: iconPath,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  // 加载启动画面 HTML
+  splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+          color: white;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          -webkit-app-region: drag;
+          border-radius: 16px;
+          overflow: hidden;
+        }
+        .logo {
+          width: 80px;
+          height: 80px;
+          margin-bottom: 20px;
+          animation: bounce 1s ease-in-out infinite;
+        }
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        .title {
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 8px;
+        }
+        .subtitle {
+          font-size: 14px;
+          color: #888;
+          margin-bottom: 30px;
+        }
+        .loader {
+          width: 200px;
+          height: 4px;
+          background: rgba(255,255,255,0.1);
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        .loader-bar {
+          width: 40%;
+          height: 100%;
+          background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+          border-radius: 2px;
+          animation: loading 1.5s ease-in-out infinite;
+        }
+        @keyframes loading {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+        .status {
+          margin-top: 16px;
+          font-size: 12px;
+          color: #666;
+        }
+      </style>
+    </head>
+    <body>
+      <img class="logo" src="file:///${logoPath}" alt="Logo" onerror="this.outerHTML='🐧'" />
+      <div class="title">PenguinMagic</div>
+      <div class="subtitle">企鹅工坊</div>
+      <div class="loader"><div class="loader-bar"></div></div>
+      <div class="status">正在启动服务...</div>
+    </body>
+    </html>
+  `)}`);
+
+  splashWindow.center();
+  splashWindow.show();
+}
+
+// 关闭启动画面
+function closeSplashWindow() {
+  if (splashWindow) {
+    splashWindow.close();
+    splashWindow = null;
+  }
+}
 
 // 获取图标路径（开发环境和打包环境不同）
 function getIconPath() {
+  // Windows 使用 .ico，其他平台使用 .png
+  const iconExt = process.platform === 'win32' ? 'ico' : 'png';
+  
   if (!app.isPackaged) {
     // 开发环境
-    return path.join(__dirname, '../resources/icon.png');
+    return path.join(__dirname, `../resources/icon.${iconExt}`);
   } else {
     // 打包环境：图标在 resources 目录
-    return path.join(process.resourcesPath, 'icon.png');
+    return path.join(process.resourcesPath, `icon.${iconExt}`);
   }
 }
 
@@ -235,19 +345,27 @@ app.whenReady().then(async () => {
   // 创建菜单
   createMenu();
 
-  // 在生产环境启动后端服务
+  // 生产环境：先显示启动画面
   if (!CONFIG.isDev) {
+    createSplashWindow();
+    
     try {
       await startBackendServer();
     } catch (err) {
       console.error('❌ 后端服务启动失败:', err);
+      closeSplashWindow();
+      const { dialog } = require('electron');
+      dialog.showErrorBox('启动失败', `后端服务启动失败: ${err.message}`);
       app.quit();
       return;
     }
   }
 
-  // 创建窗口
+  // 创建主窗口
   createWindow();
+  
+  // 关闭启动画面
+  closeSplashWindow();
 
   // macOS 特定：点击 dock 图标时重新创建窗口
   app.on('activate', () => {

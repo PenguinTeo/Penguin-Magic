@@ -12,6 +12,18 @@ const PROJECT_DIR = path.resolve(__dirname, '..', '..');
 // - 开发环境：使用项目目录
 const BASE_DIR = IS_ELECTRON && USER_DATA_PATH ? USER_DATA_PATH : PROJECT_DIR;
 
+// 计算 DIST_DIR：
+// - Electron 打包环境：dist 在 app.asar 包内
+// - 开发环境：在项目根目录的 dist
+function getDistDir() {
+  if (IS_ELECTRON) {
+    // 打包后：__dirname 是 resources/app.asar.unpacked/backend-nodejs/src
+    // dist 在 resources/app.asar.unpacked/dist（因为 dist 在 asarUnpack 配置中）
+    return path.resolve(__dirname, '..', '..', 'dist');
+  }
+  return path.join(PROJECT_DIR, 'dist');
+}
+
 // 配置项
 const config = {
   // 服务器配置
@@ -27,8 +39,8 @@ const config = {
   DATA_DIR: path.join(BASE_DIR, 'data'),
   CREATIVE_IMAGES_DIR: path.join(BASE_DIR, 'creative_images'),
   
-  // 静态资源目录（始终指向项目/打包目录）
-  DIST_DIR: path.join(PROJECT_DIR, 'dist'),
+  // 静态资源目录
+  DIST_DIR: getDistDir(),
   
   // 缩略图配置
   THUMBNAIL_SIZE: 160, // 缩略图大小（像素）

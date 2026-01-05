@@ -3,8 +3,9 @@ import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
 import { Plug, Gem, Eye as EyeIcon, EyeOff as EyeOffIcon, Key as KeyIcon, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Info as InfoIcon, Check, X } from 'lucide-react';
 
-// 应用版本号
-const APP_VERSION = '1.0.3';
+// 应用版本号 - 从vite构建时注入，来源于package.json
+declare const __APP_VERSION__: string;
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0';
 
 // 主题图标映射 - 只保留深夜和白天
 const themeIconMap: Record<ThemeName, React.FC<{ className?: string }>> = {

@@ -1,7 +1,7 @@
 {
   "name": "penguin-magic",
   "private": true,
-  "version": "0.3.0",
+  "version": "1.0.6",
   "description": "企鹅工坊 - AI 图像创意管理应用",
   "author": "PenguinCreative",
   "type": "module",
@@ -33,6 +33,7 @@
     "icojs": "^0.20.1",
     "png-to-ico": "^3.0.1",
     "pngjs": "^7.0.0",
+    "rcedit": "^5.0.2",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "wait-on": "^9.0.3"
@@ -57,6 +58,10 @@
         "to": "icon.png"
       },
       {
+        "from": "resources/icon.ico",
+        "to": "icon.ico"
+      },
+      {
         "from": "backend-nodejs/node_modules",
         "to": "app.asar.unpacked/backend-nodejs/node_modules",
         "filter": [
@@ -73,7 +78,7 @@
         "nsis",
         "portable"
       ],
-      "icon": "resources/icon.png",
+      "icon": "resources/icon.ico",
       "signAndEditExecutable": false
     },
     "nsis": {
@@ -87,7 +92,7 @@
         "dmg",
         "zip"
       ],
-      "icon": "resources/icon.png",
+      "icon": "resources/icon.ico",
       "category": "public.app-category.graphics-design"
     },
     "linux": {
@@ -95,7 +100,7 @@
         "AppImage",
         "deb"
       ],
-      "icon": "resources/icon.png",
+      "icon": "resources/icon.ico",
       "category": "Graphics"
     }
   }
