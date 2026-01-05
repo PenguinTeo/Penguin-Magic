@@ -1,7 +1,7 @@
 {
   "name": "penguin-magic",
   "private": true,
-  "version": "0.2.4",
+  "version": "0.2.6",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {

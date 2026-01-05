@@ -1,6 +1,6 @@
 {
   "name": "penguin-magic-backend",
-  "version": "0.2.4",
+  "version": "0.2.6",
   "description": "企鹅艾洛魔法世界 - Node.js后端服务",
   "main": "src/server.js",
   "bin": "src/server.js",

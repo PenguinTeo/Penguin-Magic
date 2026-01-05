@@ -1,6 +1,5 @@
 const { app, BrowserWindow, Menu } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
 
 // 配置参数
 const CONFIG = {
@@ -14,7 +13,7 @@ const CONFIG = {
 };
 
 let mainWindow = null;
-let backendProcess = null;
+let backendServer = null;
 
 // 创建主窗口
 function createWindow() {
@@ -56,10 +55,17 @@ function createWindow() {
   });
 }
 
-// 启动后端服务
+// 启动后端服务（直接在主进程中运行，不依赖外部 Node.js）
 function startBackendServer() {
   return new Promise((resolve, reject) => {
     console.log('🚀 启动后端服务...');
+
+    // 设置环境变量
+    process.env.NODE_ENV = 'production';
+    process.env.PORT = CONFIG.backendPort.toString();
+    process.env.HOST = CONFIG.backendHost;
+    process.env.IS_ELECTRON = 'true';
+    process.env.USER_DATA_PATH = app.getPath('userData');
 
     const backendPath = CONFIG.isDev
       ? path.join(__dirname, '../backend-nodejs/src/server.js')
@@ -67,75 +73,39 @@ function startBackendServer() {
 
     console.log('后端路径:', backendPath);
 
-    // 设置环境变量
-    const env = {
-      ...process.env,
-      NODE_ENV: 'production',
-      PORT: CONFIG.backendPort.toString(),
-      HOST: CONFIG.backendHost,
-      // Electron 环境标识
-      IS_ELECTRON: 'true',
-      // 用户数据目录
-      USER_DATA_PATH: app.getPath('userData')
-    };
+    try {
+      // 修改 require 的解析路径，确保后端模块能正确找到依赖
+      const backendDir = path.dirname(backendPath);
+      const Module = require('module');
+      const originalResolveFilename = Module._resolveFilename;
+      
+      // 直接 require 后端模块（使用 Electron 内置的 Node.js）
+      const backendApp = require(backendPath);
+      
+      // 启动服务器
+      backendServer = backendApp.listen(CONFIG.backendPort, CONFIG.backendHost, () => {
+        console.log(`✅ 后端服务已启动: http://${CONFIG.backendHost}:${CONFIG.backendPort}`);
+        resolve();
+      });
 
-    // 启动后端进程
-    backendProcess = spawn('node', [backendPath], {
-      env,
-      stdio: 'inherit' // 继承标准输入输出，可以看到后端日志
-    });
+      backendServer.on('error', (err) => {
+        console.error('❌ 后端服务启动失败:', err);
+        reject(err);
+      });
 
-    backendProcess.on('error', (err) => {
-      console.error('❌ 后端服务启动失败:', err);
+    } catch (err) {
+      console.error('❌ 加载后端模块失败:', err);
       reject(err);
-    });
-
-    backendProcess.on('exit', (code) => {
-      if (code !== 0 && code !== null) {
-        console.error(`❌ 后端服务异常退出，代码: ${code}`);
-      }
-    });
-
-    // 等待后端服务就绪
-    const maxRetries = 30;
-    let retries = 0;
-
-    const checkServer = setInterval(() => {
-      const http = require('http');
-      const options = {
-        host: CONFIG.backendHost,
-        port: CONFIG.backendPort,
-        path: '/api/status',
-        timeout: 1000
-      };
-
-      const req = http.get(options, (res) => {
-        if (res.statusCode === 200) {
-          clearInterval(checkServer);
-          console.log('✅ 后端服务就绪');
-          resolve();
-        }
-      });
-
-      req.on('error', () => {
-        retries++;
-        if (retries >= maxRetries) {
-          clearInterval(checkServer);
-          reject(new Error('后端服务启动超时'));
-        }
-      });
-
-      req.end();
-    }, 1000);
+    }
   });
 }
 
 // 停止后端服务
 function stopBackendServer() {
-  if (backendProcess) {
+  if (backendServer) {
     console.log('🛑 停止后端服务...');
-    backendProcess.kill();
-    backendProcess = null;
+    backendServer.close();
+    backendServer = null;
   }
 }
 
