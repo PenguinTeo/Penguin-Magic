@@ -240,14 +240,21 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
     try {
       const result = await canvasApi.getCanvas(canvasId);
       if (result.success && result.data) {
-        setNodes(result.data.nodes || []);
-        setConnections(result.data.connections || []);
+        const loadedNodes = result.data.nodes || [];
+        const loadedConnections = result.data.connections || [];
+        
+        // 同时更新state和ref，确保一致性
+        setNodes(loadedNodes);
+        setConnections(loadedConnections);
+        nodesRef.current = loadedNodes;
+        connectionsRef.current = loadedConnections;
+        
         setCanvasName(result.data.name);
         setCurrentCanvasId(canvasId);
         // 更新缓存，防止立即触发保存
         lastSaveRef.current = {
-          nodes: JSON.stringify(result.data.nodes || []),
-          connections: JSON.stringify(result.data.connections || [])
+          nodes: JSON.stringify(loadedNodes),
+          connections: JSON.stringify(loadedConnections)
         };
         console.log('[Canvas] 加载画布:', result.data.name);
       }
@@ -906,6 +913,185 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
       console.log(`[批量生成] 全部完成`);
   };
 
+  // --- BP/Idea节点批量执行：自动创建图像节点并生成 ---
+  const handleBpIdeaBatchExecute = async (sourceNodeId: string, sourceNode: CanvasNode, count: number) => {
+      console.log(`[BP/Idea批量] 开始生成 ${count} 个图像节点`);
+      
+      // 获取输入
+      const inputs = resolveInputs(sourceNodeId);
+      const inputImages = inputs.images;
+      
+      // 获取提示词和设置
+      let finalPrompt = '';
+      let settings: any = {};
+      
+      if (sourceNode.type === 'bp') {
+          // BP节点：处理Agent和模板
+          const bpTemplate = sourceNode.data?.bpTemplate;
+          const bpInputs = sourceNode.data?.bpInputs || {};
+          settings = sourceNode.data?.settings || {};
+          
+          if (!bpTemplate) {
+              console.error('[BP/Idea批量] BP节点无模板配置');
+              return;
+          }
+          
+          const bpFields = bpTemplate.bpFields || [];
+          const inputFields = bpFields.filter((f: any) => f.type === 'input');
+          const agentFields = bpFields.filter((f: any) => f.type === 'agent');
+          
+          // 收集用户输入值
+          const userInputValues: Record<string, string> = {};
+          for (const field of inputFields) {
+              userInputValues[field.name] = bpInputs[field.id] || bpInputs[field.name] || '';
+          }
+          
+          // 执行Agent
+          const agentResults: Record<string, string> = {};
+          for (const field of agentFields) {
+              if (field.agentConfig) {
+                  let instruction = field.agentConfig.instruction;
+                  for (const [name, value] of Object.entries(userInputValues)) {
+                      instruction = instruction.split(`/${name}`).join(value);
+                  }
+                  for (const [name, result] of Object.entries(agentResults)) {
+                      instruction = instruction.split(`{${name}}`).join(result);
+                  }
+                  
+                  try {
+                      const agentResult = await generateAdvancedLLM(
+                          instruction,
+                          'You are a creative assistant. Generate content based on the given instruction. Output ONLY the requested content, no explanations.',
+                          inputImages.length > 0 ? [inputImages[0]] : undefined
+                      );
+                      agentResults[field.name] = agentResult;
+                  } catch (agentErr) {
+                      agentResults[field.name] = `[Agent错误: ${agentErr}]`;
+                  }
+              }
+          }
+          
+          // 替换模板变量
+          finalPrompt = bpTemplate.prompt;
+          for (const [name, value] of Object.entries(userInputValues)) {
+              finalPrompt = finalPrompt.split(`/${name}`).join(value);
+          }
+          for (const [name, result] of Object.entries(agentResults)) {
+              finalPrompt = finalPrompt.split(`{${name}}`).join(result);
+          }
+      } else if (sourceNode.type === 'idea') {
+          // Idea节点：直接使用content作为提示词
+          finalPrompt = sourceNode.content || '';
+          settings = sourceNode.data?.settings || {};
+      }
+      
+      if (!finalPrompt) {
+          console.error('[BP/Idea批量] 无提示词');
+          return;
+      }
+      
+      console.log(`[BP/Idea批量] 最终提示词:`, finalPrompt.slice(0, 100));
+      
+      // 创建结果节点
+      const resultNodeIds: string[] = [];
+      const newNodes: CanvasNode[] = [];
+      const newConnections: Connection[] = [];
+      
+      const baseX = sourceNode.x + sourceNode.width + 150;
+      const nodeHeight = 300;
+      const gap = 20;
+      const totalHeight = count * nodeHeight + (count - 1) * gap;
+      const startY = sourceNode.y + (sourceNode.height / 2) - (totalHeight / 2);
+      
+      for (let i = 0; i < count; i++) {
+          const newId = uuid();
+          resultNodeIds.push(newId);
+          
+          const resultNode: CanvasNode = {
+              id: newId,
+              type: 'image',
+              title: `结果 ${i + 1}`,
+              content: '',
+              x: baseX,
+              y: startY + i * (nodeHeight + gap),
+              width: 280,
+              height: nodeHeight,
+              status: 'running',
+              data: {
+                  prompt: finalPrompt,
+                  settings: settings
+              }
+          };
+          newNodes.push(resultNode);
+          
+          newConnections.push({
+              id: uuid(),
+              fromNode: sourceNodeId,
+              toNode: newId
+          });
+      }
+      
+      // 添加节点和连接
+      setNodes(prev => [...prev, ...newNodes]);
+      setConnections(prev => [...prev, ...newConnections]);
+      nodesRef.current = [...nodesRef.current, ...newNodes];
+      connectionsRef.current = [...connectionsRef.current, ...newConnections];
+      
+      // 标记源节点为完成（因为它的任务已经完成）
+      updateNode(sourceNodeId, { status: 'completed' });
+      
+      console.log(`[BP/Idea批量] 已创建 ${count} 个图像节点，开始并发执行`);
+      
+      // 并发执行所有结果节点的生成
+      const execPromises = resultNodeIds.map(async (nodeId, index) => {
+          const abortController = new AbortController();
+          abortControllersRef.current.set(nodeId, abortController);
+          const signal = abortController.signal;
+          
+          try {
+              let result: string | null = null;
+              
+              const aspectRatio = settings.aspectRatio || 'AUTO';
+              const resolution = settings.resolution || '2K';
+              const config: GenerationConfig = aspectRatio !== 'AUTO' 
+                  ? { aspectRatio, resolution }
+                  : { aspectRatio: '1:1', resolution };
+              
+              if (inputImages.length > 0) {
+                  // 图生图
+                  result = await editCreativeImage(inputImages, finalPrompt, config, signal);
+              } else {
+                  // 文生图
+                  result = await generateCreativeImage(finalPrompt, config, signal);
+              }
+              
+              if (!signal.aborted) {
+                  updateNode(nodeId, { 
+                      content: result || '', 
+                      status: result ? 'completed' : 'error' 
+                  });
+                  
+                  if (result && onImageGenerated) {
+                      onImageGenerated(result, finalPrompt);
+                  }
+                  
+                  console.log(`[BP/Idea批量] 结果 ${index + 1} 完成`);
+              }
+          } catch (err) {
+              if (!signal.aborted) {
+                  updateNode(nodeId, { status: 'error' });
+                  console.error(`[BP/Idea批量] 结果 ${index + 1} 失败:`, err);
+              }
+          } finally {
+              abortControllersRef.current.delete(nodeId);
+          }
+      });
+      
+      await Promise.all(execPromises);
+      saveCurrentCanvas();
+      console.log(`[BP/Idea批量] 全部完成`);
+  };
+
   const handleExecuteNode = async (nodeId: string, batchCount: number = 1) => {
       const node = nodesRef.current.find(n => n.id === nodeId);
       if (!node) return;
@@ -913,6 +1099,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
       // 批量生成：创建多个结果节点
       if (batchCount > 1 && ['image', 'edit'].includes(node.type)) {
           await handleBatchExecute(nodeId, node, batchCount);
+          return;
+      }
+      
+      // BP/Idea节点批量执行：自动创建图像节点
+      if (batchCount >= 1 && ['bp', 'idea'].includes(node.type)) {
+          await handleBpIdeaBatchExecute(nodeId, node, batchCount);
           return;
       }
 
