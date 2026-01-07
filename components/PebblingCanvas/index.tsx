@@ -830,6 +830,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
 
   // --- 批量生成：创建多个结果节点并并发执行 ---
   const handleBatchExecute = async (sourceNodeId: string, sourceNode: CanvasNode, count: number) => {
+      // 立即标记源节点为 running，防止重复点击
+      updateNode(sourceNodeId, { status: 'running' });
+      
       console.log(`[批量生成] 开始生成 ${count} 个结果节点`);
       
       // 获取源节点的位置和输入
@@ -853,6 +856,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
       
       if (!hasPrompt && !hasImage) {
           console.warn('[批量生成] 无提示词且无图片，无法执行');
+          updateNode(sourceNodeId, { status: 'idle' }); // 恢复状态
           return;
       }
       
@@ -957,6 +961,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
       // 等待所有执行完成
       await Promise.all(execPromises);
       
+      // 标记源节点为完成
+      updateNode(sourceNodeId, { status: 'completed' });
+      
       // 保存画布
       saveCurrentCanvas();
       console.log(`[批量生成] 全部完成`);
@@ -964,6 +971,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
 
   // --- BP/Idea节点批量执行：自动创建图像节点并生成 ---
   const handleBpIdeaBatchExecute = async (sourceNodeId: string, sourceNode: CanvasNode, count: number) => {
+      // 立即标记源节点为 running，防止重复点击
+      updateNode(sourceNodeId, { status: 'running' });
+      
       console.log(`[BP/Idea批量] 开始生成 ${count} 个图像节点`);
       
       // 获取输入
@@ -982,6 +992,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
           
           if (!bpTemplate) {
               console.error('[BP/Idea批量] BP节点无模板配置');
+              updateNode(sourceNodeId, { status: 'idle' }); // 恢复状态
               return;
           }
           
@@ -1036,6 +1047,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
       
       if (!finalPrompt) {
           console.error('[BP/Idea批量] 无提示词');
+          updateNode(sourceNodeId, { status: 'idle' }); // 恢复状态
           return;
       }
       
@@ -1086,9 +1098,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
       nodesRef.current = [...nodesRef.current, ...newNodes];
       connectionsRef.current = [...connectionsRef.current, ...newConnections];
       
-      // 标记源节点为完成（因为它的任务已经完成）
-      updateNode(sourceNodeId, { status: 'completed' });
-      
       console.log(`[BP/Idea批量] 已创建 ${count} 个图像节点，开始并发执行`);
       
       // 并发执行所有结果节点的生成
@@ -1137,6 +1146,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
       });
       
       await Promise.all(execPromises);
+      
+      // 标记源节点为完成
+      updateNode(sourceNodeId, { status: 'completed' });
+      
       saveCurrentCanvas();
       console.log(`[BP/Idea批量] 全部完成`);
   };
