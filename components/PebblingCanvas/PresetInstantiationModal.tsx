@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { CanvasPreset, PresetInput } from '../types';
+import { CanvasPreset, PresetInput } from '../../types/pebblingTypes';
 import { Icons } from './Icons';
 
 interface PresetInstantiationModalProps {
@@ -47,7 +47,7 @@ const PresetInstantiationModal: React.FC<PresetInstantiationModalProps> = ({ pre
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
             <p className="text-xs text-zinc-400 leading-relaxed">
                 Configure the inputs for this workflow.
             </p>

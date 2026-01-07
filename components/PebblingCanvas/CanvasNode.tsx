@@ -579,20 +579,20 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     // 无图片：显示输入和设置
                     <>
                         {/* 变量输入 */}
-                        <div className="flex-1 p-2 overflow-y-auto space-y-2">
+                        <div className="flex-1 p-3 overflow-y-auto space-y-3" onWheel={(e) => e.stopPropagation()}>
                             {inputFields.length === 0 ? (
-                                <div className="text-center text-zinc-500 text-[10px] py-2">
+                                <div className="text-center text-zinc-500 text-xs py-4">
                                     无变量输入
                                 </div>
                             ) : (
                                 inputFields.map((field: any) => (
-                                    <div key={field.id} className="space-y-0.5">
-                                        <label className="text-[9px] font-medium text-zinc-500">
+                                    <div key={field.id} className="space-y-1">
+                                        <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
                                             {field.label}
                                         </label>
                                         <input
                                             type="text"
-                                            className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-200 outline-none focus:border-blue-500/50 placeholder-zinc-600"
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none focus:border-blue-500/50 placeholder-zinc-600"
                                             placeholder={`输入 ${field.label}`}
                                             value={bpInputs[field.name] || ''}
                                             onChange={(e) => handleBpInputChange(field.name, e.target.value)}
@@ -604,13 +604,13 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         </div>
                         
                         {/* 设置区 */}
-                        <div className="px-2 pb-2 space-y-1">
+                        <div className="px-3 pb-3 space-y-1.5">
                             {/* 比例第一行 */}
-                            <div className="flex bg-black/40 rounded p-0.5">
+                            <div className="flex bg-black/40 rounded-lg p-0.5">
                                 {aspectRatios1.map(r => (
                                     <button
                                         key={r}
-                                        className={`flex-1 px-0.5 py-0.5 text-[7px] font-medium rounded transition-all ${(settings.aspectRatio || 'AUTO') === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${(settings.aspectRatio || 'AUTO') === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
                                         onClick={() => handleSettingChange('aspectRatio', r)}
                                         onMouseDown={(e) => e.stopPropagation()}
                                     >
@@ -619,11 +619,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 ))}
                             </div>
                             {/* 比例第二行 */}
-                            <div className="flex bg-black/40 rounded p-0.5">
+                            <div className="flex bg-black/40 rounded-lg p-0.5">
                                 {aspectRatios2.map(r => (
                                     <button
                                         key={r}
-                                        className={`flex-1 px-0.5 py-0.5 text-[7px] font-medium rounded transition-all ${settings.aspectRatio === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${settings.aspectRatio === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
                                         onClick={() => handleSettingChange('aspectRatio', r)}
                                         onMouseDown={(e) => e.stopPropagation()}
                                     >
@@ -632,11 +632,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 ))}
                             </div>
                             {/* 分辨率 */}
-                            <div className="flex bg-black/40 rounded p-0.5">
+                            <div className="flex bg-black/40 rounded-lg p-0.5">
                                 {resolutions.map(r => (
                                     <button
                                         key={r}
-                                        className={`flex-1 px-1 py-0.5 text-[8px] font-medium rounded transition-all ${settings.resolution === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${settings.resolution === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
                                         onClick={() => handleSettingChange('resolution', r)}
                                         onMouseDown={(e) => e.stopPropagation()}
                                     >
@@ -649,7 +649,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 )}
                 
                 {/* 底部状态 */}
-                <div className="h-5 bg-black/30 border-t border-white/5 px-2 flex items-center justify-between text-[8px] text-zinc-500">
+                <div className="h-6 bg-black/30 border-t border-white/5 px-3 flex items-center justify-between text-[10px] text-zinc-500">
                     <span>{hasImage ? '✅ 已生成' : `输入: ${Object.values(bpInputs).filter(v => v).length}/${inputFields.length}`}</span>
                     <span>{settings.aspectRatio || '1:1'} · {settings.resolution || '2K'}</span>
                 </div>
@@ -672,39 +672,41 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         const ideaTitle = node.title || '创意';
         
         return (
-            <div className="w-full h-full bg-[#1c1c1e] flex flex-col overflow-hidden border border-purple-400/20 rounded-xl shadow-lg relative">
-                {/* 标题栏 */}
-                <div className="h-9 flex items-center justify-between px-3 border-b border-white/10 bg-purple-400/5 flex-shrink-0">
+            <div className="w-full h-full bg-[#1c1c1e] flex flex-col overflow-hidden border border-blue-500/30 rounded-xl shadow-lg relative">
+                {/* 标题栏 - 与BP一致 */}
+                <div className="h-8 border-b border-blue-500/20 flex items-center justify-between px-3 bg-blue-500/10 shrink-0">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <Icons.Sparkles size={12} className="text-purple-300 flex-shrink-0" />
-                        <span className="text-[11px] font-bold text-white truncate">{ideaTitle}</span>
+                        <Icons.Sparkles size={12} className="text-blue-300 flex-shrink-0" />
+                        <span className="text-[10px] font-bold text-blue-200 truncate max-w-[200px]">{ideaTitle}</span>
                     </div>
-                    <span className="text-[9px] font-bold bg-purple-400/20 text-purple-200 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">IDEA</span>
+                    <span className="text-[8px] text-blue-300/60 bg-blue-500/20 px-1.5 py-0.5 rounded">IDEA</span>
                 </div>
                 
-                {/* 提示词编辑区 */}
-                <div className="flex-1 p-3 overflow-y-auto scrollbar-hide" onWheel={(e) => e.stopPropagation()}>
-                    <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium block mb-1.5">提示词</label>
-                    <textarea 
-                        className="w-full h-full min-h-[60px] bg-black/40 border border-white/10 rounded px-2 py-1.5 text-[10px] text-zinc-200 focus:border-purple-400/50 focus:outline-none transition-colors resize-none"
-                        placeholder="输入提示词..."
-                        value={localContent}
-                        onChange={(e) => setLocalContent(e.target.value)}
-                        onBlur={(e) => {
-                            onUpdate(node.id, { content: localContent });
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                    />
+                {/* 提示词编辑区 - 固定高度，内容滚动 */}
+                <div className="flex-1 p-3 flex flex-col overflow-hidden" onWheel={(e) => e.stopPropagation()}>
+                    <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium block mb-1.5 flex-shrink-0">提示词</label>
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                        <textarea 
+                            className="w-full h-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:border-blue-500/50 focus:outline-none transition-colors resize-none overflow-y-auto scrollbar-hide"
+                            placeholder="输入提示词..."
+                            value={localContent}
+                            onChange={(e) => setLocalContent(e.target.value)}
+                            onBlur={(e) => {
+                                onUpdate(node.id, { content: localContent });
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        />
+                    </div>
                 </div>
                 
                 {/* 设置区 - 与BP一致的样式 */}
-                <div className="px-2 pb-2 pt-2 space-y-1 flex-shrink-0 border-t border-white/10">
+                <div className="px-3 pb-3 space-y-1.5 flex-shrink-0">
                     {/* 比例第一行 */}
-                    <div className="flex bg-black/40 rounded p-0.5">
+                    <div className="flex bg-black/40 rounded-lg p-0.5">
                         {['AUTO', '1:1', '2:3', '3:2', '3:4', '4:3'].map(ratio => (
                             <button
                                 key={ratio}
-                                className={`flex-1 px-0.5 py-0.5 text-[7px] font-medium rounded transition-all ${(settings.aspectRatio || 'AUTO') === ratio ? 'bg-purple-400/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${(settings.aspectRatio || 'AUTO') === ratio ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onUpdate(node.id, { data: { ...node.data, settings: { ...settings, aspectRatio: ratio } } });
@@ -716,11 +718,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         ))}
                     </div>
                     {/* 比例第二行 */}
-                    <div className="flex bg-black/40 rounded p-0.5">
+                    <div className="flex bg-black/40 rounded-lg p-0.5">
                         {['3:5', '5:3', '9:16', '16:9', '21:9'].map(ratio => (
                             <button
                                 key={ratio}
-                                className={`flex-1 px-0.5 py-0.5 text-[7px] font-medium rounded transition-all ${settings.aspectRatio === ratio ? 'bg-purple-400/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${settings.aspectRatio === ratio ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onUpdate(node.id, { data: { ...node.data, settings: { ...settings, aspectRatio: ratio } } });
@@ -732,11 +734,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         ))}
                     </div>
                     {/* 分辨率 */}
-                    <div className="flex bg-black/40 rounded p-0.5">
+                    <div className="flex bg-black/40 rounded-lg p-0.5">
                         {['1K', '2K', '4K'].map(res => (
                             <button
                                 key={res}
-                                className={`flex-1 px-1 py-0.5 text-[8px] font-medium rounded transition-all ${(settings.resolution || '2K') === res ? 'bg-purple-400/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${(settings.resolution || '2K') === res ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onUpdate(node.id, { data: { ...node.data, settings: { ...settings, resolution: res } } });
@@ -749,15 +751,15 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     </div>
                 </div>
                 
-                {/* 底部状态栏 */}
-                <div className="h-5 bg-black/30 border-t border-white/5 px-2 flex items-center justify-between text-[8px] text-zinc-500 flex-shrink-0">
+                {/* 底部状态 - 与BP一致 */}
+                <div className="h-6 bg-black/30 border-t border-white/5 px-3 flex items-center justify-between text-[10px] text-zinc-500">
                     <span>输入: 1/1</span>
                     <span>{settings.aspectRatio || 'AUTO'} · {settings.resolution || '2K'}</span>
                 </div>
                 
                 {isRunning && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-30">
-                        <div className="w-8 h-8 border-2 border-purple-300/50 border-t-purple-300 rounded-full animate-spin"></div>
+                        <div className="w-8 h-8 border-2 border-blue-400/50 border-t-blue-400 rounded-full animate-spin"></div>
                     </div>
                 )}
             </div>
@@ -809,7 +811,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                    </div>
                </div>
            ) : (
-             // 有图片状态：显示图片和prompt输入框
+             // 有图片状态：只显示图片，不显示提示词输入框
              <>
                 <div className="absolute inset-0 bg-zinc-900 z-0" />
                 <img 
@@ -818,18 +820,6 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     className="relative z-10 w-full h-full object-contain select-none pointer-events-none" 
                     draggable={false}
                 />
-                {/* Prompt输入框 - 始终可见但半透明 */}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-2 z-20">
-                    <textarea 
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-1.5 text-[10px] text-zinc-300 outline-none resize-none focus:border-blue-500/50 focus:bg-black/60 focus:text-white transition-colors placeholder-zinc-500"
-                        placeholder="输入描述图生图..."
-                        value={localPrompt}
-                        onChange={(e) => setLocalPrompt(e.target.value)}
-                        onBlur={handleUpdate}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        rows={1}
-                    />
-                </div>
                 
                 {/* 信息查询按钮 */}
                 <div 
@@ -862,7 +852,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 </div>
                 
                 {/* 工具箱按钮 */}
-                <div className="absolute bottom-14 right-2 z-20">
+                <div className="absolute bottom-2 right-2 z-20">
                   <button
                     className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center transition-all"
                     onClick={(e) => {
@@ -935,7 +925,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                color: hasImage ? nodeColor.light : 'rgb(113, 113, 122)'
              }}
            >
-               {!hasImage ? 'Image' : (localPrompt ? 'Img2Img' : 'Image')}
+               Image
            </div>
            
            {isRunning && (

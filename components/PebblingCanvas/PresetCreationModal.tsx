@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CanvasNode, PresetInput } from '../types';
+import { CanvasNode, PresetInput } from '../../types/pebblingTypes';
 import { Icons } from './Icons';
 
 interface PresetCreationModalProps {
@@ -92,7 +92,7 @@ const PresetCreationModal: React.FC<PresetCreationModalProps> = ({ selectedNodes
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
             
             {/* Metadata */}
             <div className="space-y-3">

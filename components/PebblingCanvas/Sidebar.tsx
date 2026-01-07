@@ -226,7 +226,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 {/* 画布列表 */}
-                <div className="max-h-80 overflow-y-auto">
+                <div className="max-h-80 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
                     {canvasList.length === 0 ? (
                         <div className="p-4 text-center text-zinc-500 text-sm">暂无画布</div>
                     ) : (
@@ -339,7 +339,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
                 
                 {/* 创意列表 */}
-                <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide space-y-2">
+                <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide space-y-2" onWheel={(e) => e.stopPropagation()}>
                     {filteredIdeas.length === 0 ? (
                         <div className="text-center py-8 text-zinc-500 text-xs">
                             暂无创意
@@ -427,7 +427,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                                 ))}
                                             </div>
                                         ) : (
-                                            <div className="text-[10px] text-zinc-400 leading-relaxed max-h-32 overflow-y-auto">
+                                            <div className="text-[10px] text-zinc-400 leading-relaxed max-h-32 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
                                                 {idea.prompt}
                                             </div>
                                         )}
@@ -442,7 +442,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {userPresets.length > 0 && (
                     <div className="pt-2 border-t border-white/10">
                         <h3 className="text-[10px] font-bold uppercase text-zinc-500 mb-2 tracking-wider">画布预设</h3>
-                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                        <div className="space-y-1 max-h-32 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
                             {userPresets.slice(0, 3).map((preset) => (
                                 <button 
                                     key={preset.id}
