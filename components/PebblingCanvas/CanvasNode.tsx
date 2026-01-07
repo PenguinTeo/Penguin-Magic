@@ -19,6 +19,7 @@ interface CanvasNodeProps {
   scale: number;
   effectiveColor?: string;
   onCreateToolNode?: (sourceNodeId: string, toolType: NodeType, position: { x: number, y: number }) => void;
+  hasDownstream?: boolean; // 是否有下游连接
 }
 
 const CanvasNodeItem: React.FC<CanvasNodeProps> = ({ 
@@ -35,7 +36,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   onDragStart,
   scale,
   effectiveColor,
-  onCreateToolNode
+  onCreateToolNode,
+  hasDownstream = false
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState(node.content);
@@ -519,7 +521,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         const bpFields = bpTemplate?.bpFields || [];
         const settings = node.data?.settings || {};
         // 检查是否有有效图片（支持 data:image, http://, https://, // 协议相对URL, /files/ 相对路径）
-        const hasImage = node.content && node.content.length > 10 && (
+        // 注意：如果有下游连接，不显示图片（结果应该在下游节点显示）
+        const hasImage = !hasDownstream && node.content && node.content.length > 10 && (
             node.content.startsWith('data:image') || 
             node.content.startsWith('http://') || 
             node.content.startsWith('https://') ||
@@ -648,6 +651,96 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
 
     if (node.type === 'llm') return renderLLMNode();
     if (node.type === 'resize') return renderResizeNode();
+
+    // Idea节点 - 类似BP的简化版本，包含提示词和设置
+    if (node.type === 'idea') {
+        const settings = node.data?.settings || {};
+        const ideaTitle = node.title || '创意';
+        
+        return (
+            <div className="w-full h-full bg-[#1c1c1e] flex flex-col overflow-hidden border border-purple-500/30 rounded-xl shadow-lg relative">
+                {/* 标题栏 */}
+                <div className="h-9 flex items-center justify-between px-3 border-b border-white/10 bg-purple-500/10 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Icons.Sparkles size={12} className="text-purple-400 flex-shrink-0" />
+                        <span className="text-[11px] font-bold text-white truncate">{ideaTitle}</span>
+                    </div>
+                    <span className="text-[9px] font-bold bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">IDEA</span>
+                </div>
+                
+                {/* 提示词编辑区 */}
+                <div className="flex-1 p-3 overflow-y-auto scrollbar-hide" onWheel={(e) => e.stopPropagation()}>
+                    <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium block mb-1.5">提示词</label>
+                    <textarea 
+                        className="w-full h-full min-h-[60px] bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-zinc-200 focus:border-purple-500/50 focus:outline-none transition-colors resize-none"
+                        placeholder="输入提示词..."
+                        value={localContent}
+                        onChange={(e) => setLocalContent(e.target.value)}
+                        onBlur={(e) => {
+                            onUpdate(node.id, { content: localContent });
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                    />
+                </div>
+                
+                {/* 底部设置栏 */}
+                <div className="p-2 border-t border-white/10 bg-black/20 flex-shrink-0">
+                    {/* 比例选择 */}
+                    <div className="flex items-center justify-center gap-1 mb-1.5">
+                        {['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3'].map(ratio => (
+                            <button
+                                key={ratio}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdate(node.id, { data: { ...node.data, settings: { ...settings, aspectRatio: ratio } } });
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className={`px-1.5 py-0.5 text-[9px] font-medium rounded transition-all ${
+                                    (settings.aspectRatio || '1:1') === ratio 
+                                        ? 'bg-purple-500 text-white' 
+                                        : 'bg-white/5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300'
+                                }`}
+                            >
+                                {ratio}
+                            </button>
+                        ))}
+                    </div>
+                    {/* 分辨率选择 */}
+                    <div className="flex items-center justify-center gap-2">
+                        {['1K', '2K', '4K'].map(res => (
+                            <button
+                                key={res}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdate(node.id, { data: { ...node.data, settings: { ...settings, resolution: res } } });
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                className={`px-3 py-1 text-[10px] font-bold rounded-full transition-all ${
+                                    (settings.resolution || '2K') === res 
+                                        ? 'bg-purple-500/80 text-white' 
+                                        : 'bg-white/5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300'
+                                }`}
+                            >
+                                {res}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                
+                {/* 底部状态栏 */}
+                <div className="h-5 bg-black/30 flex items-center justify-between px-2 text-[9px] text-zinc-500 font-mono flex-shrink-0 border-t border-white/5">
+                    <span>输入: 0/{1}</span>
+                    <span>{settings.aspectRatio || '1:1'} · {settings.resolution || '2K'}</span>
+                </div>
+                
+                {isRunning && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-30">
+                        <div className="w-8 h-8 border-2 border-purple-400/50 border-t-purple-400 rounded-full animate-spin"></div>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     if (node.type === 'image') {
       // 检查是否有有效图片（支持 data: 、http URL 和 相对路径）
