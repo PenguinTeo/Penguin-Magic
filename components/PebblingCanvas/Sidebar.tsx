@@ -96,7 +96,12 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Main Dock */}
         <div 
             className="bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 p-2 rounded-2xl flex flex-col gap-2 shadow-2xl pointer-events-auto items-center"
-            onMouseDown={(e) => e.stopPropagation()} // Stop propagation to canvas
+            onMouseDown={(e) => {
+                // 只在点击在 dock 背景上时阻止传播，不阻止拖拽事件
+                if (e.target === e.currentTarget) {
+                    e.stopPropagation();
+                }
+            }}
         >
             
             {/* Library Toggle */}
@@ -463,19 +468,61 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 const DraggableButton = ({ type, icon, label, onDragStart, onClick }: { type: NodeType, icon: React.ReactNode, label: string, onDragStart: (t: NodeType) => void, onClick: () => void }) => {
-    const handleDragStart = (e: React.DragEvent) => {
-        e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData('nodeType', type);
-        e.dataTransfer.setData('text/plain', type);
-        onDragStart(type);
+    const [isDragging, setIsDragging] = React.useState(false);
+    const startPosRef = React.useRef({ x: 0, y: 0 });
+    
+    const handleMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        startPosRef.current = { x: e.clientX, y: e.clientY };
+        
+        const handleMouseMove = (moveE: MouseEvent) => {
+            const dx = moveE.clientX - startPosRef.current.x;
+            const dy = moveE.clientY - startPosRef.current.y;
+            // 移动超过 5px 才算拖拽
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                if (!isDragging) {
+                    setIsDragging(true);
+                    console.log('[Sidebar] Mouse drag start:', type);
+                    (window as any).__draggingNodeType = type;
+                    (window as any).__dragMousePos = { x: moveE.clientX, y: moveE.clientY };
+                }
+                (window as any).__dragMousePos = { x: moveE.clientX, y: moveE.clientY };
+            }
+        };
+        
+        const handleMouseUp = (upE: MouseEvent) => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            
+            const dx = upE.clientX - startPosRef.current.x;
+            const dy = upE.clientY - startPosRef.current.y;
+            
+            if (Math.abs(dx) <= 5 && Math.abs(dy) <= 5) {
+                // 没有移动，算点击
+                onClick();
+            } else {
+                // 拖拽结束，触发全局事件
+                console.log('[Sidebar] Mouse drag end at:', upE.clientX, upE.clientY);
+                (window as any).__dragMousePos = { x: upE.clientX, y: upE.clientY };
+                // 触发自定义事件
+                window.dispatchEvent(new CustomEvent('sidebar-drag-end', { 
+                    detail: { type, x: upE.clientX, y: upE.clientY } 
+                }));
+            }
+            
+            setIsDragging(false);
+            (window as any).__draggingNodeType = null;
+        };
+        
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
     };
     
     return (
-        <div 
-            draggable
-            onDragStart={handleDragStart}
-            onClick={(e) => { e.stopPropagation(); onClick(); }}
-            className="group relative cursor-grab active:cursor-grabbing"
+        <div
+            onMouseDown={handleMouseDown}
+            className="group relative cursor-grab active:cursor-grabbing select-none"
         >
             <div className="w-8 h-8 rounded-lg bg-white/5 text-zinc-400 hover:text-white hover:bg-white/15 hover:scale-105 transition-all shadow-inner border border-transparent hover:border-white/10 active:scale-95 flex items-center justify-center">
                  {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}

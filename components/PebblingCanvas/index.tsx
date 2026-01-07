@@ -8,17 +8,20 @@ import Sidebar from './Sidebar';
 import ContextMenu from './ContextMenu';
 import PresetCreationModal from './PresetCreationModal';
 import PresetInstantiationModal from './PresetInstantiationModal';
-import { editImageWithThirdPartyApi, chatWithThirdPartyApi, getThirdPartyConfig, ImageEditConfig } from '../../services/geminiService';
+import { editImageWithGemini, chatWithThirdPartyApi, getThirdPartyConfig, ImageEditConfig } from '../../services/geminiService';
 import * as canvasApi from '../../services/api/canvas';
 import { downloadRemoteToOutput } from '../../services/api/files';
 import { Icons } from './Icons';
 
 // === 画布用API适配器，桥接主项目的geminiService ===
 
-// 检查API是否已配置
+// 检查API是否已配置（支持贞贞API或原生Gemini）
 const isApiConfigured = (): boolean => {
   const config = getThirdPartyConfig();
-  return !!(config && config.enabled && config.apiKey);
+  // 贞贞API 或 Gemini API Key
+  const hasThirdParty = !!(config && config.enabled && config.apiKey);
+  const hasGemini = !!localStorage.getItem('gemini_api_key');
+  return hasThirdParty || hasGemini;
 };
 
 // base64 转 File
@@ -28,7 +31,7 @@ const base64ToFile = async (base64: string, filename: string = 'image.png'): Pro
   return new File([blob], filename, { type: blob.type || 'image/png' });
 };
 
-// 生成图片（文生图/图生图）
+// 生成图片（文生图/图生图）- 自动选择贞贞API或Gemini
 const generateCreativeImage = async (
   prompt: string, 
   config?: GenerationConfig,
@@ -39,7 +42,8 @@ const generateCreativeImage = async (
       aspectRatio: config?.aspectRatio || '1:1',
       imageSize: config?.resolution || '1K',
     };
-    const result = await editImageWithThirdPartyApi([], prompt, imageConfig);
+    // 使用统一的 editImageWithGemini，它会自动判断用哪个API
+    const result = await editImageWithGemini([], prompt, imageConfig);
     return result.imageUrl;
   } catch (e) {
     console.error('文生图失败:', e);
@@ -47,7 +51,7 @@ const generateCreativeImage = async (
   }
 };
 
-// 编辑图片（图生图）
+// 编辑图片（图生图）- 自动选择贞贞API或Gemini
 const editCreativeImage = async (
   images: string[],
   prompt: string,
@@ -61,7 +65,8 @@ const editCreativeImage = async (
       aspectRatio: config?.aspectRatio || 'Auto',
       imageSize: config?.resolution || '1K',
     };
-    const result = await editImageWithThirdPartyApi(files, prompt, imageConfig);
+    // 使用统一的 editImageWithGemini，它会自动判断用哪个API
+    const result = await editImageWithGemini(files, prompt, imageConfig);
     return result.imageUrl;
   } catch (e) {
     console.error('图生图失败:', e);
@@ -615,13 +620,34 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
           }
       };
       
+      // 监听自定义的 sidebar-drag-end 事件（鼠标模拟拖拽）
+      const handleSidebarDragEnd = (e: Event) => {
+          const detail = (e as CustomEvent).detail;
+          console.log('[Canvas] sidebar-drag-end received:', detail);
+          
+          const container = containerRef.current;
+          if (!container) return;
+          
+          const rect = container.getBoundingClientRect();
+          const x = (detail.x - rect.left - canvasOffset.x) / scale - 150;
+          const y = (detail.y - rect.top - canvasOffset.y) / scale - 100;
+          
+          if (detail.type && ['image', 'text', 'video', 'llm', 'idea', 'relay', 'edit', 'remove-bg', 'upscale', 'resize', 'bp'].includes(detail.type)) {
+              console.log('[Canvas] 创建节点:', detail.type, '位置:', x, y);
+              addNode(detail.type, '', { x, y });
+          }
+      };
+      
       window.addEventListener('keydown', handleKeyDown);
       window.addEventListener('keyup', handleKeyUp);
+      window.addEventListener('sidebar-drag-end', handleSidebarDragEnd);
+      
       return () => {
           window.removeEventListener('keydown', handleKeyDown);
           window.removeEventListener('keyup', handleKeyUp);
+          window.removeEventListener('sidebar-drag-end', handleSidebarDragEnd);
       };
-  }, [deleteSelection, handleCopy, handlePaste]);
+  }, [deleteSelection, handleCopy, handlePaste, canvasOffset, scale]);
 
   const addNode = (type: NodeType, content: string = '', position?: Vec2, title?: string, data?: NodeData) => {
       const container = containerRef.current;
@@ -1615,21 +1641,32 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
   };
 
   const handleDragOver = (e: React.DragEvent) => {
+    console.log('[Canvas] DragOver triggered');
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     
-    // 1. Try to get internal node type
-    let type = e.dataTransfer.getData('nodeType') as NodeType;
+    console.log('[Canvas] Drop event, types:', Array.from(e.dataTransfer.types));
     
-    // 备用：从text/plain获取
+    // 尝试从 dataTransfer 获取
+    let type = e.dataTransfer.getData('nodeType') as NodeType;
+    console.log('[Canvas] nodeType from dataTransfer:', type);
+    
+    // 备用：从 text/plain 获取
     if (!type) {
-        type = e.dataTransfer.getData('text/plain') as NodeType;
+      type = e.dataTransfer.getData('text/plain') as NodeType;
+      console.log('[Canvas] nodeType from text/plain:', type);
     }
     
-    console.log('[Drop] 获取节点类型:', type);
+    // 备用：从全局状态获取
+    if (!type && (window as any).__draggingNodeType) {
+      type = (window as any).__draggingNodeType as NodeType;
+      console.log('[Canvas] nodeType from window:', type);
+      (window as any).__draggingNodeType = null;
+    }
     
     // Calculate drop position relative to canvas
     const container = containerRef.current;
@@ -1975,7 +2012,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
   ];
 
   return (
-    <div className="w-screen h-screen bg-[#0a0a0f] text-white overflow-hidden relative" onContextMenu={handleContextMenu}>
+    <div 
+      className="w-full h-full bg-[#0a0a0f] text-white overflow-hidden relative" 
+      onContextMenu={handleContextMenu}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
 
       <Sidebar 
           onDragStart={(type) => { /* HTML5 drag handled in drop */ }}
@@ -2122,7 +2164,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                 transformOrigin: '0 0',
                 width: '100%',
                 height: '100%',
-                willChange: isDraggingCanvas || draggingNodeId ? 'transform' : 'auto'
+                willChange: isDraggingCanvas || draggingNodeId ? 'transform' : 'auto',
+                pointerEvents: 'none'
             }}
             className="absolute top-0 left-0"
         >
@@ -2169,12 +2212,40 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                     
                     const isSelected = selectedConnectionId === conn.id;
                     
-                    // 三次贝塞尔曲线 - 标准水平控制点
-                    const distance = endX - startX;
-                    const ctrl1X = startX + distance / 3;
-                    const ctrl1Y = startY;
-                    const ctrl2X = endX - distance / 3;
-                    const ctrl2Y = endY;
+                    // 计算水平和垂直距离
+                    const dx = endX - startX;
+                    const dy = endY - startY;
+                    const distance = Math.abs(dx);
+                    const verticalDistance = Math.abs(dy);
+                    
+                    // 最小控制点偏移，确保连线始终可见
+                    const minControlOffset = 50;
+                    
+                    let ctrl1X, ctrl1Y, ctrl2X, ctrl2Y;
+                    
+                    if (dx >= 0) {
+                        // 正常方向：从左到右
+                        // 控制点偏移：确保曲线可见，但不超过实际距离的一半
+                        const controlOffset = Math.min(Math.max(distance / 3, minControlOffset), distance / 2 + 20);
+                        ctrl1X = startX + controlOffset;
+                        ctrl1Y = startY;
+                        ctrl2X = endX - controlOffset;
+                        ctrl2Y = endY;
+                        
+                        // 特殊处理：当水平距离很小时（节点靠近），使用直线而非曲线
+                        if (distance < 100) {
+                            ctrl1X = startX + distance / 2;
+                            ctrl2X = startX + distance / 2;
+                        }
+                    } else {
+                        // 反向连接：目标在源节点左侧，需要曲线绕行
+                        // 使用更大的控制点偏移来创建可见的曲线
+                        const controlOffset = Math.max(distance / 2, minControlOffset * 1.5);
+                        ctrl1X = startX + controlOffset;
+                        ctrl1Y = startY + (verticalDistance > 50 ? 0 : (endY > startY ? 50 : -50)); // 垂直偏移避免重叠
+                        ctrl2X = endX - controlOffset;
+                        ctrl2Y = endY + (verticalDistance > 50 ? 0 : (endY > startY ? -50 : 50));
+                    }
                     
                     // 三次贝塞尔曲线路径
                     const pathD = `M ${startX} ${startY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${endX} ${endY}`;
@@ -2185,44 +2256,40 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                              <path 
                                 d={pathD}
                                 stroke="transparent"
-                                strokeWidth="15"
+                                strokeWidth="20"
                                 fill="none"
                             />
-                            {/* 外层光晕 */}
+                            {/* 外层光晕 - 使用纯白色 */}
                             <path 
                                 d={pathD}
-                                stroke={isSelected ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.15)'}
-                                strokeWidth={isSelected ? 6 : 4}
+                                stroke={isSelected ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)'}
+                                strokeWidth={isSelected ? 8 : 5}
                                 fill="none"
                                 filter="url(#glow-white)"
                                 strokeLinecap="round"
-                                className="transition-all duration-300"
                             />
-                            {/* 主线条 */}
+                            {/* 主线条 - 使用纯白色 */}
                             <path 
                                 d={pathD}
-                                stroke={isSelected ? 'url(#grad-selected)' : 'url(#grad-mono)'}
-                                strokeWidth={isSelected ? 2.5 : 1.5}
+                                stroke={isSelected ? '#ffffff' : 'rgba(255,255,255,0.9)'}
+                                strokeWidth={isSelected ? 3 : 2}
                                 fill="none"
                                 strokeLinecap="round"
-                                className="transition-all duration-300"
                             />
                             {/* 端点光球 */}
                             <circle 
                                 cx={startX} 
                                 cy={startY} 
-                                r={isSelected ? 4 : 2.5} 
-                                fill={isSelected ? '#fff' : 'rgba(255,255,255,0.7)'}
+                                r={isSelected ? 5 : 4} 
+                                fill="#ffffff"
                                 filter="url(#glow-white)"
-                                className="transition-all duration-300"
                             />
                             <circle 
                                 cx={endX} 
                                 cy={endY} 
-                                r={isSelected ? 4 : 2.5} 
-                                fill={isSelected ? '#fff' : 'rgba(255,255,255,0.7)'}
+                                r={isSelected ? 5 : 4} 
+                                fill="#ffffff"
                                 filter="url(#glow-white)"
-                                className="transition-all duration-300"
                             />
                         </g>
                     );
@@ -2236,11 +2303,38 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                      const startY = fromNode.y + fromNode.height / 2;
                      const endX = linkingState.currPos.x;
                      const endY = linkingState.currPos.y;
-                     const distance = endX - startX;
-                     const ctrl1X = startX + distance / 3;
-                     const ctrl1Y = startY;
-                     const ctrl2X = endX - distance / 3;
-                     const ctrl2Y = endY;
+                     
+                     // 计算水平和垂直距离
+                     const dx = endX - startX;
+                     const dy = endY - startY;
+                     const distance = Math.abs(dx);
+                     const verticalDistance = Math.abs(dy);
+                     
+                     // 最小控制点偏移
+                     const minControlOffset = 50;
+                     
+                     let ctrl1X, ctrl1Y, ctrl2X, ctrl2Y;
+                     
+                     if (dx >= 0) {
+                         const controlOffset = Math.min(Math.max(distance / 3, minControlOffset), distance / 2 + 20);
+                         ctrl1X = startX + controlOffset;
+                         ctrl1Y = startY;
+                         ctrl2X = endX - controlOffset;
+                         ctrl2Y = endY;
+                         
+                         // 特殊处理：当水平距离很小时，使用直线
+                         if (distance < 100) {
+                             ctrl1X = startX + distance / 2;
+                             ctrl2X = startX + distance / 2;
+                         }
+                     } else {
+                         const controlOffset = Math.max(distance / 2, minControlOffset * 1.5);
+                         ctrl1X = startX + controlOffset;
+                         ctrl1Y = startY + (verticalDistance > 50 ? 0 : (endY > startY ? 50 : -50));
+                         ctrl2X = endX - controlOffset;
+                         ctrl2Y = endY + (verticalDistance > 50 ? 0 : (endY > startY ? -50 : 50));
+                     }
+                     
                      return (
                         <>
                             <path 

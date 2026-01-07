@@ -1456,8 +1456,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         transform: `translate(${node.x}px, ${node.y}px)`,
         width: node.width,
         height: node.height,
-        cursor: 'grab', 
-        backgroundColor: isRelay ? 'transparent' : '#1c1c1e'
+        cursor: 'grab',
+        backgroundColor: isRelay ? 'transparent' : '#1c1c1e',
+        pointerEvents: 'auto'
       }}
       onMouseDown={(e) => {
         // Prevent drag start if clicking interactive elements, BUT allow if it's the text display div

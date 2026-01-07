@@ -1558,8 +1558,8 @@ const Canvas: React.FC<CanvasProps> = ({
         </div>
       ) : null}
       
-      {/* 桌面模式 - 始终显示 */}
-      <div className="relative z-10 flex-1 overflow-hidden">
+      {/* 桌面模式 - 始终显示（画布模式下作为背景） */}
+      <div className={`relative z-10 flex-1 overflow-hidden ${view === 'canvas' ? 'pointer-events-none' : ''}`}>
           <Desktop
             items={desktopItems}
             onItemsChange={onDesktopItemsChange}
