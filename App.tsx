@@ -22,6 +22,7 @@ import { downloadImage } from './services/export';
 import { ThemeProvider, useTheme, SnowfallEffect } from './contexts/ThemeContext';
 import { Desktop, createDesktopItemFromHistory, TOP_OFFSET } from './components/Desktop';
 import { HistoryDock } from './components/HistoryDock';
+import PebblingCanvas from './components/PebblingCanvas';
 
 
 interface LeftPanelProps {
@@ -63,7 +64,7 @@ interface RightPanelProps {
   creativeIdeas: CreativeIdea[];
   handleUseCreativeIdea: (idea: CreativeIdea) => void;
   setAddIdeaModalOpen: (isOpen: boolean) => void;
-  setView: (view: 'editor' | 'local-library') => void;
+  setView: (view: 'editor' | 'local-library' | 'canvas') => void;
   onDeleteIdea: (id: number) => void;
   onEditIdea: (idea: CreativeIdea) => void;
   onToggleFavorite?: (id: number) => void; // 切换收藏状态
@@ -71,8 +72,8 @@ interface RightPanelProps {
 }
 
 interface CanvasProps {
-  view: 'editor' | 'local-library';
-  setView: (view: 'editor' | 'local-library') => void;
+  view: 'editor' | 'local-library' | 'canvas';
+  setView: (view: 'editor' | 'local-library' | 'canvas') => void;
   files: File[];
   onUploadClick: () => void;
   creativeIdeas: CreativeIdea[];
@@ -130,6 +131,8 @@ interface CanvasProps {
   // 最小化结果状态
   isResultMinimized: boolean;
   setIsResultMinimized: (value: boolean) => void;
+  // 画布图片生成回调
+  onCanvasImageGenerated?: (imageUrl: string, prompt: string) => void;
 }
 
 // IndexedDB 相关操作已迁移到 services/db/ 目录
@@ -1466,6 +1469,7 @@ const Canvas: React.FC<CanvasProps> = ({
   onUpdateCategory,
   isImporting,
   isImportingById,
+  onCanvasImageGenerated,
 }) => {
   const { theme, themeName } = useTheme();
   const isDark = themeName !== 'light';
@@ -1514,6 +1518,15 @@ const Canvas: React.FC<CanvasProps> = ({
             </span>
           )}
         </button>
+        <button
+          onClick={() => setView('canvas')}
+          className={`liquid-tab flex items-center gap-1 ${
+            view === 'canvas' ? 'active' : ''
+          }`}
+        >
+          <Grid3x3 className="w-3 h-3" />
+          画布
+        </button>
 
       </div>
       
@@ -1537,6 +1550,11 @@ const Canvas: React.FC<CanvasProps> = ({
             isImporting={isImporting}
             isImportingById={isImportingById}
           />
+        </div>
+      ) : view === 'canvas' ? (
+        /* 画布全屏显示 */
+        <div className="absolute inset-0 z-50 pt-12">
+          <PebblingCanvas onImageGenerated={onCanvasImageGenerated} />
         </div>
       ) : null}
       
@@ -1682,7 +1700,7 @@ const App: React.FC = () => {
     return [...localCreativeIdeas].sort((a, b) => (b.order || 0) - (a.order || 0));
   }, [localCreativeIdeas]);
   
-  const [view, setView] = useState<'editor' | 'local-library'>('editor'); // 默认桌面模式
+  const [view, setView] = useState<'editor' | 'local-library' | 'canvas'>('editor'); // 默认桌面模式
   const [isAddIdeaModalOpen, setAddIdeaModalOpen] = useState(false);
   const [editingIdea, setEditingIdea] = useState<CreativeIdea | null>(null);
   const [presetImageForNewIdea, setPresetImageForNewIdea] = useState<string | null>(null); // 从桌面图片创建创意库时的预设图片
@@ -2701,6 +2719,38 @@ const App: React.FC = () => {
       });
     }, [safeDesktopSave]);
 
+    // 画布生成图片同步到桌面
+    const handleCanvasImageGenerated = useCallback(async (imageUrl: string, prompt: string) => {
+      // 先将base64图片保存到本地文件
+      let finalImageUrl = imageUrl;
+      if (imageUrl.startsWith('data:')) {
+        try {
+          const result = await saveToOutput(imageUrl, `canvas_${Date.now()}.png`);
+          if (result.success && result.data?.url) {
+            finalImageUrl = result.data.url; // 使用本地文件URL
+            console.log('[Canvas] 图片已保存到:', finalImageUrl);
+          }
+        } catch (e) {
+          console.error('[Canvas] 保存图片失败:', e);
+        }
+      }
+      
+      // 创建新的桌面图片项
+      const now = Date.now();
+      const newImageItem: DesktopImageItem = {
+        id: `canvas-img-${now}-${Math.random().toString(36).substring(2, 8)}`,
+        type: 'image',
+        name: `画布(${prompt.slice(0, 10)}...)`,
+        position: { x: 0, y: 0 }, // 位置将由handleAddToDesktop自动计算
+        imageUrl: finalImageUrl,
+        prompt: prompt,
+        createdAt: now,
+        updatedAt: now,
+      };
+      handleAddToDesktop(newImageItem);
+      console.log('[Canvas] 图片已同步到桌面:', newImageItem.name);
+    }, [handleAddToDesktop]);
+
   const handleGenerateClick = useCallback(async () => {
     // 检查API配置
     const hasValidApi = 
@@ -3271,7 +3321,8 @@ const App: React.FC = () => {
         onChange={handleImportIdeas}
       />
       
-      {/* 左侧面板 */}
+      {/* 左侧面板 - 画布模式下隐藏 */}
+      {view !== 'canvas' && (
       <div className="flex-shrink-0">
         <LeftPanel 
             files={files}
@@ -3308,6 +3359,7 @@ const App: React.FC = () => {
             backendStatus={backendStatus}
           />
         </div>
+      )}
       <div className="relative flex-1 flex min-w-0">
         <Canvas 
           view={view}
@@ -3362,6 +3414,7 @@ const App: React.FC = () => {
           onUpdateCategory={handleUpdateCategory}
           isImporting={isImporting}
           isImportingById={isImportingById}
+          onCanvasImageGenerated={handleCanvasImageGenerated}
         />
         {view === 'editor' && (
              <div className="absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-300 bottom-6 flex items-center gap-3">
@@ -3433,7 +3486,8 @@ const App: React.FC = () => {
              </div>
         )}
       </div>
-      {/* 右侧面板 */}
+      {/* 右侧面板 - 画布模式下隐藏 */}
+      {view !== 'canvas' && (
       <div className="flex-shrink-0">
         <RightPanel 
           creativeIdeas={creativeIdeas}
@@ -3446,6 +3500,7 @@ const App: React.FC = () => {
           onClearRecentUsage={handleClearRecentUsage}
         />
       </div>
+      )}
       
       <style>{`
         @keyframes fade-in {

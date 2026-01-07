@@ -14,6 +14,7 @@ const filesRouter = require('./routes/files');
 const settingsRouter = require('./routes/settings');
 const desktopRouter = require('./routes/desktop');
 const imageOpsRouter = require('./routes/imageOps');
+const canvasRouter = require('./routes/canvas');
 
 const app = express();
 
@@ -65,6 +66,7 @@ app.use('/files/input', express.static(config.INPUT_DIR));
 app.use('/files/thumbnails', express.static(config.THUMBNAILS_DIR));
 app.use('/files/creative', express.static(config.CREATIVE_IMAGES_DIR));
 app.use('/files/creative_images', express.static(config.CREATIVE_IMAGES_DIR)); // 兼容旧路径
+app.use('/files/canvas_images', express.static(path.join(config.BASE_DIR, 'canvas_images'))); // 画布图片
 
 // 确保目录存在并输出调试信息
 console.log('📁 静态文件托管配置:');
@@ -80,6 +82,7 @@ app.use('/api/files', filesRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/desktop', desktopRouter);
 app.use('/api/image-ops', imageOpsRouter);
+app.use('/api/canvas', canvasRouter);
 
 // 服务状态检查
 app.get('/api/status', (req, res) => {
