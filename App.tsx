@@ -1554,7 +1554,7 @@ const Canvas: React.FC<CanvasProps> = ({
       ) : view === 'canvas' ? (
         /* 画布全屏显示 */
         <div className="absolute inset-0 z-50 pt-12">
-          <PebblingCanvas onImageGenerated={onCanvasImageGenerated} />
+          <PebblingCanvas onImageGenerated={onCanvasImageGenerated} creativeIdeas={creativeIdeas} />
         </div>
       ) : null}
       

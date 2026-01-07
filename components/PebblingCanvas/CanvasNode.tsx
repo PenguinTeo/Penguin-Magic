@@ -10,7 +10,7 @@ interface CanvasNodeProps {
   onSelect: (id: string, multi: boolean) => void;
   onUpdate: (id: string, updates: Partial<CanvasNode>) => void;
   onDelete: (id: string) => void;
-  onExecute: (id: string) => void;
+  onExecute: (id: string, count?: number) => void; // count: 批量生成数量
   onStop: (id: string) => void;
   onDownload: (id: string) => void;
   onStartConnection: (nodeId: string, portType: 'in' | 'out', position: { x: number, y: number }) => void;
@@ -41,6 +41,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   const [localContent, setLocalContent] = useState(node.content);
   const [localPrompt, setLocalPrompt] = useState(node.data?.prompt || '');
   const [localSystem, setLocalSystem] = useState(node.data?.systemInstruction || '');
+  const [batchCount, setBatchCount] = useState(1); // 批量生成数量
   
   // Resize Node Specific State
   const [resizeMode, setResizeMode] = useState<'longest' | 'shortest' | 'width' | 'height' | 'exact'>(node.data?.resizeMode || 'longest');
@@ -511,12 +512,152 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         );
     }
 
+    // BP节点 - 只展示变量输入和设置，执行后显示图片
+    if (node.type === 'bp') {
+        const bpTemplate = node.data?.bpTemplate;
+        const bpInputs = node.data?.bpInputs || {};
+        const bpFields = bpTemplate?.bpFields || [];
+        const settings = node.data?.settings || {};
+        // 检查是否有有效图片（支持 data:image, http://, https://, // 协议相对URL, /files/ 相对路径）
+        const hasImage = node.content && node.content.length > 10 && (
+            node.content.startsWith('data:image') || 
+            node.content.startsWith('http://') || 
+            node.content.startsWith('https://') ||
+            node.content.startsWith('//') ||
+            node.content.startsWith('/files/') ||
+            node.content.startsWith('/api/')
+        );
+        console.log('[BP节点渲染] content:', node.content?.slice(0, 80), 'hasImage:', hasImage);
+        
+        // 只筛选input类型的字段（变量），不显示agent类型
+        const inputFields = bpFields.filter((f: any) => f.type === 'input');
+        
+        const handleBpInputChange = (fieldName: string, value: string) => {
+            const newInputs = { ...bpInputs, [fieldName]: value };
+            onUpdate(node.id, {
+                data: { ...node.data, bpInputs: newInputs }
+            });
+        };
+        
+        const handleSettingChange = (key: string, value: string) => {
+            onUpdate(node.id, {
+                data: { ...node.data, settings: { ...settings, [key]: value } }
+            });
+        };
+        
+        const aspectRatios = ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3'];
+        const resolutions = ['1K', '2K', '4K'];
+        
+        return (
+            <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-blue-500/30 rounded-xl overflow-hidden relative shadow-lg">
+                {/* 头部 */}
+                <div className="h-8 border-b border-blue-500/20 flex items-center justify-between px-3 bg-blue-500/10 shrink-0">
+                    <div className="flex items-center gap-2">
+                        <Icons.Sparkles size={12} className="text-blue-300" />
+                        <span className="text-[10px] font-bold text-blue-200 truncate max-w-[200px]">
+                            {bpTemplate?.title || 'BP 模板'}
+                        </span>
+                    </div>
+                    <span className="text-[8px] text-blue-300/60 bg-blue-500/20 px-1.5 py-0.5 rounded">BP</span>
+                </div>
+                
+                {hasImage ? (
+                    // 有图片：显示结果
+                    <div className="flex-1 relative bg-black">
+                        <img 
+                            src={node.content} 
+                            alt="Result" 
+                            className="w-full h-full object-contain" 
+                            draggable={false}
+                        />
+                    </div>
+                ) : (
+                    // 无图片：显示输入和设置
+                    <>
+                        {/* 变量输入 */}
+                        <div className="flex-1 p-2 overflow-y-auto space-y-2">
+                            {inputFields.length === 0 ? (
+                                <div className="text-center text-zinc-500 text-[10px] py-2">
+                                    无变量输入
+                                </div>
+                            ) : (
+                                inputFields.map((field: any) => (
+                                    <div key={field.id} className="space-y-0.5">
+                                        <label className="text-[9px] font-medium text-zinc-500">
+                                            {field.label}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-200 outline-none focus:border-blue-500/50 placeholder-zinc-600"
+                                            placeholder={`输入 ${field.label}`}
+                                            value={bpInputs[field.name] || ''}
+                                            onChange={(e) => handleBpInputChange(field.name, e.target.value)}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        />
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        
+                        {/* 设置区 */}
+                        <div className="px-2 pb-2 space-y-1">
+                            {/* 比例 */}
+                            <div className="flex bg-black/40 rounded p-0.5">
+                                {aspectRatios.map(r => (
+                                    <button
+                                        key={r}
+                                        className={`flex-1 px-0.5 py-0.5 text-[7px] font-medium rounded transition-all ${settings.aspectRatio === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        onClick={() => handleSettingChange('aspectRatio', r)}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        {r}
+                                    </button>
+                                ))}
+                            </div>
+                            {/* 分辨率 */}
+                            <div className="flex bg-black/40 rounded p-0.5">
+                                {resolutions.map(r => (
+                                    <button
+                                        key={r}
+                                        className={`flex-1 px-1 py-0.5 text-[8px] font-medium rounded transition-all ${settings.resolution === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        onClick={() => handleSettingChange('resolution', r)}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        {r}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                )}
+                
+                {/* 底部状态 */}
+                <div className="h-5 bg-black/30 border-t border-white/5 px-2 flex items-center justify-between text-[8px] text-zinc-500">
+                    <span>{hasImage ? '✅ 已生成' : `输入: ${Object.values(bpInputs).filter(v => v).length}/${inputFields.length}`}</span>
+                    <span>{settings.aspectRatio || '1:1'} · {settings.resolution || '2K'}</span>
+                </div>
+                
+                {isRunning && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-30">
+                        <div className="w-8 h-8 border-2 border-blue-400/50 border-t-blue-400 rounded-full animate-spin"></div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     if (node.type === 'llm') return renderLLMNode();
     if (node.type === 'resize') return renderResizeNode();
 
     if (node.type === 'image') {
-      // 检查是否有有效图片（支持 data: 和 http URL）
-      const hasImage = node.content && (node.content.startsWith('data:image') || node.content.startsWith('http://') || node.content.startsWith('https://'));
+      // 检查是否有有效图片（支持 data: 、http URL 和 相对路径）
+      const hasImage = node.content && (
+        node.content.startsWith('data:image') || 
+        node.content.startsWith('http://') || 
+        node.content.startsWith('https://') ||
+        node.content.startsWith('/files/') ||
+        node.content.startsWith('/api/')
+      );
       const nodeColor = getNodeTypeColor(node.type);
       
       return (
@@ -1252,17 +1393,40 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                  </button>
              )}
 
-             {/* Execute Button */}
+             {/* Execute Button with Batch Count */}
              {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize'].includes(node.type) && (
-                 <button 
-                    onClick={(e) => { e.stopPropagation(); isRunning ? onStop(node.id) : onExecute(node.id); }}
-                    className={`p-1.5 rounded-lg border border-white/10 shadow-lg transition-colors flex items-center gap-1.5 px-2.5 font-bold text-[10px] uppercase tracking-wider
-                        ${isRunning ? 'bg-red-500/20 text-red-300 border-red-500/50 hover:bg-red-500/30' : 'bg-[#2c2c2e] text-green-400 hover:bg-green-500/20 hover:text-green-300'}
-                    `}
-                 >
-                    {isRunning ? <Icons.Stop size={12} fill="currentColor" /> : <Icons.Play size={12} fill="currentColor" />}
-                    {isRunning ? 'Stop' : 'Run'}
-                 </button>
+                 <div className="flex items-center gap-0.5">
+                   {/* 批量数量选择器 - 只对图片生成类型节点显示 */}
+                   {['image', 'edit'].includes(node.type) && !isRunning && (
+                     <div className="flex items-center h-7 rounded-l-lg border border-r-0 border-white/10 bg-[#2c2c2e] overflow-hidden">
+                       <button
+                         onClick={(e) => { e.stopPropagation(); setBatchCount(Math.max(1, batchCount - 1)); }}
+                         className="w-6 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                         title="减少"
+                       >
+                         <Icons.Minus size={10} />
+                       </button>
+                       <span className="w-5 text-center text-[10px] font-bold text-zinc-300">{batchCount}</span>
+                       <button
+                         onClick={(e) => { e.stopPropagation(); setBatchCount(Math.min(9, batchCount + 1)); }}
+                         className="w-6 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                         title="增加"
+                       >
+                         <Icons.Plus size={10} />
+                       </button>
+                     </div>
+                   )}
+                   <button 
+                      onClick={(e) => { e.stopPropagation(); isRunning ? onStop(node.id) : onExecute(node.id, batchCount); }}
+                      className={`p-1.5 border border-white/10 shadow-lg transition-colors flex items-center gap-1.5 px-2.5 font-bold text-[10px] uppercase tracking-wider
+                          ${['image', 'edit'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
+                          ${isRunning ? 'bg-red-500/20 text-red-300 border-red-500/50 hover:bg-red-500/30' : 'bg-[#2c2c2e] text-green-400 hover:bg-green-500/20 hover:text-green-300'}
+                      `}
+                   >
+                      {isRunning ? <Icons.Stop size={12} fill="currentColor" /> : <Icons.Play size={12} fill="currentColor" />}
+                      {isRunning ? 'Stop' : 'Run'}
+                   </button>
+                 </div>
              )}
 
             {/* Download Button */}

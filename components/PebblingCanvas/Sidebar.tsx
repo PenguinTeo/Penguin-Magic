@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Icons } from './Icons';
 import { NodeType, NodeData, CanvasPreset } from '../../types/pebblingTypes';
 import { CanvasListItem } from '../../services/api/canvas';
+import { CreativeIdea } from '../../types';
 
 interface SidebarProps {
     onDragStart: (type: NodeType) => void;
@@ -21,14 +22,23 @@ interface SidebarProps {
     onCreateCanvas: () => void;
     onLoadCanvas: (id: string) => void;
     onDeleteCanvas: (id: string) => void;
+    onRenameCanvas: (newName: string) => void;
+    // 创意库
+    creativeIdeas?: CreativeIdea[];
+    onApplyCreativeIdea?: (idea: CreativeIdea) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   onDragStart, onAdd, userPresets, onAddPreset, onDeletePreset, onHome, onOpenSettings, isApiConfigured,
-  canvasList, currentCanvasId, canvasName, isCanvasLoading, onCreateCanvas, onLoadCanvas, onDeleteCanvas
+  canvasList, currentCanvasId, canvasName, isCanvasLoading, onCreateCanvas, onLoadCanvas, onDeleteCanvas, onRenameCanvas,
+  creativeIdeas = [], onApplyCreativeIdea
 }) => {
   const [activeLibrary, setActiveLibrary] = useState(false);
   const [showCanvasPanel, setShowCanvasPanel] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingName, setEditingName] = useState('');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'bp' | 'workflow' | 'favorite'>('all');
+  const [hoveredIdeaId, setHoveredIdeaId] = useState<number | null>(null);
 
   // Default Presets
   const defaultPresets = [
@@ -168,9 +178,46 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {/* 当前画布 */}
                 <div className="px-4 py-2 bg-emerald-500/5 border-b border-white/5">
                     <div className="text-[10px] text-zinc-500 mb-1">当前画布</div>
-                    <div className="text-sm text-white font-medium truncate">
-                        {isCanvasLoading ? '加载中...' : canvasName}
-                    </div>
+                    {isEditingName ? (
+                        <input
+                            type="text"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onBlur={() => {
+                                if (editingName.trim() && editingName !== canvasName) {
+                                    onRenameCanvas(editingName);
+                                }
+                                setIsEditingName(false);
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    if (editingName.trim() && editingName !== canvasName) {
+                                        onRenameCanvas(editingName);
+                                    }
+                                    setIsEditingName(false);
+                                } else if (e.key === 'Escape') {
+                                    setIsEditingName(false);
+                                }
+                            }}
+                            autoFocus
+                            className="w-full bg-white/10 border border-emerald-500/30 rounded px-2 py-1 text-sm text-white outline-none focus:border-emerald-500"
+                        />
+                    ) : (
+                        <div 
+                            className="flex items-center gap-2 group cursor-pointer"
+                            onClick={() => {
+                                setEditingName(canvasName);
+                                setIsEditingName(true);
+                            }}
+                        >
+                            <span className="text-sm text-white font-medium truncate flex-1">
+                                {isCanvasLoading ? '加载中...' : canvasName}
+                            </span>
+                            <svg className="w-3.5 h-3.5 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                        </div>
+                    )}
                 </div>
 
                 {/* 画布列表 */}
@@ -239,83 +286,178 @@ const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* Library Drawer */}
-        {activeLibrary && (
+        {activeLibrary && ((() => {
+            // 筛选创意库
+            const filteredIdeas = creativeIdeas.filter(idea => {
+                if (libraryFilter === 'all') return true;
+                if (libraryFilter === 'favorite') return idea.isFavorite;
+                if (libraryFilter === 'bp') return idea.isBP;
+                if (libraryFilter === 'workflow') return idea.isWorkflow;
+                return true;
+            });
+            
+            return (
             <div 
-                className="fixed left-24 top-1/2 -translate-y-1/2 z-30 h-[600px] w-72 bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 flex flex-col gap-4 animate-in slide-in-from-left-4 fade-in duration-300 pointer-events-auto"
-                onMouseDown={(e) => e.stopPropagation()} // Stop propagation
+                className="fixed left-24 top-1/2 -translate-y-1/2 z-30 h-[600px] w-80 bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 flex flex-col gap-3 animate-in slide-in-from-left-4 fade-in duration-300 pointer-events-auto"
+                onMouseDown={(e) => e.stopPropagation()}
             >
+                {/* 头部 */}
                 <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                    <h2 className="text-sm font-bold text-white flex items-center gap-2"><Icons.Layers size={14} className="text-purple-400"/> Creative Library</h2>
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Icons.Layers size={14} className="text-purple-400"/> 
+                        创意库
+                        <span className="text-[10px] text-zinc-500 font-normal">({creativeIdeas.length})</span>
+                    </h2>
                     <button onClick={() => setActiveLibrary(false)} className="text-zinc-500 hover:text-white"><Icons.Close size={14}/></button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide flex flex-col gap-6">
-                    
-                    {/* User Presets */}
-                    {userPresets.length > 0 && (
-                        <div>
-                            <h3 className="text-[10px] font-bold uppercase text-zinc-500 mb-2 px-1 tracking-wider">My Workflows</h3>
-                            <div className="space-y-2">
-                                {userPresets.map((preset) => (
-                                    <div key={preset.id} className="group relative">
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onAddPreset(preset.id);
-                                                setActiveLibrary(false);
-                                            }}
-                                            className="w-full text-left p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/40 transition-all"
-                                        >
-                                            <div className="flex items-center justify-between mb-1">
-                                                <div className="font-bold text-xs text-white">{preset.title}</div>
-                                                <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded-full">{preset.nodes.length} Nodes</span>
-                                            </div>
-                                            <div className="text-[10px] text-zinc-400 leading-relaxed line-clamp-2">{preset.description || "No description"}</div>
-                                            
-                                            {/* Inputs Badge */}
-                                            {preset.inputs.length > 0 && (
-                                                <div className="mt-2 flex flex-wrap gap-1">
-                                                    {preset.inputs.map((inp, i) => (
-                                                        <span key={i} className="text-[9px] text-zinc-500 bg-black/20 px-1 rounded border border-white/5">{inp.label}</span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </button>
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); onDeletePreset(preset.id); }}
-                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#2c2c2e] text-zinc-400 rounded-full border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400 hover:border-red-500/30"
-                                        >
-                                            <Icons.Close size={10} />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
+                {/* 筛选按钮 */}
+                <div className="flex gap-1 flex-wrap">
+                    {[
+                        { key: 'all', label: '全部' },
+                        { key: 'favorite', label: '⭐' },
+                        { key: 'bp', label: 'BP' },
+                        { key: 'workflow', label: '📊' },
+                    ].map(({ key, label }) => (
+                        <button
+                            key={key}
+                            onClick={() => setLibraryFilter(key as typeof libraryFilter)}
+                            className={`px-2 py-1 text-[10px] rounded-lg transition-all ${
+                                libraryFilter === key 
+                                    ? 'bg-purple-500/30 text-purple-200 border border-purple-500/50' 
+                                    : 'bg-white/5 text-zinc-400 hover:bg-white/10 border border-transparent'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+                
+                {/* 创意列表 */}
+                <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide space-y-2">
+                    {filteredIdeas.length === 0 ? (
+                        <div className="text-center py-8 text-zinc-500 text-xs">
+                            暂无创意
                         </div>
-                    )}
-
-                    {/* Default Presets */}
-                    <div>
-                         <h3 className="text-[10px] font-bold uppercase text-zinc-500 mb-2 px-1 tracking-wider">Basic Presets</h3>
-                         <div className="space-y-2">
-                            {defaultPresets.map((preset, i) => (
+                    ) : (
+                        filteredIdeas.map((idea) => (
+                            <div 
+                                key={idea.id} 
+                                className="group relative"
+                                onMouseEnter={() => setHoveredIdeaId(idea.id)}
+                                onMouseLeave={() => setHoveredIdeaId(null)}
+                            >
                                 <button 
-                                    key={i}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onAdd(preset.type, preset.data, preset.title);
+                                        onApplyCreativeIdea?.(idea);
                                         setActiveLibrary(false);
                                     }}
-                                    className="w-full text-left p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 transition-all group"
+                                    className={`w-full text-left p-3 rounded-xl border transition-all ${
+                                        idea.isWorkflow 
+                                            ? 'bg-purple-500/10 border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/40'
+                                            : idea.isBP
+                                            ? 'bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/40'
+                                            : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'
+                                    }`}
                                 >
-                                    <div className="font-bold text-xs text-zinc-200 group-hover:text-white mb-1">{preset.title}</div>
-                                    <div className="text-[10px] text-zinc-500 leading-relaxed">{preset.description}</div>
+                                    {/* 标题行 */}
+                                    <div className="flex items-center justify-between mb-1">
+                                        <div className="font-bold text-xs text-white truncate flex-1 mr-2">
+                                            {idea.isFavorite && <span className="mr-1">⭐</span>}
+                                            {idea.title}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {idea.isWorkflow && (
+                                                <span className="text-[9px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded">工作流</span>
+                                            )}
+                                            {idea.isBP && (
+                                                <span className="text-[9px] bg-blue-500/30 text-blue-200 px-1.5 py-0.5 rounded">BP</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* 描述/提示词预览 */}
+                                    <div className="text-[10px] text-zinc-400 leading-relaxed line-clamp-2">
+                                        {idea.isBP && idea.bpFields ? (
+                                            <span className="text-zinc-500">
+                                                输入: {idea.bpFields.map(f => f.label).join(', ')}
+                                            </span>
+                                        ) : idea.isWorkflow && idea.workflowNodes ? (
+                                            <span className="text-zinc-500">
+                                                {idea.workflowNodes.length} 个节点
+                                            </span>
+                                        ) : (
+                                            idea.prompt.slice(0, 60) + (idea.prompt.length > 60 ? '...' : '')
+                                        )}
+                                    </div>
+                                </button>
+                                
+                                {/* Hover 详情 */}
+                                {hoveredIdeaId === idea.id && (
+                                    <div className="absolute left-full top-0 ml-2 w-64 bg-[#1c1c1e] border border-white/10 rounded-xl p-3 shadow-2xl z-50 pointer-events-none animate-in fade-in slide-in-from-left-2 duration-150">
+                                        {/* 缩略图 */}
+                                        {idea.imageUrl && (
+                                            <div className="w-full h-24 rounded-lg overflow-hidden mb-2 bg-black/20">
+                                                <img src={idea.imageUrl} alt="" className="w-full h-full object-cover" />
+                                            </div>
+                                        )}
+                                        <div className="text-xs font-bold text-white mb-1">{idea.title}</div>
+                                        {idea.isBP && idea.bpFields ? (
+                                            <div className="space-y-1">
+                                                <div className="text-[10px] text-zinc-500">输入字段:</div>
+                                                {idea.bpFields.map((field, i) => (
+                                                    <div key={i} className="text-[10px] text-blue-300 bg-blue-500/10 px-2 py-1 rounded">
+                                                        {field.label}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : idea.isWorkflow && idea.workflowInputs ? (
+                                            <div className="space-y-1">
+                                                <div className="text-[10px] text-zinc-500">工作流输入:</div>
+                                                {idea.workflowInputs.map((input, i) => (
+                                                    <div key={i} className="text-[10px] text-purple-300 bg-purple-500/10 px-2 py-1 rounded">
+                                                        {input.label}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-[10px] text-zinc-400 leading-relaxed max-h-32 overflow-y-auto">
+                                                {idea.prompt}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+                
+                {/* 底部快捷预设 */}
+                {userPresets.length > 0 && (
+                    <div className="pt-2 border-t border-white/10">
+                        <h3 className="text-[10px] font-bold uppercase text-zinc-500 mb-2 tracking-wider">画布预设</h3>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {userPresets.slice(0, 3).map((preset) => (
+                                <button 
+                                    key={preset.id}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAddPreset(preset.id);
+                                        setActiveLibrary(false);
+                                    }}
+                                    className="w-full text-left p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all text-xs"
+                                >
+                                    <span className="text-emerald-200">{preset.title}</span>
+                                    <span className="text-[9px] text-zinc-500 ml-2">({preset.nodes.length} 节点)</span>
                                 </button>
                             ))}
                         </div>
                     </div>
-                </div>
+                )}
             </div>
-        )}
+            );
+        })())}
     </>
   );
 };

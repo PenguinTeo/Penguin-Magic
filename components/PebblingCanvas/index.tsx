@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { CanvasNode, Vec2, NodeType, Connection, GenerationConfig, NodeData, CanvasPreset, PresetInput } from '../../types/pebblingTypes';
+import { CreativeIdea } from '../../types';
 import FloatingInput from './FloatingInput';
 import CanvasNodeItem from './CanvasNode';
 import Sidebar from './Sidebar';
@@ -9,6 +10,7 @@ import PresetCreationModal from './PresetCreationModal';
 import PresetInstantiationModal from './PresetInstantiationModal';
 import { editImageWithThirdPartyApi, chatWithThirdPartyApi, getThirdPartyConfig, ImageEditConfig } from '../../services/geminiService';
 import * as canvasApi from '../../services/api/canvas';
+import { downloadRemoteToOutput } from '../../services/api/files';
 import { Icons } from './Icons';
 
 // === 画布用API适配器，桥接主项目的geminiService ===
@@ -108,9 +110,10 @@ const generateAdvancedLLM = async (
 
 interface PebblingCanvasProps {
   onImageGenerated?: (imageUrl: string, prompt: string) => void; // 回调同步到桌面
+  creativeIdeas?: CreativeIdea[]; // 主项目创意库
 }
 
-const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated }) => {
+const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creativeIdeas = [] }) => {
   // --- 画布管理状态 ---
   const [currentCanvasId, setCurrentCanvasId] = useState<string | null>(null);
   const [canvasList, setCanvasList] = useState<canvasApi.CanvasListItem[]>([]);
@@ -274,11 +277,52 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated }) => 
     return null;
   }, [canvasList.length, loadCanvasList]);
 
-  // 保存当前画布（防抖）
+  // 保存当前画布（防抖）- 会自动将图片内容本地化到画布专属文件夹
   const saveCurrentCanvas = useCallback(async () => {
     if (!currentCanvasId) return;
     
-    const nodesStr = JSON.stringify(nodesRef.current);
+    // 获取当前画布名称
+    const currentCanvas = canvasList.find(c => c.id === currentCanvasId);
+    const currentCanvasName = currentCanvas?.name || canvasName;
+    
+    // 本地化图片内容：将base64/临时URL转换为本地文件（保存到画布专属文件夹）
+    const localizedNodes = await Promise.all(nodesRef.current.map(async (node) => {
+      // 只处理有图片内容的节点
+      if (!node.content) return node;
+      
+      // 检查是否是需要本地化的内容
+      const isBase64 = node.content.startsWith('data:image');
+      const isTempUrl = node.content.startsWith('http') && 
+                        !node.content.includes('/files/output/') && 
+                        !node.content.includes('/files/input/');
+      
+      if (!isBase64 && !isTempUrl) {
+        // 已经是本地文件URL，无需处理
+        return node;
+      }
+      
+      try {
+        let result;
+        if (isBase64) {
+          // Base64 -> 保存到画布专属文件夹
+          result = await canvasApi.saveCanvasImage(node.content, currentCanvasName, node.id, currentCanvasId);
+        } else if (isTempUrl) {
+          // 远程URL -> 下载到本地
+          result = await downloadRemoteToOutput(node.content, `canvas_${node.id}_${Date.now()}.png`);
+        }
+        
+        if (result?.success && result.data?.url) {
+          console.log(`[Canvas] 图片已本地化: ${node.id.slice(0,8)} -> ${result.data.url}`);
+          return { ...node, content: result.data.url };
+        }
+      } catch (e) {
+        console.error(`[Canvas] 图片本地化失败:`, e);
+      }
+      
+      return node;
+    }));
+    
+    const nodesStr = JSON.stringify(localizedNodes);
     const connectionsStr = JSON.stringify(connectionsRef.current);
     
     // 检查是否有变化
@@ -288,15 +332,18 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated }) => 
     
     try {
       await canvasApi.updateCanvas(currentCanvasId, {
-        nodes: nodesRef.current,
+        nodes: localizedNodes,
         connections: connectionsRef.current,
       });
+      // 更新本地节点状态（包含本地化后的URL）
+      nodesRef.current = localizedNodes;
+      setNodes(localizedNodes);
       lastSaveRef.current = { nodes: nodesStr, connections: connectionsStr };
       console.log('[Canvas] 自动保存');
     } catch (e) {
       console.error('[Canvas] 保存失败:', e);
     }
-  }, [currentCanvasId]);
+  }, [currentCanvasId, canvasList, canvasName]);
 
   // 删除画布
   const deleteCanvasById = useCallback(async (canvasId: string) => {
@@ -314,6 +361,22 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated }) => 
       console.error('[Canvas] 删除画布失败:', e);
     }
   }, [currentCanvasId, loadCanvasList, createNewCanvas]);
+
+  // 重命名画布（同步重命名文件夹）
+  const renameCanvas = useCallback(async (newName: string) => {
+    if (!currentCanvasId || !newName.trim()) return;
+    
+    try {
+      const result = await canvasApi.updateCanvas(currentCanvasId, { name: newName.trim() });
+      if (result.success) {
+        setCanvasName(newName.trim());
+        await loadCanvasList();
+        console.log('[Canvas] 画布已重命名:', newName);
+      }
+    } catch (e) {
+      console.error('[Canvas] 重命名失败:', e);
+    }
+  }, [currentCanvasId, loadCanvasList]);
 
   // 初始化：加载最近画布或创建新画布
   useEffect(() => {
@@ -684,6 +747,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated }) => 
                   images.push(node.content);
                   foundImageInThisPath = true; // 找到图片，这条路径停止
               }
+          } else if (node.type === 'bp') {
+              // BP节点：输出存储在content
+              if (node.status === 'completed' && isValidImage(node.content)) {
+                  images.push(node.content);
+                  foundImageInThisPath = true; // 找到图片，这条路径停止
+              }
           }
           // relay 节点没有自身输出，继续传递
 
@@ -697,9 +766,149 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated }) => 
       return { images, texts };
   };
 
-  const handleExecuteNode = async (nodeId: string) => {
+  // --- 批量生成：创建多个结果节点并并发执行 ---
+  const handleBatchExecute = async (sourceNodeId: string, sourceNode: CanvasNode, count: number) => {
+      console.log(`[批量生成] 开始生成 ${count} 个结果节点`);
+      
+      // 获取源节点的位置和输入
+      const inputs = resolveInputs(sourceNodeId);
+      const nodePrompt = sourceNode.data?.prompt || '';
+      const inputTexts = inputs.texts.join('\n');
+      const combinedPrompt = nodePrompt || inputTexts;
+      const inputImages = inputs.images;
+      
+      // 获取源节点自身的图片
+      let imageSource: string[] = [];
+      if (inputImages.length > 0) {
+          imageSource = inputImages;
+      } else if (isValidImage(sourceNode.content)) {
+          imageSource = [sourceNode.content];
+      }
+      
+      // 检查是否可以执行
+      const hasPrompt = !!combinedPrompt;
+      const hasImage = imageSource.length > 0;
+      
+      if (!hasPrompt && !hasImage) {
+          console.warn('[批量生成] 无提示词且无图片，无法执行');
+          return;
+      }
+      
+      // 创建结果节点，并自动连接到源节点
+      const resultNodeIds: string[] = [];
+      const newNodes: CanvasNode[] = [];
+      const newConnections: Connection[] = [];
+      
+      // 计算结果节点的位置（源节点右侧，垂直排列）
+      const baseX = sourceNode.x + sourceNode.width + 150; // 距离源节点150px
+      const nodeHeight = 300; // 预估节点高度
+      const gap = 20; // 节点间距
+      const totalHeight = count * nodeHeight + (count - 1) * gap;
+      const startY = sourceNode.y + (sourceNode.height / 2) - (totalHeight / 2);
+      
+      for (let i = 0; i < count; i++) {
+          const newId = uuid();
+          resultNodeIds.push(newId);
+          
+          const resultNode: CanvasNode = {
+              id: newId,
+              type: 'image',
+              title: `结果 ${i + 1}`,
+              content: '',
+              x: baseX,
+              y: startY + i * (nodeHeight + gap),
+              width: 280,
+              height: nodeHeight,
+              status: 'running', // 创建时就设为running
+              data: {
+                  prompt: combinedPrompt, // 继承提示词
+                  settings: sourceNode.data?.settings // 继承设置
+              }
+          };
+          newNodes.push(resultNode);
+          
+          // 创建连接：源节点 -> 结果节点
+          newConnections.push({
+              id: uuid(),
+              fromNode: sourceNodeId,
+              toNode: newId
+          });
+      }
+      
+      // 添加节点和连接
+      setNodes(prev => [...prev, ...newNodes]);
+      setConnections(prev => [...prev, ...newConnections]);
+      
+      // 更新ref
+      nodesRef.current = [...nodesRef.current, ...newNodes];
+      connectionsRef.current = [...connectionsRef.current, ...newConnections];
+      
+      console.log(`[批量生成] 已创建 ${count} 个结果节点，开始并发执行`);
+      
+      // 并发执行所有结果节点的生成
+      const execPromises = resultNodeIds.map(async (nodeId, index) => {
+          const abortController = new AbortController();
+          abortControllersRef.current.set(nodeId, abortController);
+          const signal = abortController.signal;
+          
+          try {
+              let result: string | null = null;
+              
+              if (hasPrompt && !hasImage) {
+                  // 文生图
+                  const imgAspectRatio = sourceNode.data?.settings?.aspectRatio || 'AUTO';
+                  const imgConfig = imgAspectRatio !== 'AUTO' 
+                      ? { aspectRatio: imgAspectRatio, resolution: '1K' as const }
+                      : { aspectRatio: '1:1', resolution: '1K' as const };
+                  result = await generateCreativeImage(combinedPrompt, imgConfig, signal);
+              } else if (hasPrompt && hasImage) {
+                  // 图生图
+                  result = await editCreativeImage(imageSource, combinedPrompt, undefined, signal);
+              } else if (!hasPrompt && hasImage) {
+                  // 传递图片（容器模式）
+                  result = imageSource[0];
+              }
+              
+              if (!signal.aborted) {
+                  updateNode(nodeId, { 
+                      content: result || '', 
+                      status: result ? 'completed' : 'error' 
+                  });
+                  
+                  // 同步到桌面
+                  if (result && onImageGenerated) {
+                      onImageGenerated(result, combinedPrompt);
+                  }
+                  
+                  console.log(`[批量生成] 结果 ${index + 1} 完成`);
+              }
+          } catch (err) {
+              if (!signal.aborted) {
+                  updateNode(nodeId, { status: 'error' });
+                  console.error(`[批量生成] 结果 ${index + 1} 失败:`, err);
+              }
+          } finally {
+              abortControllersRef.current.delete(nodeId);
+          }
+      });
+      
+      // 等待所有执行完成
+      await Promise.all(execPromises);
+      
+      // 保存画布
+      saveCurrentCanvas();
+      console.log(`[批量生成] 全部完成`);
+  };
+
+  const handleExecuteNode = async (nodeId: string, batchCount: number = 1) => {
       const node = nodesRef.current.find(n => n.id === nodeId);
       if (!node) return;
+
+      // 批量生成：创建多个结果节点
+      if (batchCount > 1 && ['image', 'edit'].includes(node.type)) {
+          await handleBatchExecute(nodeId, node, batchCount);
+          return;
+      }
 
       // Create abort controller for this execution
       const abortController = new AbortController();
@@ -724,7 +933,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated }) => 
               // 如果上游节点需要执行且未完成，先执行上游
               if (upstreamNode && upstreamNode.status !== 'completed') {
                   // 可执行的节点类型：包含 image 以支持容器模式级联执行
-                  const executableTypes = ['image', 'llm', 'edit', 'remove-bg', 'upscale', 'resize', 'video'];
+                  const executableTypes = ['image', 'llm', 'edit', 'remove-bg', 'upscale', 'resize', 'video', 'bp'];
                   if (executableTypes.includes(upstreamNode.type)) {
                       console.log(`[级联执行] ⤵️ 触发上游节点执行: ${upstreamNode.type} ${upstreamNode.id.slice(0,8)}`);
                       // 递归执行上游节点
@@ -1006,6 +1215,136 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated }) => 
                   const result = await editCreativeImage([inputImages[0]], prompt, upscaleConfig, signal);
                   if (!signal.aborted) {
                        updateNode(nodeId, { content: result || '', status: result ? 'completed' : 'error' });
+                  }
+              }
+          }
+          else if (node.type === 'bp') {
+              // BP节点：内置智能体+模板，执行图片生成
+              const bpTemplate = node.data?.bpTemplate;
+              const bpInputs = node.data?.bpInputs || {};
+              const inputImages = inputs.images;
+              
+              if (!bpTemplate) {
+                  updateNode(nodeId, { status: 'error' });
+                  console.error('BP节点执行失败：无模板配置');
+              } else {
+                  try {
+                      const bpFields = bpTemplate.bpFields || [];
+                      const inputFields = bpFields.filter(f => f.type === 'input');
+                      const agentFields = bpFields.filter(f => f.type === 'agent');
+                      
+                      console.log('[BP节点] 原始输入:', bpInputs);
+                      console.log('[BP节点] 字段配置:', bpFields);
+                      console.log('[BP节点] Input字段:', inputFields.map(f => f.name));
+                      console.log('[BP节点] Agent字段:', agentFields.map(f => f.name));
+                      
+                      // 1. 收集用户输入值（input字段）
+                      const userInputValues: Record<string, string> = {};
+                      for (const field of inputFields) {
+                          // input字段从bpInputs中取值（可以是field.id或field.name）
+                          userInputValues[field.name] = bpInputs[field.id] || bpInputs[field.name] || '';
+                          console.log(`[BP节点] Input ${field.name} = "${userInputValues[field.name]}"`);
+                      }
+                      
+                      // 2. 按顺序执行智能体字段（agent字段）
+                      const agentResults: Record<string, string> = {};
+                      
+                      for (const field of agentFields) {
+                          if (field.agentConfig) {
+                              // 准备agent的instruction：替换其中的变量
+                              let instruction = field.agentConfig.instruction;
+                              
+                              // 替换 /inputName 为用户输入值
+                              for (const [name, value] of Object.entries(userInputValues)) {
+                                  instruction = instruction.split(`/${name}`).join(value);
+                              }
+                              
+                              // 替换 {agentName} 为已执行的agent结果
+                              for (const [name, result] of Object.entries(agentResults)) {
+                                  instruction = instruction.split(`{${name}}`).join(result);
+                              }
+                              
+                              console.log(`[BP节点] 执行Agent ${field.name}, instruction:`, instruction.slice(0, 200));
+                              
+                              // 调用LLM执行agent
+                              try {
+                                  const agentResult = await generateAdvancedLLM(
+                                      instruction, // instruction作为user prompt
+                                      'You are a creative assistant. Generate content based on the given instruction. Output ONLY the requested content, no explanations.',
+                                      inputImages.length > 0 ? [inputImages[0]] : undefined
+                                  );
+                                  agentResults[field.name] = agentResult;
+                                  console.log(`[BP节点] Agent ${field.name} 返回:`, agentResult.slice(0, 100));
+                              } catch (agentErr) {
+                                  console.error(`[BP节点] Agent ${field.name} 执行失败:`, agentErr);
+                                  agentResults[field.name] = `[Agent错误: ${agentErr}]`;
+                              }
+                          }
+                      }
+                      
+                      // 3. 替换最终模板中的所有变量
+                      let finalPrompt = bpTemplate.prompt;
+                      console.log('[BP节点] 原始模板:', finalPrompt);
+                      
+                      // 替换 /inputName 为用户输入值
+                      for (const [name, value] of Object.entries(userInputValues)) {
+                          const beforeReplace = finalPrompt;
+                          finalPrompt = finalPrompt.split(`/${name}`).join(value);
+                          if (beforeReplace !== finalPrompt) {
+                              console.log(`[BP节点] 替换 /${name} -> ${value.slice(0, 50)}`);
+                          }
+                      }
+                      
+                      // 替换 {agentName} 为agent结果
+                      for (const [name, result] of Object.entries(agentResults)) {
+                          const beforeReplace = finalPrompt;
+                          finalPrompt = finalPrompt.split(`{${name}}`).join(result);
+                          if (beforeReplace !== finalPrompt) {
+                              console.log(`[BP节点] 替换 {${name}} -> ${result.slice(0, 50)}`);
+                          }
+                      }
+                      
+                      console.log('[BP节点] 最终提示词:', finalPrompt.slice(0, 300));
+                      
+                      // 4. 调用图片生成API
+                      const settings = node.data?.settings || {};
+                      const config: GenerationConfig = {
+                          aspectRatio: settings.aspectRatio || '1:1',
+                          resolution: settings.resolution || '2K'
+                      };
+                      
+                      let result: string | null = null;
+                      if (inputImages.length > 0) {
+                          // 有输入图片 = 图生图
+                          console.log('[BP节点] 调用图生图 API');
+                          result = await editCreativeImage(inputImages, finalPrompt, config, signal);
+                      } else {
+                          // 无输入图片 = 文生图
+                          console.log('[BP节点] 调用文生图 API');
+                          result = await generateCreativeImage(finalPrompt, config, signal);
+                      }
+                      
+                      console.log('[BP节点] API返回结果:', result ? `有图片 (${result.slice(0,50)}...)` : 'null');
+                      
+                      if (!signal.aborted) {
+                          console.log('[BP节点] 更新节点 content, nodeId:', nodeId);
+                          // 使用updateNode确保状态同步
+                          updateNode(nodeId, {
+                              content: result || '',
+                              status: result ? 'completed' : 'error'
+                          });
+                          
+                          // 保存画布
+                          saveCurrentCanvas();
+                          
+                          // 同步到桌面
+                          if (result && onImageGenerated) {
+                              onImageGenerated(result, finalPrompt);
+                          }
+                      }
+                  } catch (err) {
+                      console.error('BP节点执行失败:', err);
+                      updateNode(nodeId, { status: 'error' });
                   }
               }
           }
@@ -1405,6 +1744,92 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated }) => 
           onCreateCanvas={createNewCanvas}
           onLoadCanvas={loadCanvas}
           onDeleteCanvas={deleteCanvasById}
+          onRenameCanvas={renameCanvas}
+          creativeIdeas={creativeIdeas}
+          onApplyCreativeIdea={(idea) => {
+            // 应用创意库到画布
+            const baseX = -canvasOffset.x / scale + 200;
+            const baseY = -canvasOffset.y / scale + 100;
+            
+            if (idea.isWorkflow && idea.workflowNodes && idea.workflowConnections) {
+              // 工作流类型：添加整个工作流节点
+              const offsetX = canvasOffset.x + 200;
+              const offsetY = canvasOffset.y + 100;
+              const newNodes = idea.workflowNodes.map(n => ({
+                ...n,
+                id: `${n.id}_${Date.now()}`,
+                x: n.x + offsetX,
+                y: n.y + offsetY,
+              }));
+              const idMapping = new Map(idea.workflowNodes.map((n, i) => [n.id, newNodes[i].id]));
+              const newConns = idea.workflowConnections.map(c => ({
+                ...c,
+                id: `${c.id}_${Date.now()}`,
+                fromNode: idMapping.get(c.fromNode) || c.fromNode,
+                toNode: idMapping.get(c.toNode) || c.toNode,
+              }));
+              setNodes(prev => [...prev, ...newNodes] as CanvasNode[]);
+              setConnections(prev => [...prev, ...newConns]);
+            } else if (idea.isBP && idea.bpFields) {
+              // BP模式：创建单个BP节点（内置智能体+模板，直接输出图片）
+              const bpNodeId = `bp_${Date.now()}`;
+              
+              // BP节点：包含输入字段和模板，执行后直接显示图片
+              const bpNode: CanvasNode = {
+                id: bpNodeId,
+                type: 'bp' as NodeType,
+                title: idea.title,
+                content: '', // 执行后存放图片
+                x: baseX,
+                y: baseY,
+                width: 320,
+                height: 300,
+                data: {
+                  bpTemplate: {
+                    id: idea.id,
+                    title: idea.title,
+                    prompt: idea.prompt,
+                    bpFields: idea.bpFields,
+                    imageUrl: idea.imageUrl,
+                  },
+                  bpInputs: {}, // 用户输入值
+                  settings: {
+                    aspectRatio: idea.suggestedAspectRatio || '1:1',
+                    resolution: idea.suggestedResolution || '2K',
+                  },
+                },
+              };
+              
+              setNodes(prev => [...prev, bpNode]);
+              // 不创建结果节点，BP节点本身就是输出
+            } else {
+              // 普通创意：创建Text + Idea节点
+              const textId = `text_${Date.now()}`;
+              const ideaId = `idea_${Date.now()}`;
+              const textNode: CanvasNode = {
+                id: textId,
+                type: 'text' as NodeType,
+                title: idea.title,
+                content: idea.prompt,
+                x: baseX,
+                y: baseY,
+                width: 280,
+                height: 150,
+              };
+              const ideaNode: CanvasNode = {
+                id: ideaId,
+                type: 'idea' as NodeType,
+                title: '生成结果',
+                content: '',
+                x: baseX + 360,
+                y: baseY,
+                width: 280,
+                height: 200,
+              };
+              setNodes(prev => [...prev, textNode, ideaNode]);
+              setConnections(prev => [...prev, { id: `conn_${Date.now()}`, fromNode: textId, toNode: ideaId }]);
+            }
+          }}
       />
       
       <div 
