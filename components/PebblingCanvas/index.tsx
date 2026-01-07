@@ -144,6 +144,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
   const [scale, setScale] = useState(1);
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const [dragStart, setDragStart] = useState<Vec2>({ x: 0, y: 0 });
+  const [isSpacePressed, setIsSpacePressed] = useState(false); // 空格键状态，用于拖拽画布
 
   // Node Selection & Dragging
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set<string>());
@@ -581,11 +582,22 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
       setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
   }, []);
 
-  // Global Key Listener
+  // Global Key Listener - 只在画布区域生效
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
+          // 空格键跟踪（全局）
+          if (e.code === 'Space' && !e.repeat) {
+              setIsSpacePressed(true);
+          }
+          
+          // 其他快捷键只在画布生效
           const tag = document.activeElement?.tagName.toLowerCase();
           if (tag === 'input' || tag === 'textarea') return;
+          
+          // 检查是否在画布区域内（不在桶面模式）
+          const isInCanvas = containerRef.current?.contains(document.activeElement) || 
+                             document.activeElement === document.body;
+          if (!isInCanvas) return;
 
           if (e.key === 'Delete' || e.key === 'Backspace') {
               deleteSelection();
@@ -596,8 +608,19 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
               if (e.key === 'v') handlePaste();
           }
       };
+      
+      const handleKeyUp = (e: KeyboardEvent) => {
+          if (e.code === 'Space') {
+              setIsSpacePressed(false);
+          }
+      };
+      
       window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+      return () => {
+          window.removeEventListener('keydown', handleKeyDown);
+          window.removeEventListener('keyup', handleKeyUp);
+      };
   }, [deleteSelection, handleCopy, handlePaste]);
 
   const addNode = (type: NodeType, content: string = '', position?: Vec2, title?: string, data?: NodeData) => {
@@ -1599,7 +1622,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
     e.preventDefault();
     
     // 1. Try to get internal node type
-    const type = e.dataTransfer.getData('nodeType') as NodeType;
+    let type = e.dataTransfer.getData('nodeType') as NodeType;
+    
+    // 备用：从text/plain获取
+    if (!type) {
+        type = e.dataTransfer.getData('text/plain') as NodeType;
+    }
+    
+    console.log('[Drop] 获取节点类型:', type);
     
     // Calculate drop position relative to canvas
     const container = containerRef.current;
@@ -1609,7 +1639,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
     const x = (e.clientX - rect.left - canvasOffset.x) / scale - 150; // Center node roughly
     const y = (e.clientY - rect.top - canvasOffset.y) / scale - 100;
 
-    if (type) {
+    if (type && ['image', 'text', 'video', 'llm', 'idea', 'relay', 'edit', 'remove-bg', 'upscale', 'resize', 'bp'].includes(type)) {
+        console.log('[Drop] 创建节点:', type, '位置:', x, y);
         addNode(type, '', { x, y });
         return;
     }
@@ -1646,23 +1677,23 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
 
   const onMouseDownCanvas = (e: React.MouseEvent) => {
       // Logic:
+      // Space + Left Click = Pan Canvas
       // Ctrl/Meta + Left Click = Box Selection
-      // Left Click on BG (no keys) = Pan Canvas + Deselect All
       // Middle Click = Pan
+      // Left Click on BG (no space) = Deselect All only
       
       if (e.button === 0) {
           if (e.ctrlKey || e.metaKey) {
              // START SELECTION BOX
              setSelectionBox({ start: { x: e.clientX, y: e.clientY }, current: { x: e.clientX, y: e.clientY } });
-             // Box select usually doesn't deselect immediately, allows adding
-          } else {
-             // START PANNING & DESELECT
-             // Clicked blank space -> Deselect all nodes and connections
-             setSelectedNodeIds(new Set());
-             setSelectedConnectionId(null);
-
+          } else if (isSpacePressed) {
+             // Space + Left Click = Pan Canvas
              setIsDraggingCanvas(true);
              setDragStart({ x: e.clientX - canvasOffset.x, y: e.clientY - canvasOffset.y });
+          } else {
+             // Just Left Click = Deselect only (no pan)
+             setSelectedNodeIds(new Set());
+             setSelectedConnectionId(null);
           }
       } else if (e.button === 1) {
           // Middle click pan
@@ -2066,7 +2097,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
       
       <div 
         ref={containerRef}
-        className="w-full h-full relative cursor-default"
+        className={`w-full h-full relative ${isSpacePressed ? 'cursor-grab' : 'cursor-default'} ${isDraggingCanvas ? '!cursor-grabbing' : ''}`}
         onMouseDown={onMouseDownCanvas}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}

@@ -463,13 +463,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 const DraggableButton = ({ type, icon, label, onDragStart, onClick }: { type: NodeType, icon: React.ReactNode, label: string, onDragStart: (t: NodeType) => void, onClick: () => void }) => {
+    const handleDragStart = (e: React.DragEvent) => {
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('nodeType', type);
+        e.dataTransfer.setData('text/plain', type);
+        onDragStart(type);
+    };
+    
     return (
         <div 
-            draggable 
-            onDragStart={(e) => {
-                e.dataTransfer.setData('nodeType', type);
-                onDragStart(type);
-            }}
+            draggable
+            onDragStart={handleDragStart}
             onClick={(e) => { e.stopPropagation(); onClick(); }}
             className="group relative cursor-grab active:cursor-grabbing"
         >
