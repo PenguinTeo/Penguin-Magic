@@ -748,10 +748,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                   foundImageInThisPath = true; // 找到图片，这条路径停止
               }
           } else if (node.type === 'bp') {
-              // BP节点：输出存储在content
-              if (node.status === 'completed' && isValidImage(node.content)) {
-                  images.push(node.content);
-                  foundImageInThisPath = true; // 找到图片，这条路径停止
+              // BP节点：优先从 data.output 获取（有下游连接时），否则从 content 获取
+              const bpOutput = node.data?.output;
+              if (node.status === 'completed') {
+                  if (bpOutput && isValidImage(bpOutput)) {
+                      images.push(bpOutput);
+                      foundImageInThisPath = true;
+                  } else if (isValidImage(node.content)) {
+                      images.push(node.content);
+                      foundImageInThisPath = true;
+                  }
               }
           }
           // relay 节点没有自身输出，继续传递
@@ -959,21 +965,30 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
               // 上游图片
               const inputImages = inputs.images;
               
-              // 如果节点自己没有 prompt，尝试从上游图片节点继承 prompt
+              // 从上游节点获取设置（支持idea节点）
+              let upstreamSettings: any = null;
               let upstreamPrompt = '';
-              if (!nodePrompt && inputImages.length > 0) {
-                  const inputConnections = connectionsRef.current.filter(c => c.toNode === nodeId);
-                  for (const conn of inputConnections) {
-                      const upstreamNode = nodesRef.current.find(n => n.id === conn.fromNode);
-                      if (upstreamNode?.type === 'image' && upstreamNode.data?.prompt) {
-                          upstreamPrompt = upstreamNode.data.prompt;
-                          break;
+              const inputConnections = connectionsRef.current.filter(c => c.toNode === nodeId);
+              for (const conn of inputConnections) {
+                  const upstreamNode = nodesRef.current.find(n => n.id === conn.fromNode);
+                  if (upstreamNode?.type === 'idea' && upstreamNode.data?.settings) {
+                      // 从idea节点继承设置
+                      upstreamSettings = upstreamNode.data.settings;
+                      if (!nodePrompt && upstreamNode.content) {
+                          upstreamPrompt = upstreamNode.content;
                       }
+                      break;
+                  } else if (upstreamNode?.type === 'image' && upstreamNode.data?.prompt && !nodePrompt) {
+                      // 从上游image节点继承prompt
+                      upstreamPrompt = upstreamNode.data.prompt;
                   }
               }
               
               // 合并prompt：自身 > 上游节点prompt > 上游文本输入
               const combinedPrompt = nodePrompt || upstreamPrompt || inputTexts;
+              
+              // 合并设置：自身 > 上游节点设置 > 默认
+              const effectiveSettings = node.data?.settings || upstreamSettings || {};
               
               // 获取图片：优先用上游输入，其次用节点自身的图片
               let imageSource: string[] = [];
@@ -997,11 +1012,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                   console.warn('图片节点执行失败：无提示词且无图片');
               } else if (combinedPrompt && imageSource.length === 0) {
                   // 有prompt + 无图片 = 文生图
-                  // 获取设置，AUTO 时不传递 aspectRatio 参数
-                  const imgAspectRatio = node.data?.settings?.aspectRatio || 'AUTO';
+                  // 使用effectiveSettings（合并后的设置）
+                  const imgAspectRatio = effectiveSettings.aspectRatio || 'AUTO';
+                  const imgResolution = effectiveSettings.resolution || '2K';
                   const imgConfig = imgAspectRatio !== 'AUTO' 
-                      ? { aspectRatio: imgAspectRatio, resolution: '1K' as const }
-                      : { aspectRatio: '1:1', resolution: '1K' as const }; // 文生图默认1:1
+                      ? { aspectRatio: imgAspectRatio, resolution: imgResolution as '1K' | '2K' | '4K' }
+                      : { aspectRatio: '1:1', resolution: imgResolution as '1K' | '2K' | '4K' }; // 文生图默认1:1
                   
                   const result = await generateCreativeImage(combinedPrompt, imgConfig, signal);
                   if (!signal.aborted) {
@@ -1327,12 +1343,25 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                       console.log('[BP节点] API返回结果:', result ? `有图片 (${result.slice(0,50)}...)` : 'null');
                       
                       if (!signal.aborted) {
-                          console.log('[BP节点] 更新节点 content, nodeId:', nodeId);
-                          // 使用updateNode确保状态同步
-                          updateNode(nodeId, {
-                              content: result || '',
-                              status: result ? 'completed' : 'error'
-                          });
+                          // 检查是否有下游连接
+                          const hasDownstream = connectionsRef.current.some(c => c.fromNode === nodeId);
+                          console.log('[BP节点] 有下游连接:', hasDownstream);
+                          
+                          if (hasDownstream) {
+                              // 有下游连接：结果存到 data.output，保持节点原貌
+                              console.log('[BP节点] 有下游，结果存到 data.output');
+                              updateNode(nodeId, {
+                                  data: { ...node.data, output: result || '' },
+                                  status: result ? 'completed' : 'error'
+                              });
+                          } else {
+                              // 无下游连接：结果存到 content，显示图片
+                              console.log('[BP节点] 无下游，结果存到 content');
+                              updateNode(nodeId, {
+                                  content: result || '',
+                                  status: result ? 'completed' : 'error'
+                              });
+                          }
                           
                           // 保存画布
                           saveCurrentCanvas();
@@ -1803,31 +1832,42 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
               setNodes(prev => [...prev, bpNode]);
               // 不创建结果节点，BP节点本身就是输出
             } else {
-              // 普通创意：创建Text + Idea节点
-              const textId = `text_${Date.now()}`;
+              // 普通创意：创建Idea节点 + Image节点（类似BP的简化版本）
               const ideaId = `idea_${Date.now()}`;
-              const textNode: CanvasNode = {
-                id: textId,
-                type: 'text' as NodeType,
+              const imageId = `image_${Date.now()}`;
+              
+              // Idea节点：包含提示词和设置
+              const ideaNode: CanvasNode = {
+                id: ideaId,
+                type: 'idea' as NodeType,
                 title: idea.title,
                 content: idea.prompt,
                 x: baseX,
                 y: baseY,
                 width: 280,
-                height: 150,
+                height: 280,
+                data: {
+                  settings: {
+                    aspectRatio: idea.suggestedAspectRatio || '1:1',
+                    resolution: idea.suggestedResolution || '2K',
+                  },
+                },
               };
-              const ideaNode: CanvasNode = {
-                id: ideaId,
-                type: 'idea' as NodeType,
+              
+              // Image节点：用于显示生成结果
+              const imageNode: CanvasNode = {
+                id: imageId,
+                type: 'image' as NodeType,
                 title: '生成结果',
                 content: '',
-                x: baseX + 360,
+                x: baseX + 340,
                 y: baseY,
                 width: 280,
-                height: 200,
+                height: 280,
               };
-              setNodes(prev => [...prev, textNode, ideaNode]);
-              setConnections(prev => [...prev, { id: `conn_${Date.now()}`, fromNode: textId, toNode: ideaId }]);
+              
+              setNodes(prev => [...prev, ideaNode, imageNode]);
+              setConnections(prev => [...prev, { id: `conn_${Date.now()}`, fromNode: ideaId, toNode: imageId }]);
             }
           }}
       />
@@ -2011,6 +2051,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                     isSelected={selectedNodeIds.has(node.id)}
                     scale={scale}
                     effectiveColor={node.type === 'relay' ? 'stroke-' + resolveEffectiveType(node.id).replace('text', 'emerald').replace('image', 'blue').replace('llm', 'purple') + '-400' : undefined}
+                    hasDownstream={connections.some(c => c.fromNode === node.id)}
                     onSelect={(id, multi) => {
                         const newSet = new Set(multi ? selectedNodeIds : []);
                         newSet.add(id);
