@@ -114,11 +114,12 @@ const generateAdvancedLLM = async (
 // === 画布组件开始 ===
 
 interface PebblingCanvasProps {
-  onImageGenerated?: (imageUrl: string, prompt: string) => void; // 回调同步到桌面
+  onImageGenerated?: (imageUrl: string, prompt: string, canvasId?: string, canvasName?: string) => void; // 回调同步到桌面（含画布ID用于联动）
+  onCanvasCreated?: (canvasId: string, canvasName: string) => void; // 画布创建回调（用于桌面联动创建文件夹）
   creativeIdeas?: CreativeIdea[]; // 主项目创意库
 }
 
-const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creativeIdeas = [] }) => {
+const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCanvasCreated, creativeIdeas = [] }) => {
   // --- 画布管理状态 ---
   const [currentCanvasId, setCurrentCanvasId] = useState<string | null>(null);
   const [canvasList, setCanvasList] = useState<canvasApi.CanvasListItem[]>([]);
@@ -282,13 +283,19 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
         lastSaveRef.current = { nodes: '[]', connections: '[]' };
         await loadCanvasList();
         console.log('[Canvas] 创建新画布:', result.data.name);
+        
+        // 通知外层创建桌面文件夹
+        if (onCanvasCreated) {
+          onCanvasCreated(result.data.id, result.data.name);
+        }
+        
         return result.data;
       }
     } catch (e) {
       console.error('[Canvas] 创建画布失败:', e);
     }
     return null;
-  }, [canvasList.length, loadCanvasList]);
+  }, [canvasList.length, loadCanvasList, onCanvasCreated]);
 
   // 保存当前画布（防抖）- 会自动将图片内容本地化到画布专属文件夹
   const saveCurrentCanvas = useCallback(async () => {
@@ -943,7 +950,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                   
                   // 同步到桌面
                   if (result && onImageGenerated) {
-                      onImageGenerated(result, combinedPrompt);
+                      onImageGenerated(result, combinedPrompt, currentCanvasId || undefined, canvasName);
                   }
                   
                   console.log(`[批量生成] 结果 ${index + 1} 完成`);
@@ -1130,7 +1137,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                   });
                   
                   if (result && onImageGenerated) {
-                      onImageGenerated(result, finalPrompt);
+                      onImageGenerated(result, finalPrompt, currentCanvasId || undefined, canvasName);
                   }
                   
                   console.log(`[BP/Idea批量] 结果 ${index + 1} 完成`);
@@ -1280,7 +1287,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                       saveCurrentCanvas();
                       // 同步到桌面
                       if (result && onImageGenerated) {
-                          onImageGenerated(result, combinedPrompt);
+                          onImageGenerated(result, combinedPrompt, currentCanvasId || undefined, canvasName);
                       }
                   }
               } else if (!combinedPrompt && imageSource.length > 0) {
@@ -1298,7 +1305,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                       saveCurrentCanvas();
                       // 同步到桌面
                       if (result && onImageGenerated) {
-                          onImageGenerated(result, combinedPrompt);
+                          onImageGenerated(result, combinedPrompt, currentCanvasId || undefined, canvasName);
                       }
                   }
               }
@@ -1622,7 +1629,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
                           
                           // 同步到桌面
                           if (result && onImageGenerated) {
-                              onImageGenerated(result, finalPrompt);
+                              onImageGenerated(result, finalPrompt, currentCanvasId || undefined, canvasName);
                           }
                       }
                   } catch (err) {
@@ -1964,6 +1971,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
 
   // --- FLOATING GENERATOR HANDLER ---
   const handleGenerate = async (type: NodeType, prompt: string, config: GenerationConfig, files?: File[]) => {
+      console.log('[FloatingInput] 开始生成:', { type, prompt, config });
       setIsGenerating(true);
       
       let base64Files: string[] = [];
@@ -1980,6 +1988,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
           prompt: prompt,
           settings: config
       });
+      console.log('[FloatingInput] 节点已创建:', newNode.id);
       
       updateNode(newNode.id, { status: 'running' });
 
@@ -1987,12 +1996,21 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, creat
           if (type === 'image') {
                const result = await generateCreativeImage(prompt, config);
                updateNode(newNode.id, { content: result || '', status: result ? 'completed' : 'error' });
+               // 同步到桌面
+               if (result && onImageGenerated) {
+                   onImageGenerated(result, prompt, currentCanvasId || undefined, canvasName);
+               }
           } 
           else if (type === 'edit') {
                const result = await editCreativeImage(base64Files, prompt, config);
                updateNode(newNode.id, { content: result || '', status: result ? 'completed' : 'error' });
+               // 同步到桌面
+               if (result && onImageGenerated) {
+                   onImageGenerated(result, prompt, currentCanvasId || undefined, canvasName);
+               }
           }
       } catch(e) {
+          console.error('[FloatingInput] 生成失败:', e);
           updateNode(newNode.id, { status: 'error' });
       } finally {
           setIsGenerating(false);

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
-import { Plug, Gem, Eye as EyeIcon, EyeOff as EyeOffIcon, Key as KeyIcon, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Info as InfoIcon, Check, X } from 'lucide-react';
+import { SoraConfig, getSoraConfig, saveSoraConfig } from '../services/soraService';
+import { Plug, Gem, Eye as EyeIcon, EyeOff as EyeOffIcon, Key as KeyIcon, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Info as InfoIcon, Check, X, Video } from 'lucide-react';
 
 // 应用版本号 - 从vite构建时注入，来源于package.json
 declare const __APP_VERSION__: string;
@@ -55,7 +56,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [localThirdPartyKey, setLocalThirdPartyKey] = useState(thirdPartyConfig.apiKey || '');
   const [localGeminiKey, setLocalGeminiKey] = useState(geminiApiKey || '');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showSoraKey, setShowSoraKey] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+  
+  // Sora 视频 API 配置
+  const [soraConfig, setSoraConfig] = useState<SoraConfig>({
+    apiKey: '',
+    baseUrl: 'https://api.openai.com'
+  });
 
   // 同步本地输入状态
   useEffect(() => {
@@ -66,6 +74,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     setLocalGeminiKey(geminiApiKey || '');
   }, [geminiApiKey]);
+
+  // 加载 Sora 配置
+  useEffect(() => {
+    if (isOpen) {
+      const savedSoraConfig = getSoraConfig();
+      setSoraConfig(savedSoraConfig);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -100,6 +116,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSaveGeminiKey = () => {
     onGeminiApiKeySave(localGeminiKey);
     setSaveSuccessMessage('Gemini API Key 已保存');
+    setTimeout(() => setSaveSuccessMessage(null), 2000);
+  };
+
+  const handleSaveSoraConfig = () => {
+    saveSoraConfig(soraConfig);
+    setSaveSuccessMessage('Sora 视频 API 已保存');
     setTimeout(() => setSaveSuccessMessage(null), 2000);
   };
 
@@ -441,6 +463,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   ? thirdPartyConfig.model || 'nano-banana-2' 
                   : 'Gemini 3 Pro'}
               </span>
+            </div>
+          </div>
+
+          {/* 分割线 */}
+          <div style={{ borderTop: `1px solid ${colors.border}` }} />
+
+          {/* 视频 API 设置 */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Sora 视频 API</h3>
+            
+            <div className="p-4 rounded-xl border" style={{ background: colors.bgTertiary, borderColor: colors.border }}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #9333ea, #ec4899)' }}>
+                  <Video className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold" style={{ color: colors.textPrimary }}>Sora 视频生成</h4>
+                  <p className="text-xs" style={{ color: colors.textSecondary }}>OpenAI Sora API 或兼容服务</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: colors.textSecondary }}>API 地址</label>
+                  <input
+                    type="text"
+                    value={soraConfig.baseUrl}
+                    onChange={(e) => setSoraConfig({ ...soraConfig, baseUrl: e.target.value })}
+                    placeholder="https://api.openai.com"
+                    className="w-full px-3 py-2 text-sm border rounded-lg transition-all outline-none"
+                    style={{
+                      background: colors.bgPrimary,
+                      borderColor: colors.border,
+                      color: colors.textPrimary
+                    }}
+                  />
+                  <p className="text-xs mt-1" style={{ color: colors.textMuted }}>支持 T8star 等第三方代理地址</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: colors.textSecondary }}>Sora API Key</label>
+                  <div className="relative">
+                    <input
+                      type={showSoraKey ? 'text' : 'password'}
+                      value={soraConfig.apiKey}
+                      onChange={(e) => setSoraConfig({ ...soraConfig, apiKey: e.target.value })}
+                      placeholder="sk-..."
+                      className="w-full px-3 py-2 pr-10 text-sm border rounded-lg transition-all outline-none"
+                      style={{
+                        background: colors.bgPrimary,
+                        borderColor: colors.border,
+                        color: colors.textPrimary
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSoraKey(!showSoraKey)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
+                      style={{ color: colors.textSecondary }}
+                    >
+                      {showSoraKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSaveSoraConfig}
+                  className="w-full py-2 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #9333ea, #ec4899)' }}
+                >
+                  保存视频 API 配置
+                </button>
+              </div>
             </div>
           </div>
 

@@ -358,7 +358,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                         onApplyCreativeIdea?.(idea);
                                         setActiveLibrary(false);
                                     }}
-                                    className={`w-full text-left p-3 rounded-xl border transition-all ${
+                                    className={`w-full text-left p-2 rounded-xl border transition-all ${
                                         idea.isWorkflow 
                                             ? 'bg-purple-500/10 border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/40'
                                             : idea.isBP
@@ -366,35 +366,45 @@ const Sidebar: React.FC<SidebarProps> = ({
                                             : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'
                                     }`}
                                 >
-                                    {/* 标题行 */}
-                                    <div className="flex items-center justify-between mb-1">
-                                        <div className="font-bold text-xs text-white truncate flex-1 mr-2">
-                                            {idea.isFavorite && <span className="mr-1">⭐</span>}
-                                            {idea.title}
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            {idea.isWorkflow && (
-                                                <span className="text-[9px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded">工作流</span>
-                                            )}
-                                            {idea.isBP && (
-                                                <span className="text-[9px] bg-blue-500/30 text-blue-200 px-1.5 py-0.5 rounded">BP</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    
-                                    {/* 描述/提示词预览 */}
-                                    <div className="text-[10px] text-zinc-400 leading-relaxed line-clamp-2">
-                                        {idea.isBP && idea.bpFields ? (
-                                            <span className="text-zinc-500">
-                                                输入: {idea.bpFields.map(f => f.label).join(', ')}
-                                            </span>
-                                        ) : idea.isWorkflow && idea.workflowNodes ? (
-                                            <span className="text-zinc-500">
-                                                {idea.workflowNodes.length} 个节点
-                                            </span>
-                                        ) : (
-                                            idea.prompt.slice(0, 60) + (idea.prompt.length > 60 ? '...' : '')
+                                    <div className="flex gap-2">
+                                        {/* 预览图 */}
+                                        {idea.imageUrl && (
+                                            <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-black/20">
+                                                <img src={idea.imageUrl} alt="" className="w-full h-full object-cover" />
+                                            </div>
                                         )}
+                                        <div className="flex-1 min-w-0">
+                                            {/* 标题行 */}
+                                            <div className="flex items-center justify-between mb-0.5">
+                                                <div className="font-bold text-xs text-white truncate flex-1 mr-2">
+                                                    {idea.isFavorite && <span className="mr-1">⭐</span>}
+                                                    {idea.title}
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    {idea.isWorkflow && (
+                                                        <span className="text-[8px] bg-purple-500/30 text-purple-200 px-1 py-0.5 rounded">工作流</span>
+                                                    )}
+                                                    {idea.isBP && (
+                                                        <span className="text-[8px] bg-blue-500/30 text-blue-200 px-1 py-0.5 rounded">BP</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* 描述/提示词预览 */}
+                                            <div className="text-[9px] text-zinc-400 leading-relaxed line-clamp-2">
+                                                {idea.isBP && idea.bpFields ? (
+                                                    <span className="text-zinc-500">
+                                                        输入: {idea.bpFields.map(f => f.label).join(', ')}
+                                                    </span>
+                                                ) : idea.isWorkflow && idea.workflowNodes ? (
+                                                    <span className="text-zinc-500">
+                                                        {idea.workflowNodes.length} 个节点
+                                                    </span>
+                                                ) : (
+                                                    idea.prompt.slice(0, 50) + (idea.prompt.length > 50 ? '...' : '')
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </button>
                                 

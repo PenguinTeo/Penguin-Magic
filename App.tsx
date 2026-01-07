@@ -132,7 +132,9 @@ interface CanvasProps {
   isResultMinimized: boolean;
   setIsResultMinimized: (value: boolean) => void;
   // 画布图片生成回调
-  onCanvasImageGenerated?: (imageUrl: string, prompt: string) => void;
+  onCanvasImageGenerated?: (imageUrl: string, prompt: string, canvasId?: string, canvasName?: string) => void;
+  // 画布创建回调
+  onCanvasCreated?: (canvasId: string, canvasName: string) => void;
 }
 
 // IndexedDB 相关操作已迁移到 services/db/ 目录
@@ -1470,6 +1472,7 @@ const Canvas: React.FC<CanvasProps> = ({
   isImporting,
   isImportingById,
   onCanvasImageGenerated,
+  onCanvasCreated,
 }) => {
   const { theme, themeName } = useTheme();
   const isDark = themeName !== 'light';
@@ -1554,7 +1557,11 @@ const Canvas: React.FC<CanvasProps> = ({
       ) : view === 'canvas' ? (
         /* 画布全屏显示 */
         <div className="absolute inset-0 z-50 pt-12">
-          <PebblingCanvas onImageGenerated={onCanvasImageGenerated} creativeIdeas={creativeIdeas} />
+          <PebblingCanvas 
+            onImageGenerated={onCanvasImageGenerated} 
+            onCanvasCreated={onCanvasCreated}
+            creativeIdeas={creativeIdeas} 
+          />
         </div>
       ) : null}
       
@@ -1748,6 +1755,16 @@ const App: React.FC = () => {
   const [desktopSelectedIds, setDesktopSelectedIds] = useState<string[]>([]);
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const [openStackId, setOpenStackId] = useState<string | null>(null); // 叠放打开状态
+  
+  // 画布ID到桌面文件夹ID的映射（用于画布-桌面联动）
+  const [canvasToFolderMap, setCanvasToFolderMap] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem('canvas_folder_map');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
     const [isResultMinimized, setIsResultMinimized] = useState(false); // 生成结果最小化状态
   const [isLoading, setIsLoading] = useState(true); // 加载状态
   const [isImporting, setIsImporting] = useState(false); // 导入状态
@@ -2719,8 +2736,41 @@ const App: React.FC = () => {
       });
     }, [safeDesktopSave]);
 
-    // 画布生成图片同步到桌面
-    const handleCanvasImageGenerated = useCallback(async (imageUrl: string, prompt: string) => {
+    // 画布创建时创建对应的桌面文件夹
+    const handleCanvasCreated = useCallback((canvasId: string, canvasName: string) => {
+      // 检查是否已有对应文件夹
+      if (canvasToFolderMap[canvasId]) {
+        console.log('[Canvas] 画布已有对应文件夹:', canvasToFolderMap[canvasId]);
+        return;
+      }
+      
+      // 创建新的桌面文件夹
+      const now = Date.now();
+      const folderId = `canvas-folder-${canvasId}-${now}`;
+      const newFolder: DesktopFolderItem = {
+        id: folderId,
+        type: 'folder',
+        name: `🎨 ${canvasName}`,
+        position: { x: 0, y: 0 }, // 位置将由handleAddToDesktop自动计算
+        itemIds: [],
+        color: '#3b82f6', // 蓝色标识画布文件夹
+        createdAt: now,
+        updatedAt: now,
+      };
+      
+      // 添加到桌面
+      handleAddToDesktop(newFolder);
+      
+      // 保存映射关系
+      const newMap = { ...canvasToFolderMap, [canvasId]: folderId };
+      setCanvasToFolderMap(newMap);
+      localStorage.setItem('canvas_folder_map', JSON.stringify(newMap));
+      
+      console.log('[Canvas] 创建画布文件夹:', canvasName, '->', folderId);
+    }, [canvasToFolderMap, handleAddToDesktop]);
+
+    // 画布生成图片同步到桌面（添加到对应画布文件夹）
+    const handleCanvasImageGenerated = useCallback(async (imageUrl: string, prompt: string, canvasId?: string, canvasName?: string) => {
       // 先将base64图片保存到本地文件
       let finalImageUrl = imageUrl;
       if (imageUrl.startsWith('data:')) {
@@ -2747,9 +2797,36 @@ const App: React.FC = () => {
         createdAt: now,
         updatedAt: now,
       };
-      handleAddToDesktop(newImageItem);
-      console.log('[Canvas] 图片已同步到桌面:', newImageItem.name);
-    }, [handleAddToDesktop]);
+      
+      // 如果有画布ID，尝试添加到对应文件夹
+      const folderId = canvasId ? canvasToFolderMap[canvasId] : undefined;
+      
+      if (folderId) {
+        // 添加图片到桌面
+        handleAddToDesktop(newImageItem);
+        
+        // 将图片添加到画布文件夹
+        setDesktopItems(prev => {
+          const folder = prev.find(item => item.id === folderId) as DesktopFolderItem | undefined;
+          if (folder) {
+            const updatedFolder: DesktopFolderItem = {
+              ...folder,
+              itemIds: [...folder.itemIds, newImageItem.id],
+              updatedAt: now,
+            };
+            const newItems = prev.map(item => item.id === folderId ? updatedFolder : item);
+            setTimeout(() => safeDesktopSave(newItems), 0);
+            return newItems;
+          }
+          return prev;
+        });
+        console.log('[Canvas] 图片已添加到画布文件夹:', canvasName, newImageItem.name);
+      } else {
+        // 无对应文件夹，直接添加到桌面
+        handleAddToDesktop(newImageItem);
+        console.log('[Canvas] 图片已同步到桌面:', newImageItem.name);
+      }
+    }, [handleAddToDesktop, canvasToFolderMap, safeDesktopSave]);
 
   const handleGenerateClick = useCallback(async () => {
     // 检查API配置
@@ -3415,6 +3492,7 @@ const App: React.FC = () => {
           isImporting={isImporting}
           isImportingById={isImportingById}
           onCanvasImageGenerated={handleCanvasImageGenerated}
+          onCanvasCreated={handleCanvasCreated}
         />
         {view === 'editor' && (
              <div className="absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-300 bottom-6 flex items-center gap-3">
