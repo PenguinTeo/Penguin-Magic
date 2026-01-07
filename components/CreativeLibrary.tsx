@@ -28,7 +28,7 @@ interface CreativeLibraryProps {
   isImportingById?: boolean; // 按ID导入状态
 }
 
-type FilterType = 'all' | 'bp' | 'favorite';
+type FilterType = 'all' | 'bp' | 'workflow' | 'favorite';
 type SortType = 'time' | 'title' | 'manual'; // 添加排序类型
 type CategoryFilterType = 'all' | CreativeCategoryType;
 
@@ -256,6 +256,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
       .filter(idea => {
         // 类型筛选
         if (filter === 'bp' && !idea.isBP) return false;
+        if (filter === 'workflow' && !idea.isWorkflow) return false;
         if (filter === 'favorite' && !idea.isFavorite) return false;
         return true;
       })
@@ -320,6 +321,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
     { key: 'all', label: '全部' },
     { key: 'favorite', label: '⭐ 收藏' },
     { key: 'bp', label: 'BP' },
+    { key: 'workflow', label: '📊 工作流' },
   ];
 
   return (
@@ -726,8 +728,51 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                     </div>
                   )}
                   <img src={normalizeImageUrl(idea.imageUrl)} alt={idea.title} className={`w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 p-0.5 pointer-events-none ${isSelected ? 'opacity-80' : ''}`} />
-                  <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/90 to-transparent pointer-events-none">
-                      <h3 className="font-medium text-white truncate text-xs">{idea.title}</h3>
+                  
+                  {/* 底部信息：标题 + hover时展示详情 */}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-none transition-all duration-300 group-hover:from-black/98 group-hover:via-black/85">
+                      {/* 标题始终显示 */}
+                      <div className="p-2 pb-1.5">
+                          <h3 className="font-semibold text-white truncate text-xs">{idea.title}</h3>
+                      </div>
+                      
+                      {/* hover时展示的详情内容 */}
+                      <div className="max-h-0 overflow-hidden group-hover:max-h-24 transition-all duration-300 px-2 pb-2">
+                          {/* BP模式：展示输入字段 */}
+                          {idea.isBP && idea.bpFields && idea.bpFields.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                  {idea.bpFields.slice(0, 4).map((field, i) => (
+                                      <span key={i} className="text-[9px] text-zinc-300 bg-white/10 px-1.5 py-0.5 rounded">
+                                          {field.label}
+                                      </span>
+                                  ))}
+                                  {idea.bpFields.length > 4 && (
+                                      <span className="text-[9px] text-zinc-400">+{idea.bpFields.length - 4}</span>
+                                  )}
+                              </div>
+                          )}
+                          
+                          {/* 工作流模式：展示输入字段 */}
+                          {idea.isWorkflow && idea.workflowInputs && idea.workflowInputs.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                  {idea.workflowInputs.slice(0, 4).map((input, i) => (
+                                      <span key={i} className="text-[9px] text-purple-200 bg-purple-500/20 px-1.5 py-0.5 rounded">
+                                          {input.label}
+                                      </span>
+                                  ))}
+                                  {idea.workflowInputs.length > 4 && (
+                                      <span className="text-[9px] text-zinc-400">+{idea.workflowInputs.length - 4}</span>
+                                  )}
+                              </div>
+                          )}
+                          
+                          {/* 非BP/非工作流：展示提示词概要 */}
+                          {!idea.isBP && !idea.isWorkflow && idea.prompt && (
+                              <p className="text-[10px] text-zinc-300 line-clamp-3 leading-relaxed">
+                                  {idea.prompt.slice(0, 100)}{idea.prompt.length > 100 ? '...' : ''}
+                              </p>
+                          )}
+                      </div>
                   </div>
                   {/* 非多选模式下显示操作按钮 */}
                   {!isMultiSelectMode && (
@@ -807,7 +852,7 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                   </div>
                   )}
                    <div className={`absolute top-1.5 ${isMultiSelectMode ? 'left-8' : 'left-1.5'} flex flex-col gap-0.5`}>
-                      <div className="flex gap-0.5">
+                      <div className="flex gap-0.5 flex-wrap">
                         {idea.isBP && (
                             <div 
                               className="px-1.5 py-0.5 text-[9px] font-bold rounded-full backdrop-blur-sm pointer-events-none shadow-lg"
@@ -816,7 +861,16 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                                 BP
                             </div>
                         )}
-                        {/* 显示作者信息（非BP模式也显示） */}
+                        {/* 工作流标识 */}
+                        {idea.isWorkflow && (
+                            <div 
+                              className="px-1.5 py-0.5 text-[9px] font-bold rounded-full backdrop-blur-sm pointer-events-none shadow-lg"
+                              style={{ backgroundColor: '#a855f7', color: '#fff', boxShadow: '0 4px 6px -1px rgba(168,85,247,0.3)' }}
+                            >
+                                📊 工作流
+                            </div>
+                        )}
+                        {/* 显示作者信息 */}
                         {idea.author && (
                             <div 
                               className="px-1.5 py-0.5 text-[9px] font-medium rounded-full backdrop-blur-sm pointer-events-none"
@@ -831,6 +885,12 @@ export const CreativeLibrary: React.FC<CreativeLibraryProps> = ({ ideas, onBack,
                         <div className="px-1.5 py-0.5 bg-blue-500/90 text-white text-[8px] font-bold rounded-full backdrop-blur-sm pointer-events-none flex items-center gap-0.5">
                           <span>🪨</span>
                           <span>{idea.cost}</span>
+                        </div>
+                      )}
+                      {/* 工作流节点数显示 */}
+                      {idea.isWorkflow && idea.workflowNodes && (
+                        <div className="px-1.5 py-0.5 bg-purple-500/80 text-white text-[8px] font-bold rounded-full backdrop-blur-sm pointer-events-none">
+                          {idea.workflowNodes.length} 节点
                         </div>
                       )}
                     </div>

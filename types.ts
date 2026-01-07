@@ -77,6 +77,12 @@ export interface CreativeIdea {
   cost?: number; // 使用此创意库生成图片需要扣除的 Pebbling 鹅卵石数量 🪨
   createdAt?: string; // 创建时间
 
+  // 画布工作流模式（节点图谱）
+  isWorkflow?: boolean; // 是否为画布工作流
+  workflowNodes?: WorkflowNode[]; // 工作流节点
+  workflowConnections?: WorkflowConnection[]; // 工作流连接
+  workflowInputs?: WorkflowInput[]; // 工作流可编辑输入
+
   // 建议的宽高比和分辨率
   suggestedAspectRatio?: AspectRatioType;
   suggestedResolution?: ImageSizeType;
@@ -87,6 +93,41 @@ export interface CreativeIdea {
 
   // Deprecated but kept for type compatibility during migration if needed
   bpVariables?: any[];
+}
+
+// 工作流节点类型
+export type WorkflowNodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale';
+
+// 工作流节点
+export interface WorkflowNode {
+  id: string;
+  type: WorkflowNodeType;
+  title?: string;
+  content: string; // 文本内容或图片URL
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  data?: {
+    prompt?: string;
+    systemInstruction?: string;
+    settings?: Record<string, any>;
+  };
+}
+
+// 工作流连接
+export interface WorkflowConnection {
+  id: string;
+  fromNode: string;
+  toNode: string;
+}
+
+// 工作流输入定义
+export interface WorkflowInput {
+  nodeId: string;
+  field: 'content' | 'prompt' | 'systemInstruction';
+  label: string; // 显示标签
+  defaultValue: string;
 }
 
 // RunningHub 配置

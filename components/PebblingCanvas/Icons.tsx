@@ -2,6 +2,7 @@
 import React from 'react';
 import { 
   Plus, 
+  Minus,
   Type, 
   Image as ImageIcon, 
   Sparkles, 
@@ -33,6 +34,7 @@ import {
 
 export const Icons = {
   Plus,
+  Minus,
   Type,
   Image: ImageIcon,
   Sparkles,

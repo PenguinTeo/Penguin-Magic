@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -19,6 +19,25 @@ export interface NodeData {
   resizeMode?: 'longest' | 'shortest' | 'width' | 'height' | 'exact';
   resizeWidth?: number;
   resizeHeight?: number;
+  
+  // BP Node Specifics - 存储BP创意库配置
+  bpTemplate?: {
+    id: number;
+    title: string;
+    prompt: string; // 模板提示词
+    bpFields?: Array<{
+      id: string;
+      type: 'input' | 'agent';
+      name: string;
+      label: string;
+      agentConfig?: {
+        instruction: string;
+        model: string;
+      };
+    }>;
+    imageUrl?: string; // 缩略图
+  };
+  bpInputs?: Record<string, string>; // 用户填写的BP输入值
 }
 
 export interface CanvasNode {
@@ -83,6 +102,10 @@ export const ARCTIC_COLORS = {
   // 冰原灰 - Default/Relay节点
   arcticGray: 'rgb(155, 163, 171)',
   arcticGrayLight: 'rgb(184, 192, 200)',
+  
+  // BP蓝 - BP节点（智能体模式）
+  bpBlue: 'rgb(96, 165, 250)',
+  bpBlueLight: 'rgb(147, 197, 253)',
 } as const;
 
 // 节点类型颜色映射
@@ -104,6 +127,9 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
     
     case 'video':
       return { primary: ARCTIC_COLORS.snowBlue, light: ARCTIC_COLORS.snowBlueLight };
+    
+    case 'bp':
+      return { primary: ARCTIC_COLORS.bpBlue, light: ARCTIC_COLORS.bpBlueLight };
     
     default:
       return { primary: ARCTIC_COLORS.arcticGray, light: ARCTIC_COLORS.arcticGrayLight };

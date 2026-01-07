@@ -60,11 +60,12 @@ export const deleteCanvas = async (id: string): Promise<{ success: boolean; erro
   return del(`/canvas/${id}`);
 };
 
-// 保存画布节点图片到本地文件
+// 保存画布节点图片到本地文件（保存到画布专属文件夹）
 export const saveCanvasImage = async (
   imageData: string,
-  canvasId?: string,
-  nodeId?: string
+  canvasName?: string,
+  nodeId?: string,
+  canvasId?: string
 ): Promise<{ success: boolean; data?: { filename: string; path: string; url: string }; error?: string }> => {
-  return post('/canvas/save-image', { imageData, canvasId, nodeId });
+  return post('/canvas/save-image', { imageData, canvasName, nodeId, canvasId });
 };

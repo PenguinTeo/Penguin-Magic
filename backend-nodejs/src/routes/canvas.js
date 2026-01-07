@@ -3,14 +3,50 @@ const config = require('../config');
 const JsonStorage = require('../utils/jsonStorage');
 const FileHandler = require('../utils/fileHandler');
 const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
 
-// 画布图片存储目录
-const CANVAS_IMAGES_DIR = path.join(config.BASE_DIR, 'canvas_images');
+// 画布图片存储基础目录
+const CANVAS_IMAGES_BASE = path.join(config.OUTPUT_DIR, 'canvas');
 
-// 确保目录存在
-FileHandler.ensureDir(CANVAS_IMAGES_DIR);
+// 确保基础目录存在
+FileHandler.ensureDir(CANVAS_IMAGES_BASE);
+
+// 获取画布专属文件夹路径
+const getCanvasFolder = (canvasName) => {
+  // 安全处理文件夹名：移除特殊字符
+  const safeName = canvasName.replace(/[<>:"\/|?*]/g, '_').trim() || '未命名画布';
+  return path.join(CANVAS_IMAGES_BASE, safeName);
+};
+
+// 创建画布文件夹
+const createCanvasFolder = (canvasName) => {
+  const folderPath = getCanvasFolder(canvasName);
+  FileHandler.ensureDir(folderPath);
+  return folderPath;
+};
+
+// 重命名画布文件夹
+const renameCanvasFolder = (oldName, newName) => {
+  const oldPath = getCanvasFolder(oldName);
+  const newPath = getCanvasFolder(newName);
+  
+  if (oldPath === newPath) return true;
+  
+  try {
+    if (fs.existsSync(oldPath)) {
+      // 确保新路径的父目录存在
+      FileHandler.ensureDir(path.dirname(newPath));
+      fs.renameSync(oldPath, newPath);
+      console.log(`[Canvas] 文件夹已重命名: ${oldName} -> ${newName}`);
+    }
+    return true;
+  } catch (e) {
+    console.error('[Canvas] 重命名文件夹失败:', e.message);
+    return false;
+  }
+};
 
 // 初始化画布数据文件
 JsonStorage.init(config.CANVAS_FILE, []);
@@ -66,15 +102,20 @@ router.post('/', (req, res) => {
     const canvasList = JsonStorage.load(config.CANVAS_FILE, []);
     
     const now = Date.now();
+    const canvasName = name || `画布 ${canvasList.length + 1}`;
+    
     const newCanvas = {
       id: `canvas-${now}-${Math.random().toString(36).substring(2, 8)}`,
-      name: name || `画布 ${canvasList.length + 1}`,
+      name: canvasName,
       nodes: nodes,
       connections: connections,
       createdAt: now,
       updatedAt: now,
       thumbnail: null,
     };
+    
+    // 创建画布专属文件夹
+    createCanvasFolder(canvasName);
     
     canvasList.push(newCanvas);
     JsonStorage.save(config.CANVAS_FILE, canvasList);
@@ -100,8 +141,14 @@ router.put('/:id', (req, res) => {
       return res.status(404).json({ success: false, error: '画布不存在' });
     }
     
+    const oldName = canvasList[index].name;
+    
     // 更新字段
-    if (name !== undefined) canvasList[index].name = name;
+    if (name !== undefined && name !== oldName) {
+      // 名字改变时重命名文件夹
+      renameCanvasFolder(oldName, name);
+      canvasList[index].name = name;
+    }
     if (nodes !== undefined) canvasList[index].nodes = nodes;
     if (connections !== undefined) canvasList[index].connections = connections;
     if (thumbnail !== undefined) canvasList[index].thumbnail = thumbnail;
@@ -145,25 +192,36 @@ router.delete('/:id', (req, res) => {
 
 /**
  * 保存画布节点图片到本地文件
- * 将 base64 图片保存到 canvas_images 目录，返回文件URL
+ * 将 base64 图片保存到画布专属文件夹，返回文件URL
  */
 router.post('/save-image', (req, res) => {
   try {
-    const { imageData, canvasId, nodeId } = req.body;
+    const { imageData, canvasId, canvasName, nodeId } = req.body;
     
     if (!imageData) {
       return res.status(400).json({ success: false, error: '缺少图片数据' });
     }
     
+    // 确定保存目录：使用画布名称创建专属文件夹
+    let saveDir = CANVAS_IMAGES_BASE;
+    let urlPrefix = '/files/output/canvas';
+    
+    if (canvasName) {
+      saveDir = getCanvasFolder(canvasName);
+      FileHandler.ensureDir(saveDir);
+      const safeName = canvasName.replace(/[<>:"\/|?*]/g, '_').trim() || '未命名画布';
+      urlPrefix = `/files/output/canvas/${encodeURIComponent(safeName)}`;
+    }
+    
     // 生成文件名
     const timestamp = Date.now();
-    const filename = `${canvasId || 'temp'}_${nodeId || timestamp}_${timestamp}.png`;
+    const filename = `${nodeId || timestamp}_${timestamp}.png`;
     
-    const result = FileHandler.saveImage(imageData, CANVAS_IMAGES_DIR, filename);
+    const result = FileHandler.saveImage(imageData, saveDir, filename);
     
     if (result.success) {
       // 返回相对URL
-      result.data.url = `/files/canvas_images/${result.data.filename}`;
+      result.data.url = `${urlPrefix}/${result.data.filename}`;
     }
     
     res.json(result);
