@@ -660,37 +660,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       const container = containerRef.current;
       let x, y;
 
-      if (position) {
-          x = position.x;
-          y = position.y;
-      } else {
-          // Use ref for calculation to be safe if multiple nodes added quickly
-          const currentNodes = nodesRef.current.length > 0 ? nodesRef.current : nodes;
-          const hasNodes = currentNodes.length > 0;
-          let targetX = 100;
-          let targetY = 100;
-          
-          if (hasNodes) {
-              const maxX = Math.max(...currentNodes.map(n => n.x + n.width));
-              const minY = Math.min(...currentNodes.map(n => n.y));
-              const maxY = Math.max(...currentNodes.map(n => n.y));
-              const avgY = (minY + maxY) / 2;
-              targetX = maxX + 100; 
-              targetY = avgY; 
-          } else {
-              targetX = (-canvasOffset.x + (container ? container.clientWidth / 2 : window.innerWidth / 2)) / scale - 150;
-              targetY = (-canvasOffset.y + (container ? container.clientHeight / 2 : window.innerHeight / 2)) / scale - 100;
-          }
-          
-          x = targetX;
-          y = targetY;
-      }
-      
+      // 节点尺寸预计算
       let width = 300; let height = 200;
       if (type === 'image') { 
           width = 300; 
           height = 300; 
-          // 1. Aspect Ratio Logic for New Nodes
           if (data?.settings?.aspectRatio && data.settings.aspectRatio !== 'AUTO') {
               const [w, h] = data.settings.aspectRatio.split(':').map(Number);
               if (w && h) {
@@ -698,10 +672,76 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               }
           }
       }
-      if (type === 'video') { width = 400; height = 225; } // 16:9 default
+      if (type === 'video') { width = 400; height = 225; }
       if (type === 'relay') { width = 40; height = 40; }
       if (['edit', 'remove-bg', 'upscale', 'llm', 'resize'].includes(type)) { width = 280; height = 250; }
       if (type === 'llm') { width = 320; height = 300; }
+
+      if (position) {
+          x = position.x;
+          y = position.y;
+      } else {
+          // 计算当前视野范围（画布坐标系）
+          const viewWidth = container ? container.clientWidth : window.innerWidth;
+          const viewHeight = container ? container.clientHeight : window.innerHeight;
+          
+          // 视野在画布坐标系中的范围
+          const viewLeft = -canvasOffset.x / scale;
+          const viewTop = -canvasOffset.y / scale;
+          const viewRight = viewLeft + viewWidth / scale;
+          const viewBottom = viewTop + viewHeight / scale;
+          
+          // 视野中心
+          const viewCenterX = (viewLeft + viewRight) / 2;
+          const viewCenterY = (viewTop + viewBottom) / 2;
+          
+          const currentNodes = nodesRef.current.length > 0 ? nodesRef.current : nodes;
+          
+          // 检查位置是否与现有节点重叠
+          const isOverlapping = (px: number, py: number, pw: number, ph: number) => {
+              return currentNodes.some(n => {
+                  const margin = 20;
+                  return !(px + pw + margin < n.x || px > n.x + n.width + margin ||
+                           py + ph + margin < n.y || py > n.y + n.height + margin);
+              });
+          };
+          
+          // 在视野内寻找空白位置（从中心开始螺旋向外搜索）
+          const findEmptySpot = (): { x: number, y: number } => {
+              // 先尝试视野中心
+              let testX = viewCenterX - width / 2;
+              let testY = viewCenterY - height / 2;
+              
+              if (!isOverlapping(testX, testY, width, height)) {
+                  return { x: testX, y: testY };
+              }
+              
+              // 螺旋搜索空白位置
+              const step = 80;
+              for (let radius = 1; radius <= 20; radius++) {
+                  for (let angle = 0; angle < 360; angle += 30) {
+                      const rad = (angle * Math.PI) / 180;
+                      testX = viewCenterX + Math.cos(rad) * radius * step - width / 2;
+                      testY = viewCenterY + Math.sin(rad) * radius * step - height / 2;
+                      
+                      // 确保在视野内
+                      if (testX >= viewLeft && testX + width <= viewRight &&
+                          testY >= viewTop && testY + height <= viewBottom) {
+                          if (!isOverlapping(testX, testY, width, height)) {
+                              return { x: testX, y: testY };
+                          }
+                      }
+                  }
+              }
+              
+              // 找不到空白位置，放在视野右侧
+              return { x: viewRight - width - 50, y: viewCenterY - height / 2 };
+          };
+          
+          const spot = findEmptySpot();
+          x = spot.x;
+          y = spot.y;
+      }
 
       const newNode: CanvasNode = {
           id: uuid(),
@@ -1812,18 +1852,22 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           return;
       }
 
-      // 4. Linking - 连线需要即时响应，不使用 RAF
+      // 4. Linking - 使用 RAF 优化
       if (linkingState.active) {
           const container = containerRef.current;
           if (container) {
                const rect = container.getBoundingClientRect();
-               setLinkingState(prev => ({
-                   ...prev,
-                   currPos: {
-                       x: (clientX - rect.left - canvasOffset.x) / scale,
-                       y: (clientY - rect.top - canvasOffset.y) / scale
-                   }
-               }));
+               const newPos = {
+                   x: (clientX - rect.left - canvasOffset.x) / scale,
+                   y: (clientY - rect.top - canvasOffset.y) / scale
+               };
+               if (rafRef.current) cancelAnimationFrame(rafRef.current);
+               rafRef.current = requestAnimationFrame(() => {
+                   setLinkingState(prev => ({
+                       ...prev,
+                       currPos: newPos
+                   }));
+               });
           }
       }
   };
@@ -1875,13 +1919,17 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       }
   };
 
-  const onWheel = (e: React.WheelEvent) => {
+  const onWheel = useCallback((e: React.WheelEvent) => {
       // Wheel = Zoom centered on cursor
       e.preventDefault(); 
 
-      const zoomSensitivity = -0.001; 
-      const delta = e.deltaY * zoomSensitivity;
-      const newScale = Math.min(Math.max(0.1, scale + delta), 5);
+      // 使用更平滑的缩放灵敏度
+      const zoomSensitivity = 0.002;
+      const rawDelta = -e.deltaY * zoomSensitivity;
+      
+      // 限制单次缩放幅度，避免跳跃
+      const delta = Math.max(-0.15, Math.min(0.15, rawDelta));
+      const newScale = Math.min(Math.max(0.1, scale * (1 + delta)), 5);
 
       // Calculate Zoom towards Mouse Position
       const container = containerRef.current;
@@ -1898,9 +1946,13 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       const newOffsetX = mouseX - ((mouseX - canvasOffset.x) / scale) * newScale;
       const newOffsetY = mouseY - ((mouseY - canvasOffset.y) / scale) * newScale;
 
-      setScale(newScale);
-      setCanvasOffset({ x: newOffsetX, y: newOffsetY });
-  };
+      // 使用 RAF 确保平滑更新
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+          setScale(newScale);
+          setCanvasOffset({ x: newOffsetX, y: newOffsetY });
+      });
+  }, [scale, canvasOffset]);
 
   const handleNodeDragStart = (e: React.MouseEvent, id: string) => {
       if (e.button !== 0) return; // Only left click
@@ -2191,11 +2243,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
         {/* Canvas Content Container */}
         <div 
             style={{ 
-                transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px) scale(${scale})`,
+                transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${scale})`,
                 transformOrigin: '0 0',
                 width: '100%',
                 height: '100%',
-                willChange: isDraggingCanvas || draggingNodeId ? 'transform' : 'auto',
+                willChange: 'transform',
+                backfaceVisibility: 'hidden',
                 pointerEvents: 'none'
             }}
             className="absolute top-0 left-0"
