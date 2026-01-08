@@ -1,5 +1,7 @@
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { exec } = require('child_process');
 
 // 配置参数
 const CONFIG = {
@@ -15,6 +17,62 @@ const CONFIG = {
 let mainWindow = null;
 let splashWindow = null;
 let backendServer = null;
+
+// 检查并释放端口（Windows）
+function killProcessOnPort(port) {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') {
+      resolve();
+      return;
+    }
+    
+    // 查找占用端口的进程PID
+    exec(`netstat -ano | findstr :${port} | findstr LISTENING`, (err, stdout) => {
+      if (err || !stdout.trim()) {
+        console.log(`✅ 端口 ${port} 未被占用`);
+        resolve();
+        return;
+      }
+      
+      // 解析PID
+      const lines = stdout.trim().split('\n');
+      const pids = new Set();
+      lines.forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        const pid = parts[parts.length - 1];
+        if (pid && /^\d+$/.test(pid) && pid !== '0') {
+          pids.add(pid);
+        }
+      });
+      
+      if (pids.size === 0) {
+        resolve();
+        return;
+      }
+      
+      console.log(`⚠️ 端口 ${port} 被占用，尝试终止进程: ${[...pids].join(', ')}`);
+      
+      // 杀掉占用端口的进程
+      const killPromises = [...pids].map(pid => {
+        return new Promise((res) => {
+          exec(`taskkill /F /PID ${pid}`, (killErr) => {
+            if (killErr) {
+              console.log(`杀死进程 ${pid} 失败:`, killErr.message);
+            } else {
+              console.log(`✅ 已终止进程 ${pid}`);
+            }
+            res();
+          });
+        });
+      });
+      
+      Promise.all(killPromises).then(() => {
+        // 等待一下确保端口释放
+        setTimeout(resolve, 500);
+      });
+    });
+  });
+}
 
 // 创建启动画面
 function createSplashWindow() {
@@ -124,22 +182,63 @@ function closeSplashWindow() {
 
 // 获取图标路径（开发环境和打包环境不同）
 function getIconPath() {
-  // Windows 使用 .ico，其他平台使用 .png
   const iconExt = process.platform === 'win32' ? 'ico' : 'png';
+  let iconPath;
   
   if (!app.isPackaged) {
     // 开发环境
-    return path.join(__dirname, `../resources/icon.${iconExt}`);
+    iconPath = path.join(__dirname, `../resources/icon.${iconExt}`);
   } else {
-    // 打包环境：图标在 resources 目录
-    return path.join(process.resourcesPath, `icon.${iconExt}`);
+    // 打包环境：尝试多个可能的位置
+    const possiblePaths = [
+      path.join(process.resourcesPath, `icon.${iconExt}`),
+      path.join(process.resourcesPath, 'resources', `icon.${iconExt}`),
+      path.join(app.getAppPath(), 'resources', `icon.${iconExt}`),
+      path.join(__dirname, `../resources/icon.${iconExt}`)
+    ];
+    
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        iconPath = p;
+        console.log('✅ 找到图标:', p);
+        break;
+      } else {
+        console.log('❌ 图标不存在:', p);
+      }
+    }
+    
+    if (!iconPath) {
+      console.error('❌ 无法找到图标文件');
+      return null;
+    }
+  }
+  
+  return iconPath;
+}
+
+// 创建 nativeImage 图标
+function getNativeIcon() {
+  const iconPath = getIconPath();
+  if (!iconPath) return null;
+  
+  try {
+    const icon = nativeImage.createFromPath(iconPath);
+    if (icon.isEmpty()) {
+      console.error('❌ 图标加载失败（空图片）:', iconPath);
+      return null;
+    }
+    console.log('✅ 图标加载成功:', iconPath, '尺寸:', icon.getSize());
+    return icon;
+  } catch (e) {
+    console.error('❌ 图标加载异常:', e);
+    return null;
   }
 }
 
 // 创建主窗口
 function createWindow() {
-  const iconPath = getIconPath();
-  console.log('图标路径:', iconPath);
+  const icon = getNativeIcon();
+  console.log('窗口图标:', icon ? '已加载' : '未加载');
   
   mainWindow = new BrowserWindow({
     width: CONFIG.windowWidth,
@@ -147,7 +246,7 @@ function createWindow() {
     minWidth: CONFIG.minWidth,
     minHeight: CONFIG.minHeight,
     title: 'PenguinMagic - 企鹅工坊',
-    icon: iconPath,
+    icon: icon || undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -156,6 +255,11 @@ function createWindow() {
     },
     show: false // 先隐藏，等加载完成后显示
   });
+  
+  // 设置任务栏图标（Windows特有）
+  if (icon && process.platform === 'win32') {
+    mainWindow.setIcon(icon);
+  }
 
   // 窗口准备好后显示
   mainWindow.once('ready-to-show', () => {
@@ -350,6 +454,8 @@ app.whenReady().then(async () => {
     createSplashWindow();
     
     try {
+      // 先检查并释放端口
+      await killProcessOnPort(CONFIG.backendPort);
       await startBackendServer();
     } catch (err) {
       console.error('❌ 后端服务启动失败:', err);

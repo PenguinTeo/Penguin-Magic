@@ -1,7 +1,7 @@
 {
   "name": "penguin-magic",
   "private": true,
-  "version": "1.0.8",
+  "version": "1.1.4",
   "description": "企鹅工坊 - AI 图像创意管理应用",
   "author": "PenguinCreative",
   "type": "module",
@@ -85,7 +85,10 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico"
     },
     "mac": {
       "target": [
