@@ -1560,7 +1560,8 @@ const Canvas: React.FC<CanvasProps> = ({
           <PebblingCanvas 
             onImageGenerated={onCanvasImageGenerated} 
             onCanvasCreated={onCanvasCreated}
-            creativeIdeas={creativeIdeas} 
+            creativeIdeas={creativeIdeas}
+            isActive={view === 'canvas'}
           />
         </div>
       ) : null}
@@ -1587,6 +1588,7 @@ const Canvas: React.FC<CanvasProps> = ({
             creativeIdeas={creativeIdeas}
             onFileDrop={onFileDrop}
             onCreateCreativeIdea={onCreateCreativeIdea}
+            isActive={view !== 'canvas'}
           />
           
           {/* 生成结果浮层 - 毛玻璃效果 + 最小化联动 */}

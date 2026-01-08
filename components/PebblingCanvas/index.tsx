@@ -117,9 +117,10 @@ interface PebblingCanvasProps {
   onImageGenerated?: (imageUrl: string, prompt: string, canvasId?: string, canvasName?: string) => void; // 回调同步到桌面（含画布ID用于联动）
   onCanvasCreated?: (canvasId: string, canvasName: string) => void; // 画布创建回调（用于桌面联动创建文件夹）
   creativeIdeas?: CreativeIdea[]; // 主项目创意库
+  isActive?: boolean; // 画布是否处于活动状态（用于快捷键作用域控制）
 }
 
-const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCanvasCreated, creativeIdeas = [] }) => {
+const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCanvasCreated, creativeIdeas = [], isActive = true }) => {
   // --- 画布管理状态 ---
   const [currentCanvasId, setCurrentCanvasId] = useState<string | null>(null);
   const [canvasList, setCanvasList] = useState<canvasApi.CanvasListItem[]>([]);
@@ -127,6 +128,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   const [isCanvasLoading, setIsCanvasLoading] = useState(false);
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveRef = useRef<{ nodes: string; connections: string }>({ nodes: '', connections: '' });
+  const saveCanvasRef = useRef<(() => Promise<void>) | null>(null); // 用于避免循环依赖
 
   // --- State ---
   const [showIntro, setShowIntro] = useState(false); // 禁用解锁动画
@@ -243,6 +245,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
 
   // 加载单个画布
   const loadCanvas = useCallback(async (canvasId: string) => {
+    // 先保存当前画布（使用ref避免循环依赖）
+    if (currentCanvasId && currentCanvasId !== canvasId && saveCanvasRef.current) {
+      await saveCanvasRef.current();
+    }
+    
     setIsCanvasLoading(true);
     try {
       const result = await canvasApi.getCanvas(canvasId);
@@ -269,10 +276,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       console.error('[Canvas] 加载画布失败:', e);
     }
     setIsCanvasLoading(false);
-  }, []);
+  }, [currentCanvasId]);
 
   // 创建新画布
   const createNewCanvas = useCallback(async (name?: string) => {
+    // 先保存当前画布
+    if (currentCanvasId && saveCanvasRef.current) {
+      await saveCanvasRef.current();
+    }
+    
     try {
       const result = await canvasApi.createCanvas({ name: name || `画布 ${canvasList.length + 1}` });
       if (result.success && result.data) {
@@ -280,6 +292,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
         setCanvasName(result.data.name);
         setNodes([]);
         setConnections([]);
+        nodesRef.current = [];
+        connectionsRef.current = [];
         lastSaveRef.current = { nodes: '[]', connections: '[]' };
         await loadCanvasList();
         console.log('[Canvas] 创建新画布:', result.data.name);
@@ -295,7 +309,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       console.error('[Canvas] 创建画布失败:', e);
     }
     return null;
-  }, [canvasList.length, loadCanvasList, onCanvasCreated]);
+  }, [canvasList.length, loadCanvasList, onCanvasCreated, currentCanvasId]);
 
   // 保存当前画布（防抖）- 会自动将图片内容本地化到画布专属文件夹
   const saveCurrentCanvas = useCallback(async () => {
@@ -364,6 +378,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       console.error('[Canvas] 保存失败:', e);
     }
   }, [currentCanvasId, canvasList, canvasName]);
+
+  // 将saveCurrentCanvas赋值给ref，供其他函数调用（避免循环依赖）
+  useEffect(() => {
+    saveCanvasRef.current = saveCurrentCanvas;
+  }, [saveCurrentCanvas]);
 
   // 删除画布
   const deleteCanvasById = useCallback(async (canvasId: string) => {
@@ -594,30 +613,43 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
   }, []);
 
-  // Global Key Listener - 只在画布区域生效
+  // Global Key Listener - 只在画布活动时生效
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
-          // 空格键跟踪（全局）
-          if (e.code === 'Space' && !e.repeat) {
-              setIsSpacePressed(true);
+          // 空格键跟踪（仅在画布活动时）
+          if (isActive && e.code === 'Space' && !e.repeat) {
+              const tag = document.activeElement?.tagName.toLowerCase();
+              if (tag !== 'input' && tag !== 'textarea') {
+                  setIsSpacePressed(true);
+              }
           }
+          
+          // 如果画布不活动，不响应任何快捷键
+          if (!isActive) return;
           
           // 其他快捷键只在画布生效
           const tag = document.activeElement?.tagName.toLowerCase();
           if (tag === 'input' || tag === 'textarea') return;
-          
-          // 检查是否在画布区域内（不在桶面模式）
-          const isInCanvas = containerRef.current?.contains(document.activeElement) || 
-                             document.activeElement === document.body;
-          if (!isInCanvas) return;
 
           if (e.key === 'Delete' || e.key === 'Backspace') {
+              e.preventDefault();
               deleteSelection();
           }
 
           if (e.ctrlKey || e.metaKey) {
-              if (e.key === 'c') handleCopy();
-              if (e.key === 'v') handlePaste();
+              if (e.key === 'c') {
+                  e.preventDefault();
+                  handleCopy();
+              }
+              if (e.key === 'v') {
+                  e.preventDefault();
+                  handlePaste();
+              }
+              if (e.key === 'a') {
+                  // Ctrl+A 选中所有节点
+                  e.preventDefault();
+                  setSelectedNodeIds(new Set(nodesRef.current.map(n => n.id)));
+              }
           }
       };
       
@@ -654,7 +686,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           window.removeEventListener('keyup', handleKeyUp);
           window.removeEventListener('sidebar-drag-end', handleSidebarDragEnd);
       };
-  }, [deleteSelection, handleCopy, handlePaste, canvasOffset, scale]);
+  }, [deleteSelection, handleCopy, handlePaste, canvasOffset, scale, isActive]);
 
   const addNode = (type: NodeType, content: string = '', position?: Vec2, title?: string, data?: NodeData) => {
       const container = containerRef.current;

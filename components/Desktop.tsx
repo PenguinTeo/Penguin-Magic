@@ -56,6 +56,8 @@ interface DesktopProps {
   onFileDrop?: (files: FileList) => void;
   // 从图片创建创意库
   onCreateCreativeIdea?: (imageUrl: string, prompt?: string, aspectRatio?: string, resolution?: string) => void;
+  // 桌面是否处于活动状态（用于快捷键作用域控制）
+  isActive?: boolean;
 }
 
 const GRID_SIZE = 100; // 网格大小
@@ -95,6 +97,7 @@ export const Desktop: React.FC<DesktopProps> = ({
   creativeIdeas = [],
   onFileDrop,
   onCreateCreativeIdea,
+  isActive = true,
 }) => {
   const { theme, themeName } = useTheme();
   const isLight = themeName === 'light';
@@ -845,6 +848,9 @@ export const Desktop: React.FC<DesktopProps> = ({
   // 键盘快捷键
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 如果桌面不活动（如在画布模式），不响应任何快捷键
+      if (!isActive) return;
+      
       // 检查当前焦点是否在输入框、文本域或其他可编辑元素中
       const activeElement = document.activeElement;
       const isInputFocused = activeElement instanceof HTMLInputElement ||
@@ -936,7 +942,7 @@ export const Desktop: React.FC<DesktopProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectedIds, items, editingItemId, handleCopy, handleCut, handlePaste, currentItems, onSelectionChange]);
+  }, [selectedIds, items, editingItemId, handleCopy, handleCut, handlePaste, currentItems, onSelectionChange, isActive]);
 
   // 计算拖拽偏移
   const getDragOffset = () => {
