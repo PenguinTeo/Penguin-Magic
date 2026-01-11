@@ -1,8 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { CanvasNode, NodeType, getNodeTypeColor } from '../../types/pebblingTypes';
 import { Icons } from './Icons';
 import { ChevronDown } from 'lucide-react';
+
+// 动态导入 3D 组件以避免影响初始加载
+const MultiAngle3D = lazy(() => import('./MultiAngle3D'));
 
 interface CanvasNodeProps {
   node: CanvasNode;
@@ -50,6 +53,12 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   const [resizeWidth, setResizeWidth] = useState<number>(node.data?.resizeWidth || 1024);
   const [resizeHeight, setResizeHeight] = useState<number>(node.data?.resizeHeight || 1024);
 
+  // MultiAngle Node Specific State
+  const [angleRotate, setAngleRotate] = useState<number>(node.data?.angleRotate ?? 0);
+  const [angleVertical, setAngleVertical] = useState<number>(node.data?.angleVertical ?? 0);
+  const [angleZoom, setAngleZoom] = useState<number>(node.data?.angleZoom ?? 5);
+  const [angleDetailMode, setAngleDetailMode] = useState<boolean>(node.data?.angleDetailMode ?? true);
+
   // 媒体信息状态（图片/视频通用）
   const [showMediaInfo, setShowMediaInfo] = useState(false);
   const [showToolbox, setShowToolbox] = useState(false);
@@ -66,6 +75,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     if (node.data?.resizeMode) setResizeMode(node.data.resizeMode);
     if (node.data?.resizeWidth) setResizeWidth(node.data.resizeWidth);
     if (node.data?.resizeHeight) setResizeHeight(node.data.resizeHeight);
+    if (node.data?.angleRotate !== undefined) setAngleRotate(node.data.angleRotate);
+    if (node.data?.angleVertical !== undefined) setAngleVertical(node.data.angleVertical);
+    if (node.data?.angleZoom !== undefined) setAngleZoom(node.data.angleZoom);
+    if (node.data?.angleDetailMode !== undefined) setAngleDetailMode(node.data.angleDetailMode);
     
     // 计算媒体元数据（图片/视频）
     const isImageContent = node.content && (node.content.startsWith('data:image') || (node.content.startsWith('http') && !node.content.includes('.mp4')));
@@ -351,6 +364,13 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     
     const widthLabel = (resizeMode === 'longest' || resizeMode === 'shortest') ? 'Target (px)' : 'Width (px)';
 
+    // 切换到 3D 模式
+    const switchTo3D = () => {
+      onUpdate(node.id, {
+        data: { ...node.data, nodeMode: '3d' }
+      });
+    };
+
     // If there's output content, show the result image
     if (node.content && (node.content.startsWith('data:image') || node.content.startsWith('http://') || node.content.startsWith('https://'))) {
         // 图片加载后自动调整节点尺寸以匹配图片比例
@@ -424,9 +444,19 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
 
     return (
         <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
-            <div className="h-8 border-b border-white/10 flex items-center px-3 gap-2 bg-white/5">
-                <Icons.Resize size={14} className="text-white/70" />
-                <span className="text-xs font-bold uppercase tracking-wider text-white/90">Smart Resize</span>
+            <div className="h-8 border-b border-white/10 flex items-center justify-between px-3 gap-2 bg-white/5 shrink-0">
+                <div className="flex items-center gap-2">
+                    <Icons.Resize size={14} className="text-white/70" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-white/90">Smart Resize</span>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); switchTo3D(); }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="px-1.5 py-0.5 rounded text-[8px] bg-cyan-800/40 hover:bg-cyan-700/50 text-cyan-300 transition-colors"
+                  title="切换到 3D 视角模式"
+                >
+                  ↔ 3D
+                </button>
             </div>
             <div className="flex-1 p-3 flex flex-col justify-center gap-3">
                  <div className="space-y-1">
@@ -502,6 +532,198 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 </div>
             )}
         </div>
+    );
+  };
+
+  // 视角控制辅助函数
+  const getHorizontalDirection = (angle: number, detail: boolean): string => {
+    const hAngle = angle % 360;
+    const suffix = detail ? "" : " quarter";
+    if (hAngle < 22.5 || hAngle >= 337.5) return "front view";
+    if (hAngle < 67.5) return `front-right${suffix} view`;
+    if (hAngle < 112.5) return "right side view";
+    if (hAngle < 157.5) return `back-right${suffix} view`;
+    if (hAngle < 202.5) return "back view";
+    if (hAngle < 247.5) return `back-left${suffix} view`;
+    if (hAngle < 292.5) return "left side view";
+    return `front-left${suffix} view`;
+  };
+  const getVerticalDirection = (v: number, detail: boolean): string => {
+    if (detail) {
+      if (v < -15) return "low angle";
+      if (v < 15) return "eye level";
+      if (v < 45) return "high angle";
+      if (v < 75) return "bird's eye view";
+      return "top-down view";
+    } else {
+      if (v < -15) return "low-angle shot";
+      if (v < 15) return "eye-level shot";
+      if (v < 75) return "elevated shot";
+      return "high-angle shot";
+    }
+  };
+  const getDistanceDesc = (z: number, detail: boolean): string => {
+    if (detail) {
+      if (z < 2) return "wide shot";
+      if (z < 4) return "medium-wide shot";
+      if (z < 6) return "medium shot";
+      if (z < 8) return "medium close-up";
+      return "close-up";
+    } else {
+      if (z < 2) return "wide shot";
+      if (z < 6) return "medium shot";
+      return "close-up";
+    }
+  };
+  const getHorizontalLabel = (angle: number): string => {
+    const hAngle = angle % 360;
+    if (hAngle < 22.5 || hAngle >= 337.5) return "正面";
+    if (hAngle < 67.5) return "右前";
+    if (hAngle < 112.5) return "右侧";
+    if (hAngle < 157.5) return "右后";
+    if (hAngle < 202.5) return "背面";
+    if (hAngle < 247.5) return "左后";
+    if (hAngle < 292.5) return "左侧";
+    return "左前";
+  };
+  const getVerticalLabel = (v: number): string => {
+    if (v < -15) return "仰视";
+    if (v < 15) return "平视";
+    if (v < 45) return "高角度";
+    if (v < 75) return "鸟瞰";
+    return "俯视";
+  };
+  const getZoomLabel = (z: number): string => {
+    if (z < 2) return "远景";
+    if (z < 4) return "中远景";
+    if (z < 6) return "中景";
+    if (z < 8) return "中近景";
+    return "特写";
+  };
+
+  const renderMultiAngleNode = () => {
+    const hDir = getHorizontalDirection(angleRotate, angleDetailMode);
+    const vDir = getVerticalDirection(angleVertical, angleDetailMode);
+    const dist = getDistanceDesc(angleZoom, angleDetailMode);
+    const anglePrompt = angleDetailMode 
+      ? `${hDir}, ${vDir}, ${dist} (horizontal: ${Math.round(angleRotate)}, vertical: ${Math.round(angleVertical)}, zoom: ${angleZoom.toFixed(1)})`
+      : `${hDir} ${vDir} ${dist}`;
+
+    // 模式切换: '3d' | 'resize'
+    const nodeMode = node.data?.nodeMode || '3d';
+
+    const handleAngleUpdate = (updates: {rotate?: number, vertical?: number, zoom?: number, detail?: boolean}) => {
+      const newRotate = updates.rotate ?? angleRotate;
+      const newVertical = updates.vertical ?? angleVertical;
+      const newZoom = updates.zoom ?? angleZoom;
+      const newDetail = updates.detail ?? angleDetailMode;
+      
+      setAngleRotate(newRotate);
+      setAngleVertical(newVertical);
+      setAngleZoom(newZoom);
+      if (updates.detail !== undefined) setAngleDetailMode(newDetail);
+      
+      const newHDir = getHorizontalDirection(newRotate, newDetail);
+      const newVDir = getVerticalDirection(newVertical, newDetail);
+      const newDist = getDistanceDesc(newZoom, newDetail);
+      const newPrompt = newDetail 
+        ? `${newHDir}, ${newVDir}, ${newDist} (horizontal: ${Math.round(newRotate)}, vertical: ${Math.round(newVertical)}, zoom: ${newZoom.toFixed(1)})`
+        : `${newHDir} ${newVDir} ${newDist}`;
+      
+      onUpdate(node.id, {
+        content: newPrompt,
+        data: {
+          ...node.data,
+          angleRotate: newRotate,
+          angleVertical: newVertical,
+          angleZoom: newZoom,
+          angleDetailMode: newDetail,
+          anglePrompt: newPrompt
+        }
+      });
+    };
+
+    // 从上游获取图片
+    const handleRunLoadImage = () => {
+      // 触发完整节点执行流程，让 resolveInputs 获取上游图片
+      if (onExecute) {
+        onExecute();
+      }
+    };
+
+    // 切换模式
+    const toggleMode = () => {
+      const newMode = nodeMode === '3d' ? 'resize' : '3d';
+      onUpdate(node.id, {
+        data: { ...node.data, nodeMode: newMode }
+      });
+    };
+
+    // 原有 Resize 模式
+    if (nodeMode === 'resize') {
+      return renderResizeNode();
+    }
+
+    return (
+      <div className="w-full h-full bg-[#080810] flex flex-col border border-cyan-500/30 rounded-xl overflow-hidden relative shadow-lg">
+        {/* 标题栏 - 支持拖拽 */}
+        <div className="h-7 border-b border-cyan-900/40 flex items-center justify-between px-2 bg-cyan-900/20 shrink-0 cursor-move">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px]">\uD83D\uDCF7</span>
+            <span className="text-[10px] font-bold text-cyan-200 uppercase tracking-wider">3D 视角</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleMode(); }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="px-1.5 py-0.5 rounded text-[8px] bg-cyan-800/40 hover:bg-cyan-700/50 text-cyan-300 transition-colors"
+              title="切换到 Resize 模式"
+            >
+              ↔ Resize
+            </button>
+          </div>
+        </div>
+
+        {/* 3D 视图 */}
+        <Suspense fallback={
+          <div className="flex-1 flex items-center justify-center bg-[#080810]">
+            <div className="w-6 h-6 border-2 border-cyan-400/50 border-t-cyan-400 rounded-full animate-spin"></div>
+          </div>
+        }>
+          <MultiAngle3D
+            rotate={angleRotate}
+            vertical={angleVertical}
+            zoom={angleZoom}
+            onChange={handleAngleUpdate}
+            imageUrl={node.data?.inputImageUrl || node.data?.previewImage}
+            width={node.width - 4}
+            height={Math.max(140, node.height - 100)}
+            onRun={handleRunLoadImage}
+            isRunning={isRunning}
+            onExecute={onExecute}
+          />
+        </Suspense>
+        
+        {/* 详细模式开关 & 提示词预览 */}
+        <div className="px-2 py-1 space-y-1 bg-[#0a0a14] border-t border-cyan-900/30">
+          <label className="flex items-center gap-2 text-[8px] text-zinc-500 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={angleDetailMode}
+              onChange={(e) => handleAngleUpdate({detail: e.target.checked})}
+              className="w-2.5 h-2.5 rounded border-gray-600 text-cyan-500 focus:ring-cyan-500"
+              onMouseDown={(e) => e.stopPropagation()}
+            />
+            <span>附加详细参数</span>
+          </label>
+          
+          <div className="rounded bg-black/40 border border-cyan-900/30 px-1.5 py-0.5">
+            <div className="text-[7px] text-cyan-300/80 leading-relaxed break-words font-mono truncate">
+              {anglePrompt}
+            </div>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -664,7 +886,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     }
 
     if (node.type === 'llm') return renderLLMNode();
-    if (node.type === 'resize') return renderResizeNode();
+    if (node.type === 'resize') return renderMultiAngleNode();
 
     // Idea节点 - 类似BP的简化版本，包含提示词和设置
     if (node.type === 'idea') {

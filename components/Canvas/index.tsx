@@ -33,9 +33,10 @@ import ImageNode from './nodes/ImageNode';
 import PromptNode from './nodes/PromptNode';
 import TextNode from './nodes/TextNode';
 import SaveImageNode from './nodes/SaveImageNode';
+import MultiAngleNode from './nodes/MultiAngleNode';
 
 // 节点类型定义
-export type CanvasNodeType = 'creative' | 'image' | 'prompt' | 'text' | 'saveImage';
+export type CanvasNodeType = 'creative' | 'image' | 'prompt' | 'text' | 'saveImage' | 'multiAngle';
 
 export interface CanvasNodeData {
   [key: string]: unknown; // 索引签名，满足 Record<string, unknown> 约束
@@ -63,6 +64,7 @@ const nodeTypes: NodeTypes = {
   prompt: PromptNode,
   text: TextNode,
   saveImage: SaveImageNode,
+  multiAngle: MultiAngleNode,
 };
 
 // 自定义可删除边组件
@@ -403,6 +405,27 @@ export const Canvas: React.FC<CanvasProps> = ({
     setNodes((nds) => [...nds, newNode]);
   }, [setNodes, handleDeleteNode, handleEditNode]);
 
+  // 添加视角控制节点
+  const addMultiAngleNode = useCallback(() => {
+    const newNode: Node<CanvasNodeData> = {
+      id: `multiAngle-${Date.now()}`,
+      type: 'multiAngle',
+      position: { x: 250 + Math.random() * 150, y: 150 + Math.random() * 150 },
+      data: {
+        label: '视角控制',
+        type: 'multiAngle',
+        rotate: 0,
+        vertical: 0,
+        zoom: 5,
+        addAnglePrompt: true,
+        anglePrompt: 'front view, eye level, medium shot (horizontal: 0, vertical: 0, zoom: 5.0)',
+        onDelete: handleDeleteNode,
+        onEdit: handleEditNode,
+      },
+    };
+    setNodes((nds) => [...nds, newNode]);
+  }, [setNodes, handleDeleteNode, handleEditNode]);
+
   // 执行单个保存图片节点
   const handleExecuteSingleNode = useCallback(async (nodeId: string) => {
     if (!onGenerateFromFlow || isExecuting) {
@@ -452,6 +475,12 @@ export const Canvas: React.FC<CanvasProps> = ({
         case 'prompt':
           const promptText = (sourceNode.data as CanvasNodeData).promptText || '';
           prompt = prompt ? `${prompt} ${promptText}` : promptText;
+          break;
+        case 'multiAngle':
+          const anglePrompt = (sourceNode.data as any).anglePrompt || '';
+          if (anglePrompt) {
+            prompt = prompt ? `${prompt}, ${anglePrompt}` : anglePrompt;
+          }
           break;
         case 'image':
           imageFile = (sourceNode.data as any).imageFile;
@@ -598,6 +627,13 @@ export const Canvas: React.FC<CanvasProps> = ({
               prompt = promptText;
             }
             console.log('[Flow] 找到提示词:', promptText);
+            break;
+          case 'multiAngle':
+            const anglePrompt = (sourceNode.data as any).anglePrompt || '';
+            if (anglePrompt) {
+              prompt = prompt ? `${prompt}, ${anglePrompt}` : anglePrompt;
+            }
+            console.log('[Flow] 找到视角提示词:', anglePrompt);
             break;
           case 'image':
             imageFile = (sourceNode.data as any).imageFile;
@@ -827,6 +863,14 @@ export const Canvas: React.FC<CanvasProps> = ({
             </button>
 
             <button
+              onClick={addMultiAngleNode}
+              className="w-full px-4 py-2.5 text-sm font-medium rounded-xl bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 transition-all flex items-center gap-3"
+            >
+              <span className="text-lg">🎬</span>
+              <span>视角控制</span>
+            </button>
+
+            <button
               onClick={addSaveImageNode}
               className="w-full px-4 py-2.5 text-sm font-medium rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-300 hover:bg-blue-500/30 transition-all flex items-center gap-3"
             >
@@ -946,6 +990,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               case 'prompt': return '#22c55e';
               case 'text': return '#eab308';
               case 'saveImage': return theme.colors.primary;
+              case 'multiAngle': return '#a855f7';
               default: return '#6b7280';
             }
           }}

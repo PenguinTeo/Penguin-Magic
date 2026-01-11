@@ -17,11 +17,13 @@
   },
   "dependencies": {
     "@google/genai": "^1.16.0",
+    "@types/three": "^0.182.0",
     "@xyflow/react": "^12.10.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.562.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "three": "^0.182.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
