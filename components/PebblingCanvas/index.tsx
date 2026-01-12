@@ -3096,13 +3096,61 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                     onDelete={(id) => setNodes(prev => prev.filter(n => n.id !== id))}
                     onExecute={handleExecuteNode}
                     onStop={handleStopNode}
-                    onDownload={(id) => {
+                    onDownload={async (id) => {
                         const n = nodes.find(x => x.id === id);
-                        if (n && n.content && n.content.startsWith('data:')) {
+                        if (!n || !n.content) {
+                            console.warn('[Download] 节点无内容:', id);
+                            return;
+                        }
+                        
+                        // 根据内容类型判断文件扩展名
+                        const isVideo = n.content.startsWith('data:video') || n.content.includes('.mp4') || n.type === 'video';
+                        const ext = isVideo ? 'mp4' : 'png';
+                        const filename = `pebbling-${n.id}.${ext}`;
+                        const content = n.content;
+                        
+                        // 如果是 base64 数据，直接下载
+                        if (content.startsWith('data:')) {
                             const link = document.createElement('a');
-                            link.href = n.content;
-                            link.download = `pebbling-${n.id}.png`;
+                            link.href = content;
+                            link.download = filename;
+                            document.body.appendChild(link);
                             link.click();
+                            document.body.removeChild(link);
+                            console.log('[Download] Base64 下载成功:', filename);
+                            return;
+                        }
+                        
+                        // 处理 URL 路径（/files/、/api/、http://、https://）
+                        try {
+                            let urlToFetch = content;
+                            
+                            // 相对路径转绝对路径
+                            if (content.startsWith('/files/') || content.startsWith('/api/')) {
+                                urlToFetch = `http://localhost:8765${content}`;
+                            }
+                            
+                            console.log('[Download] 正在下载:', urlToFetch);
+                            const response = await fetch(urlToFetch);
+                            
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}`);
+                            }
+                            
+                            const blob = await response.blob();
+                            const blobUrl = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = blobUrl;
+                            link.download = filename;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(blobUrl);
+                            console.log('[Download] URL 下载成功:', filename);
+                        } catch (error: any) {
+                            console.error('[Download] 下载失败:', error);
+                            // 降级：在新窗口打开
+                            window.open(content, '_blank');
                         }
                     }}
                     onStartConnection={(id, type, pos) => {
