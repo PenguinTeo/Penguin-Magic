@@ -1318,9 +1318,32 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 {isRunning && (
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] flex items-center justify-center z-30">
                         <div className="flex flex-col items-center gap-2">
+                            {node.data?.videoTaskStatus && (
+                                <div className="text-[9px] text-white/60 font-mono mb-1">
+                                    {node.data.videoTaskStatus === 'NOT_START' && '📦 任务正在排队...'}
+                                    {node.data.videoTaskStatus === 'IN_PROGRESS' && '🎨 正在生成视频...'}
+                                    {node.data.videoTaskStatus === 'SUCCESS' && '✅ 生成完成，下载中...'}
+                                    {node.data.videoTaskStatus === 'FAILURE' && '❌ 生成失败'}
+                                </div>
+                            )}
+                            
                             <div className="w-8 h-8 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
-                            <span className="text-[10px] text-white/80 font-medium">视频生成中...</span>
-                            <span className="text-[8px] text-zinc-500">预计 1-10 分钟</span>
+                            
+                            {node.data?.videoProgress !== undefined && node.data.videoProgress > 0 ? (
+                                <span className="text-[11px] text-white font-medium">进度: {node.data.videoProgress}%</span>
+                            ) : (
+                                <span className="text-[10px] text-white/80 font-medium">视频生成中...</span>
+                            )}
+                            
+                            {node.data?.videoTaskStatus === 'FAILURE' && node.data?.videoFailReason && (
+                                <div className="max-w-[200px] text-center">
+                                    <span className="text-[8px] text-red-400 block">{node.data.videoFailReason}</span>
+                                </div>
+                            )}
+                            
+                            {!node.data?.videoTaskStatus && (
+                                <span className="text-[8px] text-zinc-500">预计 1-10 分钟</span>
+                            )}
                         </div>
                     </div>
                 )}
