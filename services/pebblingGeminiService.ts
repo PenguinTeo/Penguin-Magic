@@ -1,5 +1,5 @@
 
-import { GenerationConfig } from '../types';
+import { GenerationConfig } from '../types/pebblingTypes';
 
 // T8star API 配置接口
 export interface ThirdPartyApiConfig {
@@ -331,10 +331,18 @@ export const editCreativeImage = async (base64Images: string[], prompt: string, 
       return `data:image/png;base64,${img}`;
     });
 
+    // 多图处理：在提示词中标注图片顺序（从上到下连接的顺序 = Image1, Image2, ...）
+    let enhancedPrompt = prompt || "Enhance this image";
+    if (base64Images.length > 1) {
+      const imageLabels = base64Images.map((_, idx) => `Image${idx + 1}`).join(', ');
+      enhancedPrompt = `[Input images in order: ${imageLabels}]\n\n${enhancedPrompt}`;
+      console.log(`[贞贞多图] 检测到 ${base64Images.length} 张图片，已标注顺序:`, imageLabels);
+    }
+
     // 构建请求体
     const requestBody: any = {
       model: config.model,
-      prompt: prompt || "Enhance this image",
+      prompt: enhancedPrompt,
       response_format: 'url',
       image: imageDataUrls
     };

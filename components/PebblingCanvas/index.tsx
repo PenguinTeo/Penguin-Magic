@@ -163,6 +163,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   // 自动保存状态（默认禁用，首次操作后启用）
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
   
+  // 未保存标记（用于提醒用户）
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  
   // Refs for State (to avoid stale closures in execution logic)
   const nodesRef = useRef<CanvasNode[]>([]);
   const connectionsRef = useRef<Connection[]>([]);
@@ -189,11 +192,24 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [isDragOperation, setIsDragOperation] = useState(false); // Tracks if actual movement occurred
   
+  // Refs to track dragging state for immediate save detection
+  const draggingNodeIdRef = useRef<string | null>(null);
+  const isDragOperationRef = useRef(false);
+  
+  useEffect(() => {
+    draggingNodeIdRef.current = draggingNodeId;
+  }, [draggingNodeId]);
+  
+  useEffect(() => {
+    isDragOperationRef.current = isDragOperation;
+  }, [isDragOperation]);
+  
   // Copy/Paste Buffer
   const clipboardRef = useRef<CanvasNode[]>([]);
 
   // Abort Controllers for cancelling operations
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const executingNodesRef = useRef<Set<string>>(new Set()); // 正在执行的节点ID集合，用于防止重复执行
 
   // Dragging Mathematics (Delta based)
   const [dragStartMousePos, setDragStartMousePos] = useState<Vec2>({ x: 0, y: 0 });
@@ -276,9 +292,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
 
   // 加载单个画布
   const loadCanvas = useCallback(async (canvasId: string) => {
-    // 先保存当前画布（使用ref避免循环依赖）
-    if (currentCanvasId && currentCanvasId !== canvasId && saveCanvasRef.current) {
-      await saveCanvasRef.current();
+    // 🔧 检查未保存的修改
+    if (hasUnsavedChanges && currentCanvasId && currentCanvasId !== canvasId) {
+      const confirmed = window.confirm(
+        '当前画布有未保存的修改，是否保存？\n\n点击“确定”保存后切换\n点击“取消”放弃修改并切换'
+      );
+      
+      if (confirmed && saveCanvasRef.current) {
+        await saveCanvasRef.current();
+        setHasUnsavedChanges(false);
+      }
     }
     
     setIsCanvasLoading(true);
@@ -301,6 +324,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           nodes: JSON.stringify(loadedNodes),
           connections: JSON.stringify(loadedConnections)
         };
+        // 清除未保存标记
+        setHasUnsavedChanges(false);
         console.log('[Canvas] 加载画布:', result.data.name);
         
         // 自动恢复Video节点的异步任务
@@ -312,13 +337,20 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       console.error('[Canvas] 加载画布失败:', e);
     }
     setIsCanvasLoading(false);
-  }, [currentCanvasId]);
+  }, [currentCanvasId, hasUnsavedChanges]);
 
   // 创建新画布
   const createNewCanvas = useCallback(async (name?: string) => {
-    // 先保存当前画布
-    if (currentCanvasId && saveCanvasRef.current) {
-      await saveCanvasRef.current();
+    // 🔧 检查未保存的修改
+    if (hasUnsavedChanges && currentCanvasId) {
+      const confirmed = window.confirm(
+        '当前画布有未保存的修改，是否保存？\n\n点击“确定”保存后创建\n点击“取消”放弃修改并创建'
+      );
+      
+      if (confirmed && saveCanvasRef.current) {
+        await saveCanvasRef.current();
+        setHasUnsavedChanges(false);
+      }
     }
     
     try {
@@ -331,6 +363,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
         nodesRef.current = [];
         connectionsRef.current = [];
         lastSaveRef.current = { nodes: '[]', connections: '[]' };
+        setHasUnsavedChanges(false);
         await loadCanvasList();
         console.log('[Canvas] 创建新画布:', result.data.name);
         
@@ -345,7 +378,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       console.error('[Canvas] 创建画布失败:', e);
     }
     return null;
-  }, [canvasList.length, loadCanvasList, onCanvasCreated, currentCanvasId]);
+  }, [canvasList.length, loadCanvasList, onCanvasCreated, currentCanvasId, hasUnsavedChanges]);
 
   // 保存当前画布（防抖）- 会自动将图片内容本地化到画布专属文件夹
   const saveCurrentCanvas = useCallback(async () => {
@@ -655,9 +688,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   const handleManualSave = useCallback(async () => {
     console.log('[手动保存] 开始保存...');
     await saveCurrentCanvas();
-    // 保存后启用自动保存
-    enableAutoSave();
-  }, [saveCurrentCanvas, enableAutoSave]);
+    // 保存后清除未保存标记
+    setHasUnsavedChanges(false);
+    console.log('[手动保存] 保存完成');
+  }, [saveCurrentCanvas]);
 
   const handleResetView = () => {
     setCanvasOffset({ x: 0, y: 0 });
@@ -671,15 +705,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           setNodes(prev => prev.filter(n => !idsToDelete.has(n.id)));
           setConnections(prev => prev.filter(c => !idsToDelete.has(c.fromNode) && !idsToDelete.has(c.toNode)));
           setSelectedNodeIds(new Set<string>());
-          enableAutoSave(); // 启用自动保存
+          setHasUnsavedChanges(true); // 标记未保存
       }
       // 2. Delete Connection
       if (selectedConnectionId) {
           setConnections(prev => prev.filter(c => c.id !== selectedConnectionId));
           setSelectedConnectionId(null);
-          enableAutoSave(); // 启用自动保存
+          setHasUnsavedChanges(true); // 标记未保存
       }
-  }, [selectedNodeIds, selectedConnectionId, enableAutoSave]);
+  }, [selectedNodeIds, selectedConnectionId]);
 
   const handleCopy = useCallback(() => {
       if (selectedNodeIds.size === 0) return;
@@ -709,8 +743,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
 
       setNodes(prev => [...prev, ...newNodes]);
       setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
-      enableAutoSave(); // 启用自动保存
-  }, [enableAutoSave]);
+      setHasUnsavedChanges(true); // 标记未保存
+  }, []);
 
   // Global Key Listener - 只在画布活动时生效
   useEffect(() => {
@@ -935,7 +969,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           status: 'idle'
       };
       setNodes(prev => [...prev, newNode]);
-      enableAutoSave(); // 启用自动保存
+      setHasUnsavedChanges(true); // 标记未保存
+      
       return newNode;
   };
 
@@ -1471,11 +1506,25 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
 
   const handleExecuteNode = async (nodeId: string, batchCount: number = 1) => {
       const node = nodesRef.current.find(n => n.id === nodeId);
-      if (!node) return;
+      if (!node) {
+          console.warn(`[执行] 节点 ${nodeId.slice(0,8)} 不存在`);
+          return;
+      }
+      
+      // 🔒 原子操作：防止重复执行（关键修复点）
+      if (executingNodesRef.current.has(nodeId)) {
+          console.warn(`[🔒执行锁] 节点 ${nodeId.slice(0,8)} 正在执行中，阻止重复请求`);
+          return;
+      }
+      
+      // 立即标记为执行中（在任何异步操作之前）
+      executingNodesRef.current.add(nodeId);
+      console.log(`[🔒执行锁] 节点 ${nodeId.slice(0,8)} 已加锁，开始执行`);
       
       // 防止重复执行：如果节点已经在运行中，直接返回
       if (node.status === 'running') {
           console.warn(`[执行] 节点 ${nodeId.slice(0,8)} 已在运行中，忽略重复请求`);
+          executingNodesRef.current.delete(nodeId); // 解锁
           return;
       }
       
@@ -1489,13 +1538,21 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
 
       // 批量生成：创建多个结果节点
       if (batchCount > 1 && ['image', 'edit'].includes(node.type)) {
-          await handleBatchExecute(nodeId, node, batchCount);
+          try {
+              await handleBatchExecute(nodeId, node, batchCount);
+          } finally {
+              executingNodesRef.current.delete(nodeId); // 解锁
+          }
           return;
       }
       
       // BP/Idea节点批量执行：自动创建图像节点
       if (batchCount >= 1 && ['bp', 'idea'].includes(node.type)) {
-          await handleBpIdeaBatchExecute(nodeId, node, batchCount);
+          try {
+              await handleBpIdeaBatchExecute(nodeId, node, batchCount);
+          } finally {
+              executingNodesRef.current.delete(nodeId); // 解锁
+          }
           return;
       }
 
@@ -1521,6 +1578,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               
               // 如果上游节点需要执行且未完成，先执行上游
               if (upstreamNode && upstreamNode.status !== 'completed') {
+                  // 只有 idle 状态的节点才需要级联执行（关键修复点）
+                  // running: 已在执行，等待完成
+                  // error: 已失败，不重试
+                  if (upstreamNode.status !== 'idle') {
+                      console.log(`[级联执行] ⚠️ 上游节点状态为 ${upstreamNode.status}，跳过级联执行`);
+                      continue; // 跳过这个上游节点
+                  }
+                  
                   // 可执行的节点类型：包含 image 以支持容器模式级联执行
                   const executableTypes = ['image', 'llm', 'edit', 'remove-bg', 'upscale', 'resize', 'video', 'bp'];
                   if (executableTypes.includes(upstreamNode.type)) {
@@ -2263,6 +2328,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       } finally {
           // Clean up abort controller
           abortControllersRef.current.delete(nodeId);
+          // 🔓 解锁：移除执行标记
+          executingNodesRef.current.delete(nodeId);
+          console.log(`[🔓执行锁] 节点 ${nodeId.slice(0,8)} 已解锁`);
       }
   };
   
@@ -2471,10 +2539,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       setIsDragOperation(false);
       setLinkingState(prev => ({ ...prev, active: false, fromNode: null }));
 
-      // 拖拽结束后启用自动保存，但不立即保存，由防扖2秒后自然触发
+      // 拖拽结束后标记未保存
       if (wasDragging) {
-          enableAutoSave(); // 启用自动保存，由 useEffect 防抖处理
-          console.log('[拖拽] 拖拽结束，自动保存已启用，等待防抖触发');
+          setHasUnsavedChanges(true);
+          console.log('[拖拽] 拖拽结束，已标记未保存');
       }
 
       // Resolve Selection Box
@@ -2558,7 +2626,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                   fromNode: linkingState.fromNode!,
                   toNode: targetNodeId
               }]);
-              enableAutoSave(); // 启用自动保存
+              setHasUnsavedChanges(true); // 标记未保存
           }
       }
   };
@@ -2579,7 +2647,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           fromNode: sourceNodeId,
           toNode: newNode.id
       }]);
-      enableAutoSave(); // 启用自动保存
+      setHasUnsavedChanges(true); // 标记未保存
   };
 
   // --- FLOATING GENERATOR HANDLER ---
@@ -2686,12 +2754,13 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           creativeIdeas={creativeIdeas}
           onManualSave={handleManualSave}
           autoSaveEnabled={autoSaveEnabled}
+          hasUnsavedChanges={hasUnsavedChanges}
           onApplyCreativeIdea={(idea) => {
             // 应用创意库到画布
             const baseX = -canvasOffset.x / scale + 200;
             const baseY = -canvasOffset.y / scale + 100;
             
-            enableAutoSave(); // 启用自动保存
+            setHasUnsavedChanges(true); // 标记未保存
             
             if (idea.isWorkflow && idea.workflowNodes && idea.workflowConnections) {
               // 工作流类型：添加整个工作流节点

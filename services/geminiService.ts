@@ -170,6 +170,13 @@ export const editImageWithThirdPartyApi = async (
       return `data:${file.type};base64,${imageBase64}`;
     });
     requestBody.image = await Promise.all(imagePromises);
+    
+    // 多图处理：在提示词中标注图片顺序（从上到下连接的顺序 = Image1, Image2, ...）
+    if (files.length > 1) {
+      const imageLabels = files.map((_, idx) => `Image${idx + 1}`).join(', ');
+      requestBody.prompt = `[输入图片按顺序: ${imageLabels}]\n\n${prompt}`;
+      console.log(`[贞贞多图] 检测到 ${files.length} 张图片，已标注顺序:`, imageLabels);
+    }
   }
 
   // 直接调用贞贞API
@@ -314,9 +321,17 @@ export const editImageWithGemini = async (files: File[], prompt: string, config:
   if (files.length > 0) {
     // 图生图模式（支持多图）
     const imageParts = await Promise.all(files.map(file => fileToGenerativePart(file)));
-    const instruction = files.length > 1 
-      ? '请根据以下提示词，参考所有输入图片进行编辑/融合/创作，只输出结果图片，不要输出任何文字描述。'
-      : '请根据以下提示词编辑图片，只输出结果图片，不要输出任何文字描述。';
+    
+    // 多图处理：在提示词中标注图片顺序（从上到下连接的顺序 = Image1, Image2, ...）
+    let instruction;
+    if (files.length > 1) {
+      const imageLabels = files.map((_, idx) => `Image${idx + 1}`).join(', ');
+      instruction = `请根据以下提示词，参考所有输入图片进行编辑/融合/创作。输入图片按连接顺序标记为：${imageLabels}（从上到下）。只输出结果图片，不要输出任何文字描述。`;
+      console.log(`[Gemini多图] 检测到 ${files.length} 张图片，已标注顺序:`, imageLabels);
+    } else {
+      instruction = '请根据以下提示词编辑图片，只输出结果图片，不要输出任何文字描述。';
+    }
+    
     const textPart: Part = { text: `${instruction}\n\n${prompt}` };
     contents = {
       parts: [...imageParts, textPart],

@@ -236,7 +236,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
           const reader = new FileReader();
           reader.onload = (ev) => {
               if (ev.target?.result) {
-                  onUpdate(node.id, { content: ev.target.result as string });
+                  // 🔧 上传图片后立即设置 status 为 completed（关键修复点）
+                  onUpdate(node.id, { 
+                      content: ev.target.result as string,
+                      status: 'completed' // 标记为已完成，避免级联执行时重复生成
+                  });
               }
           };
           reader.readAsDataURL(file);

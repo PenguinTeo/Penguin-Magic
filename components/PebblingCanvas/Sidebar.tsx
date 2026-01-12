@@ -29,12 +29,13 @@ interface SidebarProps {
     // 手动保存
     onManualSave?: () => void;
     autoSaveEnabled?: boolean;
+    hasUnsavedChanges?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   onDragStart, onAdd, userPresets, onAddPreset, onDeletePreset, onHome, onOpenSettings, isApiConfigured,
   canvasList, currentCanvasId, canvasName, isCanvasLoading, onCreateCanvas, onLoadCanvas, onDeleteCanvas, onRenameCanvas,
-  creativeIdeas = [], onApplyCreativeIdea, onManualSave, autoSaveEnabled = false
+  creativeIdeas = [], onApplyCreativeIdea, onManualSave, autoSaveEnabled = false, hasUnsavedChanges = false
 }) => {
   const [activeLibrary, setActiveLibrary] = useState(false);
   const [showCanvasPanel, setShowCanvasPanel] = useState(false);
@@ -87,16 +88,19 @@ const Sidebar: React.FC<SidebarProps> = ({
         {onManualSave && (
             <button 
                 onClick={(e) => { e.stopPropagation(); onManualSave(); }}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-xl backdrop-blur-sm pointer-events-auto select-none hover:bg-white/10 transition-all active:scale-95 ${
-                    autoSaveEnabled
-                        ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                        : 'bg-white/5 border-white/10 text-white animate-pulse'
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-xl backdrop-blur-sm pointer-events-auto select-none transition-all active:scale-95 relative ${
+                    hasUnsavedChanges
+                        ? 'bg-orange-500/20 border-orange-500/30 text-orange-300 animate-pulse'
+                        : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
                 }`}
-                title={autoSaveEnabled ? "手动保存（自动保存已启用）" : "手动保存（点击后启用自动保存）"}
+                title={hasUnsavedChanges ? "有未保存的修改，点击保存" : "保存画布"}
             >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                 </svg>
+                {hasUnsavedChanges && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-500 rounded-full border-2 border-[#1c1c1e]" />
+                )}
             </button>
         )}
 
