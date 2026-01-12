@@ -76,6 +76,72 @@ class FileHandler {
   }
 
   /**
+   * 保存base64视频到文件
+   * @param {string} videoData - base64编码的视频数据
+   * @param {string} targetDir - 目标目录
+   * @param {string} filename - 文件名(可选)
+   * @returns {object} 保存结果 {success, data: {filename, path, url}}
+   */
+  static saveVideo(videoData, targetDir, filename = null) {
+    try {
+      // 确保目录存在
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      // 解析视频格式
+      let ext = '.mp4';
+      let base64Data = videoData;
+      
+      if (videoData.startsWith('data:')) {
+        const matches = videoData.match(/^data:video\/(\w+);base64,(.+)$/);
+        if (matches) {
+          const format = matches[1];
+          base64Data = matches[2];
+          
+          if (format === 'mp4') {
+            ext = '.mp4';
+          } else if (format === 'webm') {
+            ext = '.webm';
+          } else if (format === 'ogg') {
+            ext = '.ogg';
+          }
+        }
+      }
+
+      // 生成文件名
+      if (!filename) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' + 
+                         new Date().toTimeString().split(' ')[0].replace(/:/g, '');
+        const randomStr = crypto.randomBytes(4).toString('hex');
+        filename = `video_${timestamp}_${randomStr}${ext}`;
+      }
+
+      // 保存文件
+      const filePath = path.join(targetDir, filename);
+      const buffer = Buffer.from(base64Data, 'base64');
+      fs.writeFileSync(filePath, buffer);
+
+      // 返回相对URL路径
+      const dirName = path.basename(targetDir);
+      return {
+        success: true,
+        data: {
+          filename: filename,
+          path: filePath,
+          url: `/files/${dirName}/${filename}`
+        }
+      };
+    } catch (error) {
+      console.error('保存视频失败:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * 列出目录中的文件
    * @param {string} directory - 目录路径
    * @param {array} extensions - 文件扩展名过滤(可选)

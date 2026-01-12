@@ -84,6 +84,16 @@ export async function createVideoTask(params: VideoGenerationParams): Promise<st
   // 添加可选参数
   if (params.images && params.images.length > 0) {
     requestBody.images = params.images;
+    console.log('[Sora API] 图片数据检查:', {
+      count: params.images.length,
+      formats: params.images.map(img => ({
+        isBase64: img.startsWith('data:'),
+        isLocalPath: img.startsWith('/'),
+        isHttpUrl: img.startsWith('http'),
+        length: img.length,
+        preview: img.slice(0, 100)
+      }))
+    });
   }
   if (params.aspectRatio) {
     requestBody.aspect_ratio = params.aspectRatio;

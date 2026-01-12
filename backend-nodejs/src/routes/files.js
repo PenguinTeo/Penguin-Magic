@@ -41,6 +41,23 @@ router.post('/save-output', async (req, res) => {
   res.json(result);
 });
 
+// 保存视频到output目录
+router.post('/save-video', async (req, res) => {
+  const { videoData, filename } = req.body;
+  
+  if (!videoData) {
+    return res.status(400).json({ success: false, error: '缺少视频数据' });
+  }
+  
+  const result = FileHandler.saveVideo(videoData, config.OUTPUT_DIR, filename);
+  
+  if (result.success) {
+    console.log(`[Video] 视频已保存: ${result.data.filename}`);
+  }
+  
+  res.json(result);
+});
+
 // 保存图片到input目录（并生成缩略图）
 router.post('/save-input', async (req, res) => {
   const { imageData, filename } = req.body;

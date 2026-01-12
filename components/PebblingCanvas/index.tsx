@@ -111,6 +111,31 @@ const generateAdvancedLLM = async (
   }
 };
 
+// 检查是否是有效的视频数据
+const isValidVideo = (content: string | undefined): boolean => {
+  if (!content || content.length < 10) return false;
+  return (
+    content.startsWith('data:video') ||
+    content.startsWith('http://') ||
+    content.startsWith('https://') ||
+    content.startsWith('//') ||
+    content.startsWith('/files/')
+  );
+};
+
+// 检查是否是有效的图片数据
+const isValidImage = (content: string | undefined): boolean => {
+  if (!content || content.length < 10) return false;
+  return (
+    content.startsWith('data:image') ||
+    content.startsWith('http://') ||
+    content.startsWith('https://') ||
+    content.startsWith('//') ||
+    content.startsWith('/files/') ||
+    content.startsWith('/api/')
+  );
+};
+
 // === 画布组件开始 ===
 
 interface PebblingCanvasProps {
@@ -177,6 +202,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   const rafRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
   const isCanvasDraggingRef = useRef(false);
+  
+  // Ref to handleExecuteNode for use in callbacks (避免依赖循环)
+  const executeNodeRef = useRef<((nodeId: string, batchCount?: number) => Promise<void>) | null>(null);
   
   // Selection Box
   const [selectionBox, setSelectionBox] = useState<{ start: Vec2, current: Vec2 } | null>(null);
@@ -271,6 +299,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           connections: JSON.stringify(loadedConnections)
         };
         console.log('[Canvas] 加载画布:', result.data.name);
+        
+        // 自动恢复Video节点的异步任务
+        setTimeout(() => {
+          recoverVideoTasks(loadedNodes);
+        }, 1000); // 延迟1秒执行，确保画布已完全加载
       }
     } catch (e) {
       console.error('[Canvas] 加载画布失败:', e);
@@ -383,6 +416,36 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   useEffect(() => {
     saveCanvasRef.current = saveCurrentCanvas;
   }, [saveCurrentCanvas]);
+  
+  // 自动恢复Video节点的异步任务
+  const recoverVideoTasks = useCallback(async (nodesToCheck: CanvasNode[]) => {
+    const videoNodes = nodesToCheck.filter(node => 
+      node.type === 'video' && 
+      node.status === 'running' && 
+      (node.data as any)?.videoTaskId &&
+      !isValidVideo(node.content)
+    );
+    
+    if (videoNodes.length === 0) {
+      console.log('[画布恢复] 没有检测到未完成的Video任务');
+      return;
+    }
+    
+    console.log(`[画布恢复] 检测到 ${videoNodes.length} 个未完成的Video任务，开始恢复...`);
+    
+    // 对每个未完成的Video节点，触发执行流程（会自动进入恢复逻辑）
+    for (let i = 0; i < videoNodes.length; i++) {
+      const node = videoNodes[i];
+      console.log(`[画布恢复] 恢复节点 ${node.id.slice(0, 8)}, taskId: ${(node.data as any)?.videoTaskId}`);
+      // 触发执行，handleExecuteNode 会检测到这是恢复场景
+      // 使用 executeNodeRef 来避免依赖问题
+      setTimeout(() => {
+        if (executeNodeRef.current) {
+          executeNodeRef.current(node.id);
+        }
+      }, i * 500); // 每个节点间隔500ms，避免同时触发多个请求
+    }
+  }, []);
 
   // 删除画布
   const deleteCanvasById = useCallback(async (canvasId: string) => {
@@ -804,7 +867,95 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   // Helper: 检查是否是有效图片
   const isValidImage = (content: string | undefined): boolean => {
       if (!content) return false;
-      return content.startsWith('data:image') || content.startsWith('http://') || content.startsWith('https://');
+      return (
+          content.startsWith('data:image') || 
+          content.startsWith('http://') || 
+          content.startsWith('https://') ||
+          content.startsWith('//') ||
+          content.startsWith('/files/') ||
+          content.startsWith('/api/')
+      );
+  };
+  
+  // Helper: 下载视频并保存（提取为公共函数）
+  const downloadAndSaveVideo = async (videoUrl: string, nodeId: string, signal: AbortSignal) => {
+      console.log('[Video节点] 视频生成成功:', videoUrl);
+      
+      // 下载视频并转换为base64
+      console.log('[Video节点] 开始下载视频...');
+      try {
+          const response = await fetch(videoUrl);
+          if (!response.ok) {
+              throw new Error(`下载视频失败: ${response.status}`);
+          }
+          
+          const blob = await response.blob();
+          console.log('[Video节点] 视频下载完成, 大小:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
+          
+          // 再次检查是否被中断
+          if (signal.aborted) {
+              console.log('[Video节点] 下载后检测到中断');
+              return;
+          }
+          
+          // 转换为base64
+          const base64Video = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+          });
+          
+          console.log('[Video节点] 视频转换为base64完成');
+          
+          // 最后检查是否被中断
+          if (signal.aborted) {
+              console.log('[Video节点] 转换后检测到中断');
+              return;
+          }
+          
+          // 更新节点内容为base64，并清除任务ID
+          updateNode(nodeId, { 
+              content: base64Video, 
+              status: 'completed',
+              data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, videoTaskId: undefined }
+          });
+          
+          // 保存画布
+          saveCurrentCanvas();
+          
+          // 调用后端 API 保存视频文件到 output 目录
+          try {
+              const saveResponse = await fetch('/api/files/save-video', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ videoData: base64Video })
+              });
+              
+              if (saveResponse.ok) {
+                  const saveResult = await saveResponse.json();
+                  if (saveResult.success) {
+                      console.log('[Video节点] 视频已保存到本地:', saveResult.data.filename);
+                  }
+              }
+          } catch (saveErr) {
+              console.error('[Video节点] 保存视频到本地失败:', saveErr);
+          }
+          
+          console.log('[Video节点] 视频处理完成');
+      } catch (downloadErr) {
+          console.error('[Video节点] 下载视频失败:', downloadErr);
+          // 如果下载失败，直接使用URL
+          if (!signal.aborted) {
+              updateNode(nodeId, { 
+                  content: videoUrl, 
+                  status: 'completed',
+                  data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, videoTaskId: undefined }
+              });
+              saveCurrentCanvas();
+              alert(`视频生成成功，但下载失败。视频URL: ${videoUrl}`);
+          }
+      }
   };
 
   // Helper: Recursive Input Resolution - 向上追溯获取输入
@@ -1236,6 +1387,20 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   const handleExecuteNode = async (nodeId: string, batchCount: number = 1) => {
       const node = nodesRef.current.find(n => n.id === nodeId);
       if (!node) return;
+      
+      // 防止重复执行：如果节点已经在运行中，直接返回
+      if (node.status === 'running') {
+          console.warn(`[执行] 节点 ${nodeId.slice(0,8)} 已在运行中，忽略重复请求`);
+          return;
+      }
+      
+      // 检查是否已有未完成的abortController
+      if (abortControllersRef.current.has(nodeId)) {
+          console.warn(`[执行] 节点 ${nodeId.slice(0,8)} 存在未清理的abortController，先取消旧任务`);
+          const oldController = abortControllersRef.current.get(nodeId);
+          oldController?.abort();
+          abortControllersRef.current.delete(nodeId);
+      }
 
       // 批量生成：创建多个结果节点
       if (batchCount > 1 && ['image', 'edit'].includes(node.type)) {
@@ -1334,15 +1499,29 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               }
               
               // 执行逻辑：
-              // 1. 无prompt + 无图片 = 不执行
+              // 1. 无prompt + 无图片 = 不执行（但如果是上传的图片，应该已经是completed状态）
               // 2. 有prompt + 无图片 = 文生图
               // 3. 无prompt + 有图片 = 传递图片（容器模式）
               // 4. 有prompt + 有图片 = 图生图
               
+              console.log('[Image节点] 执行前检查:', {
+                  nodeId: nodeId.slice(0, 8),
+                  hasCombinedPrompt: !!combinedPrompt,
+                  imageSourceLength: imageSource.length,
+                  nodeContent: node.content?.slice(0, 100),
+                  isValidContent: isValidImage(node.content)
+              });
+              
               if (!combinedPrompt && imageSource.length === 0) {
                   // 无prompt + 无图片 = 不执行
-                  updateNode(nodeId, { status: 'error' });
-                  console.warn('图片节点执行失败：无提示词且无图片');
+                  // 特殊情况：如果节点本身就有content（用户上传的图片或画布恢复的），标记为completed
+                  if (isValidImage(node.content)) {
+                      console.log('[Image节点] ✅ 已有图片内容，直接标记为completed');
+                      updateNode(nodeId, { status: 'completed' });
+                  } else {
+                      console.error('[Image节点] ❌ 执行失败：无提示词且无图片，content:', node.content);
+                      updateNode(nodeId, { status: 'error' });
+                  }
               } else if (combinedPrompt && imageSource.length === 0) {
                   // 有prompt + 无图片 = 文生图
                   // 使用effectiveSettings（合并后的设置）
@@ -1439,9 +1618,249 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                }
           }
           else if (node.type === 'video') {
-               // Video节点：暂不支持视频生成，显示提示
-               updateNode(nodeId, { status: 'error' });
-               console.warn('Video节点暂不支持，请在主界面使用视频生成功能');
+               // Video节点：使用Sora生成视频（异步任务）
+               const nodePrompt = node.data?.prompt || '';
+               const inputTexts = inputs.texts.join('\n');
+               const combinedPrompt = nodePrompt || inputTexts;
+               const inputImages = inputs.images;
+               
+               console.log('[Video节点] ========== 开始处理 ==========');
+               console.log('[Video节点] inputImages:', {
+                   count: inputImages.length,
+                   hasImages: inputImages.length > 0,
+                   preview: inputImages.map(img => img.slice(0, 50))
+               });
+               
+               // 🔍 详细检查图片格式
+               if (inputImages.length > 0) {
+                   inputImages.forEach((img, idx) => {
+                       const isBase64 = img.startsWith('data:image');
+                       const isLocalPath = img.startsWith('/files/');
+                       const isHttpUrl = img.startsWith('http://') || img.startsWith('https://');
+                       console.log(`[Video节点] 图片 ${idx + 1} 格式:`, {
+                           isBase64,
+                           isLocalPath,
+                           isHttpUrl,
+                           length: img.length,
+                           preview: img.slice(0, 100)
+                       });
+                   });
+               }
+               
+               // 检查是否有保存的任务ID（恢复场景）
+               const savedTaskId = node.data?.videoTaskId;
+               const hasVideoContent = isValidVideo(node.content);
+               
+               // 如果节点状态是 running 但没有内容，说明是恢复的未完成任务
+               if (node.status === 'running' && savedTaskId && !hasVideoContent) {
+                   console.log('[Video节点] 检测到未完成的任务，恢复轮询:', savedTaskId);
+                   try {
+                       const { getTaskStatus, waitForVideoCompletion } = await import('../../services/soraService');
+                       
+                       // 先检查任务状态
+                       const taskStatus = await getTaskStatus(savedTaskId);
+                       console.log('[Video节点] 任务当前状态:', taskStatus.status);
+                       
+                       if (taskStatus.status === 'SUCCESS' && taskStatus.data?.output) {
+                           // 任务已完成，直接处理结果
+                           const videoUrl = taskStatus.data.output;
+                           console.log('[Video节点] 任务已完成，开始下载视频');
+                           await downloadAndSaveVideo(videoUrl, nodeId, signal);
+                       } else if (taskStatus.status === 'FAILURE') {
+                           // 任务失败
+                           console.error('[Video节点] 任务失败:', taskStatus.fail_reason);
+                           updateNode(nodeId, { 
+                               status: 'error',
+                               data: { ...node.data, videoTaskId: undefined }
+                           });
+                           alert(`视频生成失败: ${taskStatus.fail_reason || '未知错误'}`);
+                       } else {
+                           // 任务还在进行中，继续轮询
+                           console.log('[Video节点] 任务进行中，继续轮询...');
+                           const videoUrl = await waitForVideoCompletion(
+                               savedTaskId,
+                               (progress, status) => {
+                                   console.log(`[Video节点] 恢复任务进度: ${progress}%, 状态: ${status}`);
+                               }
+                           );
+                           
+                           if (!signal.aborted && videoUrl) {
+                               await downloadAndSaveVideo(videoUrl, nodeId, signal);
+                           }
+                       }
+                   } catch (err) {
+                       console.error('[Video节点] 恢复任务失败:', err);
+                       updateNode(nodeId, { 
+                           status: 'error',
+                           data: { ...node.data, videoTaskId: undefined }
+                       });
+                       alert(`恢复视频生成失败: ${err instanceof Error ? err.message : String(err)}`);
+                   }
+                   return; // 恢复流程结束
+               }
+               
+               // 前置验证：提前检查必需参数
+               if (!combinedPrompt) {
+                   updateNode(nodeId, { status: 'error' });
+                   console.warn('[Video节点] 执行失败：无提示词');
+                   return;
+               }
+               
+               try {
+                   // 动态导入 soraService
+                   const { createVideoTask, waitForVideoCompletion } = await import('../../services/soraService');
+                   
+                   // 获取视频生成参数
+                   const videoModel = node.data?.videoModel || 'sora-2';
+                   const aspectRatio = node.data?.aspectRatio || '16:9';
+                   const duration = node.data?.duration || '10';
+                   const hd = node.data?.hd || false;
+                   
+                   // 判断是图生视频还是文生视频
+                   const isImageToVideo = inputImages.length > 0;
+                   const videoType = isImageToVideo ? '图生视频' : '文生视频';
+                   
+                   // 📋 处理图片数据：确保格式正确
+                   let processedImages: string[] = [];
+                   if (isImageToVideo) {
+                       for (const img of inputImages) {
+                           if (img.startsWith('/files/')) {
+                               // 本地路径 -> 需要转换为 base64（因为 API 无法访问 localhost）
+                               console.log('[Video节点] 检测到本地路径，开始转换为 base64:', img);
+                               try {
+                                   // 构造完整 URL
+                                   const fullUrl = `${window.location.origin}${img}`;
+                                   // 使用 fetch 获取图片数据
+                                   const response = await fetch(fullUrl);
+                                   if (!response.ok) {
+                                       throw new Error(`获取图片失败: ${response.status}`);
+                                   }
+                                   const blob = await response.blob();
+                                   // 转换为 base64
+                                   const base64 = await new Promise<string>((resolve, reject) => {
+                                       const reader = new FileReader();
+                                       reader.onloadend = () => resolve(reader.result as string);
+                                       reader.onerror = reject;
+                                       reader.readAsDataURL(blob);
+                                   });
+                                   console.log('[Video节点] 本地路径已转换为 base64, 大小:', (base64.length / 1024).toFixed(2), 'KB');
+                                   processedImages.push(base64);
+                               } catch (err) {
+                                   console.error('[Video节点] 转换本地图片失败:', err);
+                                   throw new Error(`无法读取本地图片: ${img}`);
+                               }
+                           } else if (img.startsWith('data:image')) {
+                               // Base64 图片 - 验证格式
+                               const match = img.match(/^data:image\/(\w+);base64,/);
+                               if (match) {
+                                   const format = match[1].toLowerCase();
+                                   if (['png', 'jpg', 'jpeg', 'webp'].includes(format)) {
+                                       console.log(`[Video节点] Base64 图片格式: ${format}, 大小:`, (img.length / 1024).toFixed(2), 'KB');
+                                       processedImages.push(img);
+                                   } else {
+                                       console.error(`[Video节点] 不支持的图片格式: ${format}`);
+                                       throw new Error(`不支持的图片格式: ${format}，仅支持 PNG/JPG/JPEG/WebP`);
+                                   }
+                               } else {
+                                   console.error('[Video节点] Base64 格式错误:', img.slice(0, 100));
+                                   throw new Error('Base64 图片格式错误');
+                               }
+                           } else if (img.startsWith('http://') || img.startsWith('https://')) {
+                               // HTTP URL - 检查是否是外网可访问的 URL
+                               if (img.includes('localhost') || img.includes('127.0.0.1')) {
+                                   console.warn('[Video节点] 检测到 localhost URL，API 无法访问，尝试转换为 base64');
+                                   try {
+                                       const response = await fetch(img);
+                                       if (!response.ok) throw new Error(`获取图片失败: ${response.status}`);
+                                       const blob = await response.blob();
+                                       const base64 = await new Promise<string>((resolve, reject) => {
+                                           const reader = new FileReader();
+                                           reader.onloadend = () => resolve(reader.result as string);
+                                           reader.onerror = reject;
+                                           reader.readAsDataURL(blob);
+                                       });
+                                       console.log('[Video节点] localhost URL 已转换为 base64');
+                                       processedImages.push(base64);
+                                   } catch (err) {
+                                       console.error('[Video节点] 转换 localhost URL 失败:', err);
+                                       throw new Error(`无法读取本地图片: ${img}`);
+                                   }
+                               } else {
+                                   // 外网 URL - 直接使用
+                                   console.log('[Video节点] 使用外网 HTTP URL:', img.slice(0, 100));
+                                   processedImages.push(img);
+                               }
+                           } else {
+                               console.error('[Video节点] 未知图片格式:', img.slice(0, 100));
+                               throw new Error('不支持的图片数据格式');
+                           }
+                       }
+                   }
+                   
+                   console.log('[Video节点] 开始生成视频:', {
+                       type: videoType,
+                       prompt: combinedPrompt.slice(0, 100),
+                       model: videoModel,
+                       aspectRatio,
+                       duration,
+                       imagesCount: inputImages.length,
+                       hasImages: isImageToVideo
+                   });
+                   
+                   // 1. 创建异步任务（使用处理后的图片）
+                   const taskId = await createVideoTask({
+                       prompt: combinedPrompt,
+                       model: videoModel as any,
+                       images: processedImages.length > 0 ? processedImages : undefined,
+                       aspectRatio: aspectRatio as any,
+                       hd: hd,
+                       duration: duration as any
+                   });
+                   
+                   console.log('[Video节点] 任务已创建, taskId:', taskId);
+                   
+                   // 保存任务ID到节点数据（用于恢复）
+                   updateNode(nodeId, {
+                       data: { ...node.data, videoTaskId: taskId }
+                   });
+                   
+                   // 立即保存画布（确保任务ID被持久化）
+                   saveCurrentCanvas();
+                   
+                   // 2. 轮询等待任务完成
+                   const videoUrl = await waitForVideoCompletion(
+                       taskId,
+                       (progress, status) => {
+                           console.log(`[Video节点] 进度: ${progress}%, 状态: ${status}`);
+                       }
+                   );
+                   
+                   console.log('[Video节点] API调用参数:', {
+                       type: videoType,
+                       imagesParam: isImageToVideo ? `${inputImages.length}张图片` : 'undefined'
+                   });
+                   
+                   // 检查是否被中断
+                   if (signal.aborted) {
+                       console.log('[Video节点] 任务已被中断');
+                       return;
+                   }
+                   
+                   if (videoUrl) {
+                       await downloadAndSaveVideo(videoUrl, nodeId, signal);
+                   } else {
+                       throw new Error('未返回视频URL');
+                   }
+               } catch (err) {
+                   console.error('[Video节点] 生成失败:', err);
+                   if (!signal.aborted) {
+                       updateNode(nodeId, { 
+                           status: 'error',
+                           data: { ...node.data, videoTaskId: undefined }
+                       });
+                       alert(`视频生成失败: ${err instanceof Error ? err.message : String(err)}`);
+                   }
+               }
           }
           else if (node.type === 'idea' || node.type === 'text') {
                // Text/Idea节点：容器模式 - 接收上游文本内容
@@ -1721,6 +2140,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           abortControllersRef.current.delete(nodeId);
       }
   };
+  
+  // 将 handleExecuteNode 赋值给 ref，供 recoverVideoTasks 使用
+  useEffect(() => {
+      executeNodeRef.current = handleExecuteNode;
+  }, []);
 
   // Function to cancel/stop a running node execution
   const handleStopNode = (nodeId: string) => {

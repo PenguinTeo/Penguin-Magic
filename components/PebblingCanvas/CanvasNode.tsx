@@ -1745,8 +1745,18 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                      </div>
                    )}
                    <button 
-                      onClick={(e) => { e.stopPropagation(); isRunning ? onStop(node.id) : onExecute(node.id, batchCount); }}
-                      className={`p-1.5 border border-white/10 shadow-lg transition-colors flex items-center gap-1.5 px-2.5 font-bold text-[10px] uppercase tracking-wider
+                      onClick={(e) => { 
+                          e.stopPropagation(); 
+                          // 防止重复执行：如果已在运行中，只允许停止
+                          if (isRunning) {
+                              onStop(node.id);
+                          } else if (node.status !== 'running') {
+                              // 只有当节点状态不是 running 时才允许执行
+                              onExecute(node.id, batchCount);
+                          }
+                      }}
+                      disabled={!isRunning && node.status === 'running'}
+                      className={`p-1.5 border border-white/10 shadow-lg transition-colors flex items-center gap-1.5 px-2.5 font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed
                           ${['image', 'edit', 'bp', 'idea'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
                           ${isRunning ? 'bg-red-500/20 text-red-300 border-red-500/50 hover:bg-red-500/30' : 'bg-[#2c2c2e] text-green-400 hover:bg-green-500/20 hover:text-green-300'}
                       `}
