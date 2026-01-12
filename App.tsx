@@ -3287,6 +3287,19 @@ const App: React.FC = () => {
     }
   }, [files.length]);
 
+  // 工具函数：将 data URL 转换为 Blob
+  const dataURLtoBlob = (dataURL: string): Blob => {
+    const arr = dataURL.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  };
+
   // 桌面图片操作 - 重新生成（只恢复状态，不自动生成）
   const handleDesktopImageRegenerate = useCallback(async (item: DesktopImageItem) => {
     if (!item.prompt) {
@@ -3302,7 +3315,7 @@ const App: React.FC = () => {
     if (item.historyId) {
       const historyItem = generationHistory.find(h => h.id === item.historyId);
       if (historyItem) {
-        // 从本地路径恢复输入图片（新版本）
+        // 优先从本地路径恢复输入图片（新版本）
         if (historyItem.inputImagePaths && historyItem.inputImagePaths.length > 0) {
           try {
             const restoredFiles = await Promise.all(historyItem.inputImagePaths.map(async (path) => {
@@ -3316,6 +3329,40 @@ const App: React.FC = () => {
             setActiveFileIndex(0);
           } catch (e) {
             console.warn('从本地路径恢复图片失败:', e);
+            setFiles([]);
+            setActiveFileIndex(null);
+          }
+        }
+        // 其次从 base64 数据恢复（兼容旧版本和贞贞 API）
+        else if (historyItem.inputImages && historyItem.inputImages.length > 0) {
+          try {
+            const restoredFiles = historyItem.inputImages.map((img) => {
+              const base64Data = `data:${img.type};base64,${img.data}`;
+              const blob = dataURLtoBlob(base64Data);
+              return new File([blob], img.name, { type: img.type });
+            });
+            
+            setFiles(restoredFiles);
+            setActiveFileIndex(0);
+            console.log('[重新生成] 从 base64 数组恢复了', restoredFiles.length, '张图片');
+          } catch (e) {
+            console.warn('从 base64 数组恢复图片失败:', e);
+            setFiles([]);
+            setActiveFileIndex(null);
+          }
+        }
+        // 最后尝试单图 base64（更旧的版本）
+        else if (historyItem.inputImageData && historyItem.inputImageName && historyItem.inputImageType) {
+          try {
+            const base64Data = `data:${historyItem.inputImageType};base64,${historyItem.inputImageData}`;
+            const blob = dataURLtoBlob(base64Data);
+            const file = new File([blob], historyItem.inputImageName, { type: historyItem.inputImageType });
+            
+            setFiles([file]);
+            setActiveFileIndex(0);
+            console.log('[重新生成] 从单图 base64 恢复了图片');
+          } catch (e) {
+            console.warn('从单图 base64 恢复图片失败:', e);
             setFiles([]);
             setActiveFileIndex(null);
           }
