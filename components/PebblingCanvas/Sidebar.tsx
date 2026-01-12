@@ -26,12 +26,15 @@ interface SidebarProps {
     // 创意库
     creativeIdeas?: CreativeIdea[];
     onApplyCreativeIdea?: (idea: CreativeIdea) => void;
+    // 手动保存
+    onManualSave?: () => void;
+    autoSaveEnabled?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   onDragStart, onAdd, userPresets, onAddPreset, onDeletePreset, onHome, onOpenSettings, isApiConfigured,
   canvasList, currentCanvasId, canvasName, isCanvasLoading, onCreateCanvas, onLoadCanvas, onDeleteCanvas, onRenameCanvas,
-  creativeIdeas = [], onApplyCreativeIdea
+  creativeIdeas = [], onApplyCreativeIdea, onManualSave, autoSaveEnabled = false
 }) => {
   const [activeLibrary, setActiveLibrary] = useState(false);
   const [showCanvasPanel, setShowCanvasPanel] = useState(false);
@@ -80,18 +83,22 @@ const Sidebar: React.FC<SidebarProps> = ({
             <Icons.Layout className="w-5 h-5" />
         </button>
 
-        {/* Settings Button */}
-        <button 
-            onClick={(e) => { e.stopPropagation(); onOpenSettings(); }}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-xl backdrop-blur-sm pointer-events-auto select-none hover:bg-white/10 transition-colors active:scale-95 ${
-                isApiConfigured 
-                    ? 'bg-white/5 border-white/10' 
-                    : 'bg-red-500/20 border-red-500/30 animate-pulse'
-            }`}
-            title={isApiConfigured ? "API 设置" : "请配置 API Key"}
-        >
-            <Icons.Settings className={`w-5 h-5 ${isApiConfigured ? 'text-white' : 'text-red-400'}`} />
-        </button>
+        {/* 手动保存按钮 */}
+        {onManualSave && (
+            <button 
+                onClick={(e) => { e.stopPropagation(); onManualSave(); }}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-xl backdrop-blur-sm pointer-events-auto select-none hover:bg-white/10 transition-all active:scale-95 ${
+                    autoSaveEnabled
+                        ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                        : 'bg-white/5 border-white/10 text-white animate-pulse'
+                }`}
+                title={autoSaveEnabled ? "手动保存（自动保存已启用）" : "手动保存（点击后启用自动保存）"}
+            >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                </svg>
+            </button>
+        )}
 
         {/* Main Dock */}
         <div 
@@ -152,7 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* 画布管理面板 */}
         {showCanvasPanel && (
             <div 
-                className="fixed left-24 top-1/2 -translate-y-1/2 z-30 w-72 bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-left-4 fade-in duration-300 pointer-events-auto"
+                className="fixed left-24 top-6 z-30 w-72 bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-left-4 fade-in duration-300 pointer-events-auto"
                 onMouseDown={(e) => e.stopPropagation()}
             >
                 {/* 头部 */}

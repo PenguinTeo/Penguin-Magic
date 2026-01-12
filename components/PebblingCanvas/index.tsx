@@ -160,6 +160,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   
+  // 自动保存状态（默认禁用，首次操作后启用）
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
+  
   // Refs for State (to avoid stale closures in execution logic)
   const nodesRef = useRef<CanvasNode[]>([]);
   const connectionsRef = useRef<Connection[]>([]);
@@ -402,9 +405,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
         nodes: localizedNodes,
         connections: connectionsRef.current,
       });
-      // 更新本地节点状态（包含本地化后的URL）
+      
+      // 更新 ref 和 state
       nodesRef.current = localizedNodes;
       setNodes(localizedNodes);
+      
       lastSaveRef.current = { nodes: nodesStr, connections: connectionsStr };
       console.log('[Canvas] 自动保存');
     } catch (e) {
@@ -496,9 +501,21 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
     initCanvas();
   }, []); // 只在组件挂载时执行一次
 
-  // 自动保存（防抖500ms）
+  // 自动保存（防抖2000ms，避免拖拽时频繁触发）
   useEffect(() => {
     if (!currentCanvasId) return;
+    
+    // 如果自动保存被禁用，跳过
+    if (!autoSaveEnabled) {
+      console.log('[自动保存] 已禁用，跳过');
+      return;
+    }
+    
+    // 如果正在拖拽节点，跳过自动保存
+    if (draggingNodeId || isDragOperation) {
+      console.log('[自动保存] 拖拽中，跳过');
+      return;
+    }
     
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
@@ -506,14 +523,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
     
     saveTimerRef.current = setTimeout(() => {
       saveCurrentCanvas();
-    }, 500);
+    }, 2000); // 增加防抖时间到2秒
     
     return () => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, [nodes, connections, currentCanvasId, saveCurrentCanvas]);
+  }, [nodes, connections, currentCanvasId, saveCurrentCanvas, draggingNodeId, isDragOperation, autoSaveEnabled]);
 
   // 组件卸载前保存
   useEffect(() => {
@@ -626,6 +643,22 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
 
   // --- Actions ---
 
+  // 启用自动保存（首次操作时触发）
+  const enableAutoSave = useCallback(() => {
+    if (!autoSaveEnabled) {
+      setAutoSaveEnabled(true);
+      console.log('[自动保存] 已启用');
+    }
+  }, [autoSaveEnabled]);
+
+  // 手动保存
+  const handleManualSave = useCallback(async () => {
+    console.log('[手动保存] 开始保存...');
+    await saveCurrentCanvas();
+    // 保存后启用自动保存
+    enableAutoSave();
+  }, [saveCurrentCanvas, enableAutoSave]);
+
   const handleResetView = () => {
     setCanvasOffset({ x: 0, y: 0 });
     setScale(1);
@@ -638,13 +671,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           setNodes(prev => prev.filter(n => !idsToDelete.has(n.id)));
           setConnections(prev => prev.filter(c => !idsToDelete.has(c.fromNode) && !idsToDelete.has(c.toNode)));
           setSelectedNodeIds(new Set<string>());
+          enableAutoSave(); // 启用自动保存
       }
       // 2. Delete Connection
       if (selectedConnectionId) {
           setConnections(prev => prev.filter(c => c.id !== selectedConnectionId));
           setSelectedConnectionId(null);
+          enableAutoSave(); // 启用自动保存
       }
-  }, [selectedNodeIds, selectedConnectionId]);
+  }, [selectedNodeIds, selectedConnectionId, enableAutoSave]);
 
   const handleCopy = useCallback(() => {
       if (selectedNodeIds.size === 0) return;
@@ -674,7 +709,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
 
       setNodes(prev => [...prev, ...newNodes]);
       setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
-  }, []);
+      enableAutoSave(); // 启用自动保存
+  }, [enableAutoSave]);
 
   // Global Key Listener - 只在画布活动时生效
   useEffect(() => {
@@ -750,6 +786,54 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           window.removeEventListener('sidebar-drag-end', handleSidebarDragEnd);
       };
   }, [deleteSelection, handleCopy, handlePaste, canvasOffset, scale, isActive]);
+
+  // Wheel event handler for zooming
+  const onWheel = useCallback((e: WheelEvent) => {
+      // Wheel = Zoom centered on cursor
+      e.preventDefault(); 
+
+      // 使用更平滑的缩放灵敏度
+      const zoomSensitivity = 0.002;
+      const rawDelta = -e.deltaY * zoomSensitivity;
+      
+      // 限制单次缩放幅度，避免跳跃
+      const delta = Math.max(-0.15, Math.min(0.15, rawDelta));
+      const newScale = Math.min(Math.max(0.1, scale * (1 + delta)), 5);
+
+      // Calculate Zoom towards Mouse Position
+      const container = containerRef.current;
+      if (!container) {
+          setScale(newScale);
+          return;
+      }
+      
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      // Math: NewOffset = Mouse - ((Mouse - OldOffset) / OldScale) * NewScale
+      const newOffsetX = mouseX - ((mouseX - canvasOffset.x) / scale) * newScale;
+      const newOffsetY = mouseY - ((mouseY - canvasOffset.y) / scale) * newScale;
+
+      // 使用 RAF 确保平滑更新
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+          setScale(newScale);
+          setCanvasOffset({ x: newOffsetX, y: newOffsetY });
+      });
+  }, [scale, canvasOffset]);
+
+  // 添加原生 wheel 事件监听器（非被动模式）
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    container.addEventListener('wheel', onWheel as any, { passive: false });
+    
+    return () => {
+      container.removeEventListener('wheel', onWheel as any);
+    };
+  }, [onWheel]);
 
   const addNode = (type: NodeType, content: string = '', position?: Vec2, title?: string, data?: NodeData) => {
       const container = containerRef.current;
@@ -851,6 +935,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           status: 'idle'
       };
       setNodes(prev => [...prev, newNode]);
+      enableAutoSave(); // 启用自动保存
       return newNode;
   };
 
@@ -1661,19 +1746,33 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                        const taskStatus = await getTaskStatus(savedTaskId);
                        console.log('[Video节点] 任务当前状态:', taskStatus.status);
                        
+                       // 更新界面显示的状态
+                       updateNode(nodeId, {
+                           data: { 
+                               ...node.data, 
+                               videoTaskStatus: taskStatus.status,
+                               videoFailReason: taskStatus.fail_reason
+                           }
+                       });
+                       
                        if (taskStatus.status === 'SUCCESS' && taskStatus.data?.output) {
                            // 任务已完成，直接处理结果
                            const videoUrl = taskStatus.data.output;
                            console.log('[Video节点] 任务已完成，开始下载视频');
                            await downloadAndSaveVideo(videoUrl, nodeId, signal);
                        } else if (taskStatus.status === 'FAILURE') {
-                           // 任务失败
+                           // 任务失败 - 保持 error 状态，但显示失败信息
                            console.error('[Video节点] 任务失败:', taskStatus.fail_reason);
                            updateNode(nodeId, { 
                                status: 'error',
-                               data: { ...node.data, videoTaskId: undefined }
+                               data: { 
+                                   ...node.data, 
+                                   videoTaskId: undefined,
+                                   videoTaskStatus: 'FAILURE',
+                                   videoFailReason: taskStatus.fail_reason || '未知错误'
+                               }
                            });
-                           alert(`视频生成失败: ${taskStatus.fail_reason || '未知错误'}`);
+                           // 不显示 alert，直接在界面上显示失败原因
                        } else {
                            // 任务还在进行中，继续轮询
                            console.log('[Video节点] 任务进行中，继续轮询...');
@@ -1681,6 +1780,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                                savedTaskId,
                                (progress, status) => {
                                    console.log(`[Video节点] 恢复任务进度: ${progress}%, 状态: ${status}`);
+                                   // 更新进度到界面
+                                   updateNode(nodeId, {
+                                       data: {
+                                           ...nodesRef.current.find(n => n.id === nodeId)?.data,
+                                           videoProgress: progress,
+                                           videoTaskStatus: status
+                                       }
+                                   });
                                }
                            );
                            
@@ -1692,9 +1799,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                        console.error('[Video节点] 恢复任务失败:', err);
                        updateNode(nodeId, { 
                            status: 'error',
-                           data: { ...node.data, videoTaskId: undefined }
+                           data: { 
+                               ...node.data, 
+                               videoTaskId: undefined,
+                               videoTaskStatus: 'FAILURE',
+                               videoFailReason: err instanceof Error ? err.message : String(err)
+                           }
                        });
-                       alert(`恢复视频生成失败: ${err instanceof Error ? err.message : String(err)}`);
+                       // 不显示 alert，直接在界面上显示失败原因
                    }
                    return; // 恢复流程结束
                }
@@ -1827,11 +1939,19 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                    // 立即保存画布（确保任务ID被持久化）
                    saveCurrentCanvas();
                    
-                   // 2. 轮询等待任务完成
+                   // 2. 轮询等待任务完成（带进度更新）
                    const videoUrl = await waitForVideoCompletion(
                        taskId,
                        (progress, status) => {
                            console.log(`[Video节点] 进度: ${progress}%, 状态: ${status}`);
+                           // 更新进度到界面
+                           updateNode(nodeId, {
+                               data: {
+                                   ...nodesRef.current.find(n => n.id === nodeId)?.data,
+                                   videoProgress: progress,
+                                   videoTaskStatus: status
+                               }
+                           });
                        }
                    );
                    
@@ -1856,9 +1976,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                    if (!signal.aborted) {
                        updateNode(nodeId, { 
                            status: 'error',
-                           data: { ...node.data, videoTaskId: undefined }
+                           data: { 
+                               ...node.data, 
+                               videoTaskId: undefined,
+                               videoTaskStatus: 'FAILURE',
+                               videoFailReason: err instanceof Error ? err.message : String(err)
+                           }
                        });
-                       alert(`视频生成失败: ${err instanceof Error ? err.message : String(err)}`);
+                       // 不显示 alert，直接在界面上显示失败原因
                    }
                }
           }
@@ -2282,7 +2407,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           if (rafRef.current) cancelAnimationFrame(rafRef.current);
           rafRef.current = requestAnimationFrame(() => {
               const delta = dragDeltaRef.current;
-              setNodes(prev => prev.map(node => {
+              const newNodes = nodesRef.current.map(node => {
                   if (selectedNodeIds.has(node.id)) {
                       const initialPos = initialNodePositions.get(node.id);
                       if (initialPos) {
@@ -2294,7 +2419,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                       }
                   }
                   return node;
-              }));
+              });
+              // 同时更新 state 和 ref，确保一致性
+              nodesRef.current = newNodes;
+              setNodes(newNodes);
           });
           return;
       }
@@ -2335,10 +2463,19 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           rafRef.current = null;
       }
       
+      // 记录是否刚完成拖拽操作
+      const wasDragging = isDragOperation && draggingNodeId;
+      
       setIsDraggingCanvas(false);
       setDraggingNodeId(null);
       setIsDragOperation(false);
       setLinkingState(prev => ({ ...prev, active: false, fromNode: null }));
+
+      // 拖拽结束后启用自动保存，但不立即保存，由防扖2秒后自然触发
+      if (wasDragging) {
+          enableAutoSave(); // 启用自动保存，由 useEffect 防抖处理
+          console.log('[拖拽] 拖拽结束，自动保存已启用，等待防抖触发');
+      }
 
       // Resolve Selection Box
       if (selectionBox) {
@@ -2375,41 +2512,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       }
   };
 
-  const onWheel = useCallback((e: React.WheelEvent) => {
-      // Wheel = Zoom centered on cursor
-      e.preventDefault(); 
-
-      // 使用更平滑的缩放灵敏度
-      const zoomSensitivity = 0.002;
-      const rawDelta = -e.deltaY * zoomSensitivity;
-      
-      // 限制单次缩放幅度，避免跳跃
-      const delta = Math.max(-0.15, Math.min(0.15, rawDelta));
-      const newScale = Math.min(Math.max(0.1, scale * (1 + delta)), 5);
-
-      // Calculate Zoom towards Mouse Position
-      const container = containerRef.current;
-      if (!container) {
-          setScale(newScale);
-          return;
-      }
-      
-      const rect = container.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      // Math: NewOffset = Mouse - ((Mouse - OldOffset) / OldScale) * NewScale
-      const newOffsetX = mouseX - ((mouseX - canvasOffset.x) / scale) * newScale;
-      const newOffsetY = mouseY - ((mouseY - canvasOffset.y) / scale) * newScale;
-
-      // 使用 RAF 确保平滑更新
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-          setScale(newScale);
-          setCanvasOffset({ x: newOffsetX, y: newOffsetY });
-      });
-  }, [scale, canvasOffset]);
-
   const handleNodeDragStart = (e: React.MouseEvent, id: string) => {
       if (e.button !== 0) return; // Only left click
       e.stopPropagation();
@@ -2425,9 +2527,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       setIsDragOperation(true);
       setDragStartMousePos({ x: e.clientX, y: e.clientY });
       
-      // Snapshot positions
+      // Snapshot positions - 使用 nodesRef 确保获取最新的节点位置
       const positions = new Map<string, Vec2>();
-      nodes.forEach(n => {
+      const currentNodes = nodesRef.current.length > 0 ? nodesRef.current : nodes;
+      currentNodes.forEach(n => {
           if (newSelection.has(n.id)) {
               positions.set(n.id, { x: n.x, y: n.y });
           }
@@ -2455,6 +2558,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                   fromNode: linkingState.fromNode!,
                   toNode: targetNodeId
               }]);
+              enableAutoSave(); // 启用自动保存
           }
       }
   };
@@ -2475,6 +2579,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           fromNode: sourceNodeId,
           toNode: newNode.id
       }]);
+      enableAutoSave(); // 启用自动保存
   };
 
   // --- FLOATING GENERATOR HANDLER ---
@@ -2579,10 +2684,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           onDeleteCanvas={deleteCanvasById}
           onRenameCanvas={renameCanvas}
           creativeIdeas={creativeIdeas}
+          onManualSave={handleManualSave}
+          autoSaveEnabled={autoSaveEnabled}
           onApplyCreativeIdea={(idea) => {
             // 应用创意库到画布
             const baseX = -canvasOffset.x / scale + 200;
             const baseY = -canvasOffset.y / scale + 100;
+            
+            enableAutoSave(); // 启用自动保存
             
             if (idea.isWorkflow && idea.workflowNodes && idea.workflowConnections) {
               // 工作流类型：添加整个工作流节点
@@ -2682,7 +2791,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
         onMouseDown={onMouseDownCanvas}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
-        onWheel={onWheel}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       > 
