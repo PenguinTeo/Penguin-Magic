@@ -5,6 +5,19 @@ import { NodeType, NodeData, CanvasPreset } from '../../types/pebblingTypes';
 import { CanvasListItem } from '../../services/api/canvas';
 import { CreativeIdea } from '../../types';
 
+// 香蕉SVG图标组件
+const BananaIcon: React.FC<{ size?: number; className?: string }> = ({ size = 14, className = '' }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    className={className}
+  >
+    <path d="M20.5,10.5c-0.8-0.8-1.9-1.3-3-1.4c0.1-0.5,0.2-1.1,0.2-1.6c0-2.2-1.8-4-4-4c-1.4,0-2.6,0.7-3.3,1.8 C9.6,4.2,8.4,3.5,7,3.5c-2.2,0-4,1.8-4,4c0,0.5,0.1,1.1,0.2,1.6c-1.1,0.1-2.2,0.6-3,1.4c-1.4,1.4-1.4,3.7,0,5.1 c0.7,0.7,1.6,1.1,2.5,1.1c0.9,0,1.8-0.4,2.5-1.1c0.7-0.7,1.1-1.6,1.1-2.5c0-0.9-0.4-1.8-1.1-2.5c-0.2-0.2-0.4-0.4-0.7-0.5 c-0.1-0.4-0.2-0.9-0.2-1.3c0-1.1,0.9-2,2-2s2,0.9,2,2c0,0.5-0.2,0.9-0.5,1.3c-0.5,0.6-0.7,1.3-0.7,2.1c0,0.9,0.4,1.8,1.1,2.5 c0.7,0.7,1.6,1.1,2.5,1.1s1.8-0.4,2.5-1.1c0.7-0.7,1.1-1.6,1.1-2.5c0-0.8-0.3-1.5-0.7-2.1c-0.3-0.4-0.5-0.8-0.5-1.3 c0-1.1,0.9-2,2-2s2,0.9,2,2c0,0.5-0.1,0.9-0.2,1.3c-0.2,0.1-0.5,0.3-0.7,0.5c-0.7,0.7-1.1,1.6-1.1,2.5c0,0.9,0.4,1.8,1.1,2.5 c0.7,0.7,1.6,1.1,2.5,1.1c0.9,0,1.8-0.4,2.5-1.1C21.9,14.2,21.9,11.9,20.5,10.5z"/>
+  </svg>
+);
+
 interface SidebarProps {
     onDragStart: (type: NodeType) => void;
     onAdd: (type: NodeType, data?: NodeData, title?: string) => void;
@@ -144,6 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <DraggableButton type="llm" icon={<Icons.Sparkles />} label="LLM / Vision" onDragStart={onDragStart} onClick={() => onAdd('llm')} />
                 <DraggableButton type="idea" icon={<Icons.Magic />} label="Idea Gen" onDragStart={onDragStart} onClick={() => onAdd('idea')} />
                 <DraggableButton type="relay" icon={<Icons.Relay />} label="Relay" onDragStart={onDragStart} onClick={() => onAdd('relay')} />
+                <DraggableButton type="edit" icon={<BananaIcon />} label="Magic" onDragStart={onDragStart} onClick={() => onAdd('edit')} />
             </div>
 
             <div className="w-8 h-px bg-white/10 my-1" />
@@ -151,7 +165,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Tools Group */}
             <div className="flex flex-col gap-1.5">
                 <span className="text-[9px] font-bold text-zinc-600 text-center uppercase tracking-wider">Tools</span>
-                <DraggableButton type="edit" icon={<Icons.Scissors />} label="Edit / Inpaint" onDragStart={onDragStart} onClick={() => onAdd('edit')} />
                 <DraggableButton type="remove-bg" icon={<Icons.Scissors />} label="Remove BG" onDragStart={onDragStart} onClick={() => onAdd('remove-bg')} />
                 <DraggableButton type="upscale" icon={<Icons.Upscale />} label="Upscale" onDragStart={onDragStart} onClick={() => onAdd('upscale')} />
                 <DraggableButton type="resize" icon={<Icons.Resize />} label="Resize" onDragStart={onDragStart} onClick={() => onAdd('resize')} />

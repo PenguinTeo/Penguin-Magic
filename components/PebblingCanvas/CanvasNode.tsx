@@ -4,6 +4,19 @@ import { CanvasNode, NodeType, getNodeTypeColor } from '../../types/pebblingType
 import { Icons } from './Icons';
 import { ChevronDown } from 'lucide-react';
 
+// 香蕉SVG图标组件
+const BananaIcon: React.FC<{ size?: number; className?: string }> = ({ size = 14, className = '' }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    className={className}
+  >
+    <path d="M20.5,10.5c-0.8-0.8-1.9-1.3-3-1.4c0.1-0.5,0.2-1.1,0.2-1.6c0-2.2-1.8-4-4-4c-1.4,0-2.6,0.7-3.3,1.8 C9.6,4.2,8.4,3.5,7,3.5c-2.2,0-4,1.8-4,4c0,0.5,0.1,1.1,0.2,1.6c-1.1,0.1-2.2,0.6-3,1.4c-1.4,1.4-1.4,3.7,0,5.1 c0.7,0.7,1.6,1.1,2.5,1.1c0.9,0,1.8-0.4,2.5-1.1c0.7-0.7,1.1-1.6,1.1-2.5c0-0.9-0.4-1.8-1.1-2.5c-0.2-0.2-0.4-0.4-0.7-0.5 c-0.1-0.4-0.2-0.9-0.2-1.3c0-1.1,0.9-2,2-2s2,0.9,2,2c0,0.5-0.2,0.9-0.5,1.3c-0.5,0.6-0.7,1.3-0.7,2.1c0,0.9,0.4,1.8,1.1,2.5 c0.7,0.7,1.6,1.1,2.5,1.1s1.8-0.4,2.5-1.1c0.7-0.7,1.1-1.6,1.1-2.5c0-0.8-0.3-1.5-0.7-2.1c-0.3-0.4-0.5-0.8-0.5-1.3 c0-1.1,0.9-2,2-2s2,0.9,2,2c0,0.5-0.1,0.9-0.2,1.3c-0.2,0.1-0.5,0.3-0.7,0.5c-0.7,0.7-1.1,1.6-1.1,2.5c0,0.9,0.4,1.8,1.1,2.5 c0.7,0.7,1.6,1.1,2.5,1.1c0.9,0,1.8-0.4,2.5-1.1C21.9,14.2,21.9,11.9,20.5,10.5z"/>
+  </svg>
+);
+
 // 动态导入 3D 组件以避免影响初始加载
 const MultiAngle3D = lazy(() => import('./MultiAngle3D'));
 
@@ -1047,9 +1060,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     draggable={false}
                 />
                 
-                {/* 信息查询按钮 */}
+                {/* 信息查询按钮 - 移动到左上角 */}
                 <div 
-                  className="absolute top-2 right-2 z-20"
+                  className="absolute top-2 left-2 z-20"
                   onMouseEnter={() => setShowMediaInfo(true)}
                   onMouseLeave={() => setShowMediaInfo(false)}
                 >
@@ -1063,7 +1076,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                   {/* 信息浮窗 */}
                   {showMediaInfo && mediaMetadata && (
                     <div 
-                      className="absolute top-full right-0 mt-1 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-2 text-[10px] text-white/90 whitespace-nowrap shadow-lg"
+                      className="absolute top-full left-0 mt-1 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-2 text-[10px] text-white/90 whitespace-nowrap shadow-lg"
                       onMouseDown={(e) => e.stopPropagation()}
                     >
                       <div className="space-y-0.5">
@@ -1077,7 +1090,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                   )}
                 </div>
                 
-                {/* 工具箱按钮 */}
+                {/* 工具箱按钮 - 保持在右下角 */}
                 <div className="absolute bottom-2 right-2 z-20">
                   <button
                     className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center transition-all"
@@ -1091,7 +1104,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     <Icons.Wrench size={16} className="text-white/70" />
                   </button>
                   
-                  {/* 工具球 */}
+                  {/* 工具球 - 向上弹出 */}
                   {showToolbox && onCreateToolNode && (
                     <div className="absolute bottom-full right-0 mb-2 flex flex-col gap-2">
                       {/* 高清 */}
@@ -1362,7 +1375,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         let label = "Node";
 
         if (node.type === 'edit') { 
-            icon = <Icons.Magic size={14} className="text-white/70" />; label = "Image Edit";
+            icon = <BananaIcon size={12} className="text-yellow-300" />; label = "Magic";
         }
         if (node.type === 'remove-bg') { 
             icon = <Icons.Scissors size={14} className="text-white/70" />; label = "Remove BG";
@@ -1470,74 +1483,85 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             );
         }
 
-        // Edit 节点 - 显示设置界面
+        // Edit 节点 - 显示设置界面（与创意节点UI保持一致）
         if (node.type === 'edit') {
             return (
-                <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
-                    <div className="h-7 border-b border-white/10 flex items-center justify-between px-3 bg-white/5 shrink-0">
+                <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-yellow-500/30 rounded-xl overflow-hidden relative shadow-lg">
+                    {/* 头部 - 与创意节点一致 */}
+                    <div className="h-8 border-b border-yellow-500/20 flex items-center justify-between px-3 bg-yellow-500/10 shrink-0">
                         <div className="flex items-center gap-2">
-                            {icon}
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-white/90">{label}</span>
+                            <BananaIcon size={12} className="text-yellow-300" />
+                            <span className="text-[10px] font-bold text-yellow-200 truncate max-w-[200px]">{label}</span>
                         </div>
-                        <span className="text-[7px] text-white/40 uppercase">IMG IN → OUT</span>
+                        <span className="text-[8px] text-yellow-300/60 bg-yellow-500/20 px-1.5 py-0.5 rounded">MAGIC</span>
                     </div>
-                    <div className="flex-1 p-2 flex flex-col gap-2">
+                    <div className="flex-1 p-3 flex flex-col gap-2 overflow-hidden">
                         {/* Prompt */}
-                        <textarea 
-                            className="flex-1 bg-black/40 border border-white/10 rounded p-2 text-[11px] text-zinc-200 outline-none resize-none focus:border-white/30 placeholder-zinc-600"
-                            placeholder="编辑指令..."
-                            value={localPrompt}
-                            onChange={(e) => setLocalPrompt(e.target.value)}
-                            onBlur={handleUpdate}
-                            onMouseDown={(e) => e.stopPropagation()}
-                        />
-                        
-                        {/* Settings */}
-                        <div className="flex flex-col gap-1">
-                            {/* Aspect Ratio Row 1 */}
-                            <div className="flex bg-black/40 rounded p-0.5">
-                                {aspectRatios1.map(r => (
-                                    <button
-                                        key={r}
-                                        className={`flex-1 px-0.5 py-1 text-[7px] font-medium rounded transition-all ${editAspectRatio === r ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                        onClick={() => handleEditSettingChange('aspectRatio', r)}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                    >
-                                        {r}
-                                    </button>
-                                ))}
-                            </div>
-                            {/* Aspect Ratio Row 2 */}
-                            <div className="flex bg-black/40 rounded p-0.5">
-                                {aspectRatios2.map(r => (
-                                    <button
-                                        key={r}
-                                        className={`flex-1 px-0.5 py-1 text-[7px] font-medium rounded transition-all ${editAspectRatio === r ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                        onClick={() => handleEditSettingChange('aspectRatio', r)}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                    >
-                                        {r}
-                                    </button>
-                                ))}
-                            </div>
-                            {/* Resolution */}
-                            <div className="flex bg-black/40 rounded p-0.5">
-                                {resolutions.map(r => (
-                                    <button
-                                        key={r}
-                                        className={`flex-1 px-1 py-1 text-[8px] font-medium rounded transition-all ${editResolution === r ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                        onClick={() => handleEditSettingChange('resolution', r)}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                    >
-                                        {r}
-                                    </button>
-                                ))}
-                            </div>
+                        <div className="flex-1 min-h-0 flex flex-col">
+                            <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium block mb-1.5 flex-shrink-0">编辑指令</label>
+                            <textarea 
+                                className="flex-1 w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none resize-none focus:border-yellow-500/50 placeholder-zinc-600 overflow-y-auto scrollbar-hide"
+                                placeholder="输入编辑指令..."
+                                value={localPrompt}
+                                onChange={(e) => setLocalPrompt(e.target.value)}
+                                onBlur={handleUpdate}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            />
                         </div>
                     </div>
+                        
+                    {/* 设置区 - 与创意节点一致的样式 */}
+                    <div className="px-3 pb-3 space-y-1.5 flex-shrink-0">
+                        {/* Aspect Ratio Row 1 */}
+                        <div className="flex bg-black/40 rounded-lg p-0.5">
+                            {aspectRatios1.map(r => (
+                                <button
+                                    key={r}
+                                    className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${editAspectRatio === r ? 'bg-yellow-500/30 text-yellow-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    onClick={() => handleEditSettingChange('aspectRatio', r)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    {r}
+                                </button>
+                            ))}
+                        </div>
+                        {/* Aspect Ratio Row 2 */}
+                        <div className="flex bg-black/40 rounded-lg p-0.5">
+                            {aspectRatios2.map(r => (
+                                <button
+                                    key={r}
+                                    className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${editAspectRatio === r ? 'bg-yellow-500/30 text-yellow-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    onClick={() => handleEditSettingChange('aspectRatio', r)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    {r}
+                                </button>
+                            ))}
+                        </div>
+                        {/* Resolution */}
+                        <div className="flex bg-black/40 rounded-lg p-0.5">
+                            {resolutions.map(r => (
+                                <button
+                                    key={r}
+                                    className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${editResolution === r ? 'bg-yellow-500/30 text-yellow-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    onClick={() => handleEditSettingChange('resolution', r)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    {r}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* 底部状态 - 与创意节点一致 */}
+                    <div className="h-6 bg-black/30 border-t border-white/5 px-3 flex items-center justify-between text-[10px] text-zinc-500">
+                        <span>输入: 1/1</span>
+                        <span>{editAspectRatio} · {editResolution}</span>
+                    </div>
+                    
                     {isRunning && (
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-30">
-                            <div className="w-8 h-8 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
+                            <div className="w-8 h-8 border-2 border-yellow-400/50 border-t-yellow-400 rounded-full animate-spin"></div>
                         </div>
                     )}
                 </div>

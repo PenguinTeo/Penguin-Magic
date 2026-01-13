@@ -213,7 +213,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
 
   // Dragging Mathematics (Delta based)
   const [dragStartMousePos, setDragStartMousePos] = useState<Vec2>({ x: 0, y: 0 });
+  const dragStartMousePosRef = useRef<Vec2>({ x: 0, y: 0 }); // ref 备份，供实时更新
   const [initialNodePositions, setInitialNodePositions] = useState<Map<string, Vec2>>(new Map());
+  const initialNodePositionsRef = useRef<Map<string, Vec2>>(new Map()); // ref 同步备份，供 RAF 使用
   
   // 拖拽优化：使用 ref 存储实时偏移量，避免频繁 setState
   const dragDeltaRef = useRef<Vec2>({ x: 0, y: 0 });
@@ -221,6 +223,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   const rafRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
   const isCanvasDraggingRef = useRef(false);
+  
+  // 上次鼠标位置，用于计算画布平移时的增量
+  const lastMousePosRef = useRef<Vec2>({ x: 0, y: 0 });
   
   // Ref to handleExecuteNode for use in callbacks (避免依赖循环)
   const executeNodeRef = useRef<((nodeId: string, batchCount?: number) => Promise<void>) | null>(null);
@@ -754,6 +759,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               const tag = document.activeElement?.tagName.toLowerCase();
               if (tag !== 'input' && tag !== 'textarea') {
                   setIsSpacePressed(true);
+                  // 记录按下空格时的鼠标位置
+                  lastMousePosRef.current = { x: 0, y: 0 }; // 将在下次 mousemove 更新
               }
           }
           
@@ -2464,10 +2471,39 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           return;
       }
 
-      // 2. Dragging Nodes - 使用 RAF 批量更新
+     // 2. Dragging Nodes - 使用 RAF 批量更新
       if (draggingNodeId && isDragOperation) {
-          const deltaX = (clientX - dragStartMousePos.x) / scale;
-          const deltaY = (clientY - dragStartMousePos.y) / scale;
+          // 🔥 新功能：拖拽节点时按住空格可同时平移画布
+          if (isSpacePressed) {
+              // 计算鼠标移动增量（屏幕空间）
+              const mouseDeltaX = clientX - lastMousePosRef.current.x;
+              const mouseDeltaY = clientY - lastMousePosRef.current.y;
+              
+              // 初始化时跳过（避免第一次大跳跃）
+              if (lastMousePosRef.current.x !== 0 || lastMousePosRef.current.y !== 0) {
+                  // 平移画布
+                  setCanvasOffset(prev => ({
+                      x: prev.x + mouseDeltaX,
+                      y: prev.y + mouseDeltaY
+                  }));
+                  
+                  // 🔧 优化：直接更新 ref，避免 setState 导致的重渲染和卡顿
+                  dragStartMousePosRef.current = {
+                      x: dragStartMousePosRef.current.x + mouseDeltaX,
+                      y: dragStartMousePosRef.current.y + mouseDeltaY
+                  };
+              }
+              
+              // 更新上次鼠标位置
+              lastMousePosRef.current = { x: clientX, y: clientY };
+          } else {
+              // 未按空格时重置上次位置
+              lastMousePosRef.current = { x: 0, y: 0 };
+          }
+          
+          // 使用 ref 计算 delta，避免闭包问题
+          const deltaX = (clientX - dragStartMousePosRef.current.x) / scale;
+          const deltaY = (clientY - dragStartMousePosRef.current.y) / scale;
           
           // 存储当前 delta
           dragDeltaRef.current = { x: deltaX, y: deltaY };
@@ -2477,7 +2513,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               const delta = dragDeltaRef.current;
               const newNodes = nodesRef.current.map(node => {
                   if (selectedNodeIds.has(node.id)) {
-                      const initialPos = initialNodePositions.get(node.id);
+                      const initialPos = initialNodePositionsRef.current.get(node.id); // 使用 ref 获取最新值
                       if (initialPos) {
                           return {
                               ...node,
@@ -2594,6 +2630,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       setDraggingNodeId(id);
       setIsDragOperation(true);
       setDragStartMousePos({ x: e.clientX, y: e.clientY });
+      dragStartMousePosRef.current = { x: e.clientX, y: e.clientY }; // 同步更新 ref
       
       // Snapshot positions - 使用 nodesRef 确保获取最新的节点位置
       const positions = new Map<string, Vec2>();
@@ -2604,6 +2641,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           }
       });
       setInitialNodePositions(positions);
+      initialNodePositionsRef.current = positions; // 同步更新 ref
   };
 
   const handleStartConnection = (nodeId: string, portType: 'in' | 'out', pos: Vec2) => {
@@ -2814,9 +2852,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               setNodes(prev => [...prev, bpNode]);
               // 不创建结果节点，BP节点本身就是输出
             } else {
-              // 普通创意：创建Idea节点 + Image节点（类似BP的简化版本）
+              // 普通创意：只创建创意节点，不带图像节点（对齐BP模式）
               const ideaId = `idea_${Date.now()}`;
-              const imageId = `image_${Date.now()}`;
               
               // Idea节点：包含提示词和设置
               const ideaNode: CanvasNode = {
@@ -2836,20 +2873,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                 },
               };
               
-              // Image节点：用于显示生成结果
-              const imageNode: CanvasNode = {
-                id: imageId,
-                type: 'image' as NodeType,
-                title: '生成结果',
-                content: '',
-                x: baseX + 340,
-                y: baseY,
-                width: 280,
-                height: 280,
-              };
-              
-              setNodes(prev => [...prev, ideaNode, imageNode]);
-              setConnections(prev => [...prev, { id: `conn_${Date.now()}`, fromNode: ideaId, toNode: imageId }]);
+              setNodes(prev => [...prev, ideaNode]);
+              // 不创建Image节点，不创建连接
             }
           }}
       />
