@@ -284,6 +284,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
 
   const isRelay = node.type === 'relay';
   const isRunning = node.status === 'running';
+  const isToolNode = ['edit', 'remove-bg', 'upscale', 'resize'].includes(node.type);
+  const showRunningIndicator = isRunning && !isToolNode;
 
   // --- Renderers ---
 
@@ -1058,11 +1060,15 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     alt="Image" 
                     className="relative z-10 w-full h-full object-contain select-none pointer-events-none" 
                     draggable={false}
+                    style={{
+                        imageRendering: 'high-quality',
+                        WebkitFontSmoothing: 'antialiased'
+                    }}
                 />
                 
-                {/* 信息查询按钮 - 移动到左上角 */}
+                {/* 信息查询按钮 - 移动到右上角 */}
                 <div 
-                  className="absolute top-2 left-2 z-20"
+                  className="absolute top-2 right-2 z-20"
                   onMouseEnter={() => setShowMediaInfo(true)}
                   onMouseLeave={() => setShowMediaInfo(false)}
                 >
@@ -1073,10 +1079,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     <Icons.Info size={14} className="text-white/70" />
                   </div>
                   
-                  {/* 信息浮窗 */}
+                  {/* 信息浮窗 - 从右侧弹出 */}
                   {showMediaInfo && mediaMetadata && (
                     <div 
-                      className="absolute top-full left-0 mt-1 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-2 text-[10px] text-white/90 whitespace-nowrap shadow-lg"
+                      className="absolute top-full right-0 mt-1 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-2 text-[10px] text-white/90 whitespace-nowrap shadow-lg"
                       onMouseDown={(e) => e.stopPropagation()}
                     >
                       <div className="space-y-0.5">
@@ -1090,8 +1096,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                   )}
                 </div>
                 
-                {/* 工具箱按钮 - 保持在右下角 */}
-                <div className="absolute bottom-2 right-2 z-20">
+                {/* 工具箱按钮 - 向左上移动一些 */}
+                <div className="absolute bottom-6 right-6 z-20">
                   <button
                     className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center transition-all"
                     onClick={(e) => {
@@ -1155,8 +1161,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                   )}
                 </div>
              </>
-           )}
-           {/* 状态标签 */}
+           )}           
+           {/* 状态标签 - 保持在左上角 */}
            <div 
              className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded text-[9px] font-bold uppercase backdrop-blur-md"
              style={{
@@ -1401,7 +1407,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         };
 
         // If there's output content, show the result image
-        if (node.content && (node.content.startsWith('data:image') || node.content.startsWith('http://') || node.content.startsWith('https://'))) {
+        // 🔧 修复：upscale和remove-bg节点不再显示图片，结果在下游Image节点
+        if (node.type !== 'upscale' && node.type !== 'remove-bg' && node.content && (node.content.startsWith('data:image') || node.content.startsWith('http://') || node.content.startsWith('https://'))) {
             // 图片加载后自动调整节点尺寸以匹配图片比例
             const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
                 const img = e.currentTarget;
@@ -1474,7 +1481,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             rows={2}
                         />
                     </div>
-                    {isRunning && (
+                    {showRunningIndicator && (
                         <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center z-10">
                             <div className="w-6 h-6 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
                         </div>
@@ -1559,7 +1566,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         <span>{editAspectRatio} · {editResolution}</span>
                     </div>
                     
-                    {isRunning && (
+                    {showRunningIndicator && (
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-30">
                             <div className="w-8 h-8 border-2 border-yellow-400/50 border-t-yellow-400 rounded-full animate-spin"></div>
                         </div>
@@ -1615,7 +1622,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         <span className="flex items-center gap-1">IN: <span className="text-zinc-300">IMG</span></span>
                         <span className="flex items-center gap-1">OUT: <span className="text-zinc-300">{upscaleResolution}</span></span>
                     </div>
-                    {isRunning && (
+                    {showRunningIndicator && (
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-30">
                             <div className="w-8 h-8 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
                         </div>
@@ -1644,7 +1651,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         IMG OUT
                     </div>
                 </div>
-                {isRunning && (
+                {showRunningIndicator && (
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center z-10">
                         <div className="w-6 h-6 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
                     </div>
@@ -1776,8 +1783,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
              {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp'].includes(node.type) && (
                  <div className="flex items-center gap-0.5">
                    {/* 批量数量选择器 - 对图片生成类型节点显示 */}
-                   {['image', 'edit', 'bp', 'idea'].includes(node.type) && !isRunning && (
-                     <div className="flex items-center h-7 rounded-l-lg border border-r-0 border-white/10 bg-[#2c2c2e] overflow-hidden">
+                   {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale'].includes(node.type) && !isRunning && (
+                     <div className="flex items-center h-8 rounded-l-lg border border-r-0 border-white/10 bg-[#2c2c2e] overflow-hidden">
                        <button
                          onClick={(e) => { e.stopPropagation(); setBatchCount(Math.max(1, batchCount - 1)); }}
                          className="w-6 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
@@ -1807,8 +1814,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                           }
                       }}
                       disabled={!isRunning && node.status === 'running'}
-                      className={`p-1.5 border border-white/10 shadow-lg transition-colors flex items-center gap-1.5 px-2.5 font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed
-                          ${['image', 'edit', 'bp', 'idea'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
+                      className={`h-8 px-2.5 border border-white/10 shadow-lg transition-colors flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed
+                          ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
                           ${isRunning ? 'bg-red-500/20 text-red-300 border-red-500/50 hover:bg-red-500/30' : 'bg-[#2c2c2e] text-green-400 hover:bg-green-500/20 hover:text-green-300'}
                       `}
                    >
@@ -1822,7 +1829,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             {(node.content) && (
                  <button 
                     onClick={(e) => { e.stopPropagation(); onDownload(node.id); }}
-                    className="bg-[#2c2c2e] text-zinc-300 p-1.5 rounded-lg hover:bg-white/10 hover:text-white transition-colors border border-white/10 shadow-lg"
+                    className="bg-[#2c2c2e] text-zinc-300 h-8 w-8 rounded-lg hover:bg-white/10 hover:text-white transition-colors border border-white/10 shadow-lg flex items-center justify-center"
                     title="Download Output"
                 >
                     <Icons.Download size={14} />
@@ -1832,7 +1839,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             {/* Close Button */}
             <button 
                 onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
-                className="bg-[#2c2c2e] text-red-400 p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-300 transition-colors border border-white/10 shadow-lg"
+                className="bg-[#2c2c2e] text-red-400 h-8 w-8 rounded-lg hover:bg-red-500/20 hover:text-red-300 transition-colors border border-white/10 shadow-lg flex items-center justify-center"
             >
                 <Icons.Close size={14} />
             </button>
