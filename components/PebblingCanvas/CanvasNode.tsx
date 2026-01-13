@@ -420,6 +420,12 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         className="w-full h-full object-contain" 
                         draggable={false}
                         onLoad={handleImageLoad}
+                        style={{
+                            imageRendering: 'auto',
+                            transform: 'translateZ(0)',
+                            willChange: 'transform',
+                            backfaceVisibility: 'hidden',
+                        } as React.CSSProperties}
                     />
                     
                     {/* 信息查询按钮 */}
@@ -814,6 +820,12 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             alt="Result" 
                             className="w-full h-full object-contain" 
                             draggable={false}
+                            style={{
+                                imageRendering: 'auto',
+                                transform: 'translateZ(0)',
+                                willChange: 'transform',
+                                backfaceVisibility: 'hidden',
+                            } as React.CSSProperties}
                         />
                     </div>
                 ) : (
@@ -1061,9 +1073,13 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     className="relative z-10 w-full h-full object-contain select-none pointer-events-none" 
                     draggable={false}
                     style={{
-                        imageRendering: 'high-quality',
-                        WebkitFontSmoothing: 'antialiased'
-                    }}
+                        imageRendering: 'auto',
+                        // 🔧 优化：强制创建独立合成层，避免画布缩放时图片模糊
+                        transform: 'translateZ(0)',
+                        willChange: 'transform',
+                        backfaceVisibility: 'hidden',
+                        WebkitBackfaceVisibility: 'hidden',
+                    } as React.CSSProperties}
                 />
                 
                 {/* 信息查询按钮 - 移动到右上角 */}
@@ -1437,6 +1453,12 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             className="w-full h-full object-contain" 
                             draggable={false}
                             onLoad={handleImageLoad}
+                            style={{
+                                imageRendering: 'auto',
+                                transform: 'translateZ(0)',
+                                willChange: 'transform',
+                                backfaceVisibility: 'hidden',
+                            } as React.CSSProperties}
                         />
                         
                         {/* 信息查询按钮 */}
@@ -1719,17 +1741,17 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
       className={`absolute transition-all duration-75 flex flex-col select-none
         ${isRelay ? 'rounded-full' : 'rounded-xl'}
         ${isSelected ? 'ring-2 ring-blue-500/50 z-50' : 'ring-1 ring-white/5 hover:ring-white/20 z-10'}
-        ${isSelected && !isRelay ? 'shadow-2xl scale-[1.02]' : ''}
+        ${isSelected && !isRelay ? 'shadow-2xl' : ''}
         ${isRunning ? 'ring-2 ring-yellow-500 animate-pulse' : ''}
       `}
       style={{
-        transform: `translate(${node.x}px, ${node.y}px)`,
+        transform: `translate3d(${node.x}px, ${node.y}px, 0)`,
         width: node.width,
         height: node.height,
         cursor: 'grab',
         backgroundColor: isRelay ? 'transparent' : '#1c1c1e',
-        pointerEvents: 'auto'
-      }}
+        pointerEvents: 'auto',
+      } as React.CSSProperties}
       onMouseDown={(e) => {
         // Prevent drag start if clicking interactive elements, BUT allow if it's the text display div
         if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || isResizing) return;

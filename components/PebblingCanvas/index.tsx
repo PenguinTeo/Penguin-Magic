@@ -1050,25 +1050,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           setCanvasOffset({ x: newOffsetX, y: newOffsetY });
       });
       
-      // 🔧 修复缩放后模糊问题：缩放停止后强制触发重绘
-      if (zoomEndTimerRef.current) clearTimeout(zoomEndTimerRef.current);
-      zoomEndTimerRef.current = window.setTimeout(() => {
-          // 强制重绘：多种方法组合确保有效
-          
-          // 方法1：操作 transform 容器
-          const canvasContent = container.querySelector('[style*="transform"]');
-          if (canvasContent instanceof HTMLElement) {
-              // 临时修改 CSS 属性强制重绘
-              const originalStyle = canvasContent.style.transform;
-              canvasContent.style.transform = 'translateZ(0)';
-              requestAnimationFrame(() => {
-                  canvasContent.style.transform = originalStyle;
-              });
-          }
-          
-          // 方法2：强制 React 重渲染
-          setScale(s => s);
-      }, 150); // 150ms 后触发重绘
+      // 缩放结束后的处理已移除（优先保证流畅性）
   }, [scale, canvasOffset]);
 
   // 添加原生 wheel 事件监听器（非被动模式）
@@ -1672,15 +1654,23 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               
               const aspectRatio = settings.aspectRatio || 'AUTO';
               const resolution = settings.resolution || '2K';
-              const config: GenerationConfig = aspectRatio !== 'AUTO' 
-                  ? { aspectRatio, resolution }
-                  : { aspectRatio: '1:1', resolution };
+              
+              // 🔧 修复：AUTO 比例在图生图时不应该转换为 1:1
+              let config: GenerationConfig | undefined = undefined;
               
               if (inputImages.length > 0) {
-                  // 图生图
+                  // 图生图：AUTO 时只传 resolution，不传 aspectRatio，让 API 使用原图比例
+                  if (aspectRatio === 'AUTO') {
+                      config = { resolution };
+                  } else {
+                      config = { aspectRatio, resolution };
+                  }
                   result = await editCreativeImage(inputImages, finalPrompt, config, signal);
               } else {
-                  // 文生图
+                  // 文生图：AUTO 默认使用 1:1
+                  config = aspectRatio !== 'AUTO' 
+                      ? { aspectRatio, resolution }
+                      : { aspectRatio: '1:1', resolution };
                   result = await generateCreativeImage(finalPrompt, config, signal);
               }
               
@@ -2051,105 +2041,113 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               }
           }
           else if (node.type === 'edit') {
-               // Magic节点执行逻辑 - 立即创建Image节点来展示结果，不修改自身
+               // Magic节点执行逻辑
                const inputTexts = inputs.texts.join('\n');
                const inputImages = inputs.images;
-               
+                         
                // 获取节点的设置和提示词
                const nodePrompt = node.data?.prompt || '';
                const combinedPrompt = nodePrompt || inputTexts;
-               
-               // 获取Edit节点的设置
+                         
+              // 获取Edit节点的设置
                const editAspectRatio = node.data?.settings?.aspectRatio || 'AUTO';
                const editResolution = node.data?.settings?.resolution || 'AUTO';
-               
-               // AUTO 时不传递参数（不是传空），让 API 根据图片自动决定
+                         
+               // 🔧 修复：AUTO 比例应该传递给服务层，让服务层根据是否有输入图片决定处理方式
                let finalConfig: GenerationConfig | undefined = undefined;
-               if (editAspectRatio !== 'AUTO' || editResolution !== 'AUTO') {
+               const hasInputImages = inputImages.length > 0;
+                         
+               if (editAspectRatio === 'AUTO' && hasInputImages) {
+                   // 图生图 + AUTO：只传递 resolution（如果不是 AUTO），不传 aspectRatio
+                   if (editResolution !== 'AUTO') {
+                       finalConfig = {
+                           resolution: editResolution as '1K' | '2K' | '4K'
+                       };
+                   }
+               } else if (editAspectRatio !== 'AUTO' || editResolution !== 'AUTO') {
                    finalConfig = {
                        aspectRatio: editAspectRatio !== 'AUTO' ? editAspectRatio : '1:1',
                        resolution: editResolution !== 'AUTO' ? editResolution as '1K' | '2K' | '4K' : '1K'
                    };
                }
-               
-               // 🎯 修复:点击RUN立即创建输出节点,显示loading状态
-               console.log(`[Magic] 开始执行,立即创建输出节点`);
-               
-               // 1. 立即创建右侧Image节点(空白+loading)
-               const outputNodeId = uuid();
-               const outputNode: CanvasNode = {
-                   id: outputNodeId,
-                   type: 'image',
-                   content: '', // 空白,等待API返回
-                   x: node.x + node.width + 100,
-                   y: node.y,
-                   width: 300,
-                   height: 300,
-                   data: {},
-                   status: 'running' // loading状态
-               };
-               
-               const newConnection = {
-                   id: uuid(),
-                   fromNode: nodeId,
-                   toNode: outputNodeId
-               };
-               
-               // 2. 立即更新UI:添加节点+连接
-               setNodes(prev => [...prev, outputNode]);
-               setConnections(prev => [...prev, newConnection]);
-               setHasUnsavedChanges(true);
-               console.log(`[Magic] 已创建输出节点 ${outputNodeId.slice(0,8)}, 状态:running`);
-               
-               // 3. 调用API
+                         
+               // 🔧 关键修复：检查是否已有下游节点（用户手动连接的）
+               const existingDownstream = connectionsRef.current.filter(c => c.fromNode === nodeId);
+               const hasExistingOutput = existingDownstream.length > 0;
+                         
+               console.log(`[Magic] 开始执行, 已有下游连接: ${hasExistingOutput}`);
+                         
+               let outputNodeId: string;
+                         
+               if (hasExistingOutput) {
+                   // 💡 已有下游节点，不创建新节点，更新现有的第一个下游节点
+                   outputNodeId = existingDownstream[0].toNode;
+                   const existingNode = nodesRef.current.find(n => n.id === outputNodeId);
+                   console.log(`[Magic] 使用现有下游节点 ${outputNodeId.slice(0,8)}, 类型: ${existingNode?.type}`);
+                   // 更新现有节点为 running 状态
+                   updateNode(outputNodeId, { status: 'running' });
+               } else {
+                   // 🆕 没有下游节点，创建新的 Image 节点
+                   outputNodeId = uuid();
+                   const outputNode: CanvasNode = {
+                       id: outputNodeId,
+                       type: 'image',
+                       content: '',
+                       x: node.x + node.width + 100,
+                       y: node.y,
+                       width: 300,
+                       height: 300,
+                       data: {},
+                       status: 'running'
+                   };
+                             
+                   const newConnection = {
+                       id: uuid(),
+                       fromNode: nodeId,
+                       toNode: outputNodeId
+                   };
+                             
+                   setNodes(prev => [...prev, outputNode]);
+                   setConnections(prev => [...prev, newConnection]);
+                   setHasUnsavedChanges(true);
+                   console.log(`[Magic] 已创建新输出节点 ${outputNodeId.slice(0,8)}`);
+               }
+                         
+               // 调用API
                try {
                    let result: string | null = null;
-                   
+                             
                    if (!combinedPrompt && inputImages.length === 0) {
-                       // 无prompt + 无图片 = 不执行
                        console.warn('[Magic] 无prompt且无图片，无法执行');
                        updateNode(outputNodeId, { status: 'error' });
                        updateNode(nodeId, { status: 'error' });
                        return;
                    } else if (combinedPrompt && inputImages.length === 0) {
-                       // 有prompt + 无图片 = 文生图
                        result = await generateCreativeImage(combinedPrompt, finalConfig, signal);
                    } else if (!combinedPrompt && inputImages.length > 0) {
-                       // 无prompt + 有图片 = 直接传递图片
                        result = inputImages[0];
-                       // 标记Magic节点完成
                        updateNode(nodeId, { status: 'completed' });
                    } else {
-                       // 有prompt + 有图片 = 图生图
                        result = await editCreativeImage(inputImages, combinedPrompt, finalConfig, signal);
                    }
-                   
+                             
                    if (!signal.aborted) {
                        if (result) {
                            console.log(`[Magic] API返回成功,更新输出节点内容`);
-                           
-                           // 🔥 提取图片元数据
                            const metadata = await extractImageMetadata(result);
-                           console.log(`[Magic] 图片元数据:`, metadata);
-                           
-                           // 4. 更新已存在的输出节点:填充内容+元数据
                            updateNode(outputNodeId, { 
                                content: result,
                                status: 'completed',
                                data: { imageMetadata: metadata }
                            });
-                           
-                           // 5. 标记Magic节点完成
                            updateNode(nodeId, { status: 'completed' });
                        } else {
-                           // API失败,更新输出节点为error
                            updateNode(outputNodeId, { status: 'error' });
                            updateNode(nodeId, { status: 'error' });
                        }
                    }
                } catch (error) {
                    console.error('[Magic] 执行失败:', error);
-                   // API失败,更新输出节点为error
                    updateNode(outputNodeId, { status: 'error' });
                    updateNode(nodeId, { status: 'error' });
                }
@@ -3247,8 +3245,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
     <div 
       className="w-full h-full bg-[#0a0a0f] text-white overflow-hidden relative" 
       onContextMenu={handleContextMenu}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
     >
 
       <Sidebar 
@@ -3396,8 +3392,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                 height: '100%',
                 willChange: 'transform',
                 backfaceVisibility: 'hidden',
-                imageRendering: 'high-quality',
-                WebkitFontSmoothing: 'antialiased',
                 pointerEvents: 'none'
             } as React.CSSProperties}
             className="absolute top-0 left-0"
@@ -3434,8 +3428,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                     </linearGradient>
                 </defs>
                 {connections.map(conn => {
-                    const from = nodes.find(n => n.id === conn.fromNode);
-                    const to = nodes.find(n => n.id === conn.toNode);
+                    // 🔧 使用 nodesRef 获取最新位置，确保拖拽时连线实时跟随
+                    const from = nodesRef.current.find(n => n.id === conn.fromNode);
+                    const to = nodesRef.current.find(n => n.id === conn.toNode);
                     if (!from || !to) return null;
 
                     const startX = from.x + from.width;
@@ -3530,7 +3525,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                 
                 {/* Active Link Line */}
                 {linkingState.active && linkingState.fromNode && (() => {
-                     const fromNode = nodes.find(n => n.id === linkingState.fromNode);
+                     // 🔧 使用 nodesRef 获取最新位置
+                     const fromNode = nodesRef.current.find(n => n.id === linkingState.fromNode);
                      if (!fromNode) return null;
                      const startX = fromNode.x + fromNode.width; 
                      const startY = fromNode.y + fromNode.height / 2;

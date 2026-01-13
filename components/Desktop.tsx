@@ -161,19 +161,35 @@ export const Desktop: React.FC<DesktopProps> = ({
   }, [baseItems, searchQuery]);
 
   // 监听容器尺寸变化（响应式布局）
+  const [needsLayoutRefresh, setNeedsLayoutRefresh] = useState(false); // 是否需要刷新布局
+  const prevSizeRef = useRef({ width: 0, height: 0 });
+  
   useEffect(() => {
     if (!containerRef.current) return;
     const updateSize = () => {
       if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth);
-        setContainerHeight(containerRef.current.clientHeight);
+        const newWidth = containerRef.current.clientWidth;
+        const newHeight = containerRef.current.clientHeight;
+        
+        // 检测是否是分辨率变小（可能导致图标超出边界）
+        if (prevSizeRef.current.width > 0 && prevSizeRef.current.height > 0) {
+          const widthReduced = newWidth < prevSizeRef.current.width - gridSize;
+          const heightReduced = newHeight < prevSizeRef.current.height - gridSize;
+          if (widthReduced || heightReduced) {
+            setNeedsLayoutRefresh(true);
+          }
+        }
+        
+        prevSizeRef.current = { width: newWidth, height: newHeight };
+        setContainerWidth(newWidth);
+        setContainerHeight(newHeight);
       }
     };
     updateSize();
     const observer = new ResizeObserver(updateSize);
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [gridSize]);
 
   // 动态计算最大边界，不再固定行列
   const maxX = Math.max(0, Math.floor((containerWidth - PADDING * 2 - ICON_SIZE) / gridSize) * gridSize);
@@ -181,6 +197,49 @@ export const Desktop: React.FC<DesktopProps> = ({
   
   // 左右边距，简单的固定边距
   const horizontalPadding = PADDING;
+
+  // 检测图标是否有重叠或超出边界
+  const hasLayoutIssues = useMemo(() => {
+    if (!openFolderId && !openStackId && maxX > 0 && maxY > 0) {
+      // 获取顶层项目
+      const topLevelItems = items.filter(item => {
+        const isInFolder = items.some(
+          other => other.type === 'folder' && (other as DesktopFolderItem).itemIds.includes(item.id)
+        );
+        const isInStack = items.some(
+          other => other.type === 'stack' && (other as DesktopStackItem).itemIds.includes(item.id)
+        );
+        return !isInFolder && !isInStack;
+      });
+      
+      // 检查是否有超出边界的图标
+      const hasOutOfBounds = topLevelItems.some(item => 
+        item.position.x > maxX || item.position.y > maxY
+      );
+      
+      // 检查是否有重叠的图标
+      const positionSet = new Set<string>();
+      let hasOverlap = false;
+      for (const item of topLevelItems) {
+        const posKey = `${Math.round(item.position.x / gridSize)},${Math.round(item.position.y / gridSize)}`;
+        if (positionSet.has(posKey)) {
+          hasOverlap = true;
+          break;
+        }
+        positionSet.add(posKey);
+      }
+      
+      return hasOutOfBounds || hasOverlap;
+    }
+    return false;
+  }, [items, maxX, maxY, gridSize, openFolderId, openStackId]);
+
+  // 当检测到布局问题时，设置提示标记
+  useEffect(() => {
+    if (hasLayoutIssues || needsLayoutRefresh) {
+      setNeedsLayoutRefresh(true);
+    }
+  }, [hasLayoutIssues]);
 
   // 吸附到网格
   const snapToGrid = (pos: DesktopPosition): DesktopPosition => {
@@ -190,8 +249,13 @@ export const Desktop: React.FC<DesktopProps> = ({
     };
   };
 
-  // 检查位置是否被占用
-  const isPositionOccupied = (pos: DesktopPosition, excludeId?: string): boolean => {
+  // 检查位置是否被占用（增强版：支持自定义占用集合）
+  const isPositionOccupied = (pos: DesktopPosition, excludeId?: string, customOccupied?: Set<string>): boolean => {
+    // 如果提供了自定义占用集合，优先使用
+    if (customOccupied) {
+      const posKey = `${Math.round(pos.x / gridSize)},${Math.round(pos.y / gridSize)}`;
+      return customOccupied.has(posKey);
+    }
     return currentItems.some(item => {
       if (item.id === excludeId) return false;
       const snappedPos = snapToGrid(item.position);
@@ -199,13 +263,24 @@ export const Desktop: React.FC<DesktopProps> = ({
     });
   };
 
-  // 找到最近的空闲位置
-  const findNearestFreePosition = (pos: DesktopPosition, excludeId?: string): DesktopPosition => {
-    const snapped = snapToGrid(pos);
-    if (!isPositionOccupied(snapped, excludeId)) return snapped;
+  // 找到最近的空闲位置（增强版：确保在边界内且不重叠）
+  const findNearestFreePosition = (pos: DesktopPosition, excludeId?: string, customOccupied?: Set<string>): DesktopPosition => {
+    // 确保初始位置在边界内
+    const clampedPos = {
+      x: Math.min(Math.max(0, pos.x), maxX > 0 ? maxX : 0),
+      y: Math.min(Math.max(0, pos.y), maxY > 0 ? maxY : 0),
+    };
+    const snapped = snapToGrid(clampedPos);
+    
+    // 确保吸附后仍在边界内
+    snapped.x = Math.min(Math.max(0, snapped.x), maxX > 0 ? maxX : 0);
+    snapped.y = Math.min(Math.max(0, snapped.y), maxY > 0 ? maxY : 0);
+    
+    if (!isPositionOccupied(snapped, excludeId, customOccupied)) return snapped;
 
-    // 螺旋搜索空闲位置
-    for (let distance = 1; distance < 20; distance++) {
+    // 螺旋搜索空闲位置（确保在边界内）
+    const maxDistance = Math.max(20, Math.ceil(Math.max(maxX, maxY) / gridSize));
+    for (let distance = 1; distance < maxDistance; distance++) {
       for (let dx = -distance; dx <= distance; dx++) {
         for (let dy = -distance; dy <= distance; dy++) {
           if (Math.abs(dx) === distance || Math.abs(dy) === distance) {
@@ -213,10 +288,23 @@ export const Desktop: React.FC<DesktopProps> = ({
               x: snapped.x + dx * gridSize,
               y: snapped.y + dy * gridSize,
             };
-            if (testPos.x >= 0 && testPos.y >= 0 && !isPositionOccupied(testPos, excludeId)) {
+            // 确保在边界内
+            if (testPos.x >= 0 && testPos.y >= 0 && 
+                testPos.x <= (maxX > 0 ? maxX : 0) && 
+                testPos.y <= (maxY > 0 ? maxY : 0) && 
+                !isPositionOccupied(testPos, excludeId, customOccupied)) {
               return testPos;
             }
           }
+        }
+      }
+    }
+    // 如果螺旋搜索失败，从左上角顺序查找
+    for (let y = 0; y <= (maxY > 0 ? maxY : 0); y += gridSize) {
+      for (let x = 0; x <= (maxX > 0 ? maxX : 0); x += gridSize) {
+        const testPos = { x, y };
+        if (!isPositionOccupied(testPos, excludeId, customOccupied)) {
+          return testPos;
         }
       }
     }
@@ -628,6 +716,76 @@ export const Desktop: React.FC<DesktopProps> = ({
     const imageCount = groupsToStack.reduce((sum, g) => sum + g.imageIds.length, 0);
     alert(`已创建 ${stackCount} 个叠放，包含 ${imageCount} 张图片`);
   }, [items, history, creativeIdeas, onItemsChange]);
+
+  // 一键刷新布局：重新排列所有框外图标，确保不重叠且在可视区域内
+  const handleReorganizeLayout = useCallback(() => {
+    if (openFolderId || openStackId) {
+      alert('请先返回主桌面再执行刷新布局');
+      return;
+    }
+    
+    // 获取当前可用的最大列数
+    const effectiveMaxX = maxX > 0 ? maxX : 0;
+    const effectiveMaxY = maxY > 0 ? maxY : 0;
+    const maxCols = Math.max(1, Math.floor((effectiveMaxX / gridSize) + 1));
+    
+    // 获取需要重新排列的项目（不在文件夹/叠放内的项目）
+    const topLevelItems = items.filter(item => {
+      const isInFolder = items.some(
+        other => other.type === 'folder' && (other as DesktopFolderItem).itemIds.includes(item.id)
+      );
+      const isInStack = items.some(
+        other => other.type === 'stack' && (other as DesktopStackItem).itemIds.includes(item.id)
+      );
+      return !isInFolder && !isInStack;
+    });
+    
+    // 按类型分组：文件夹和叠放优先，然后是图片
+    const folders = topLevelItems.filter(i => i.type === 'folder');
+    const stacks = topLevelItems.filter(i => i.type === 'stack');
+    const images = topLevelItems.filter(i => i.type === 'image');
+    const sortedItems = [...folders, ...stacks, ...images];
+    
+    // 使用 Set 跟踪已占用位置
+    const occupiedPositions = new Set<string>();
+    
+    // 为每个项目分配新位置
+    const updatedItems = items.map(item => {
+      // 检查是否需要重新布局
+      const needsRelayout = sortedItems.some(si => si.id === item.id);
+      if (!needsRelayout) return item;
+      
+      // 找到下一个空闲位置
+      let foundPos: DesktopPosition | null = null;
+      for (let y = 0; y <= effectiveMaxY; y += gridSize) {
+        for (let x = 0; x <= effectiveMaxX; x += gridSize) {
+          const posKey = `${x / gridSize},${y / gridSize}`;
+          if (!occupiedPositions.has(posKey)) {
+            foundPos = { x, y };
+            occupiedPositions.add(posKey);
+            break;
+          }
+        }
+        if (foundPos) break;
+      }
+      
+      // 如果没找到空闲位置，继续往下排列（超出可视区域但可滚动）
+      if (!foundPos) {
+        const nextY = (occupiedPositions.size + 1) * gridSize;
+        foundPos = { x: 0, y: nextY };
+        occupiedPositions.add(`0,${nextY / gridSize}`);
+      }
+      
+      return {
+        ...item,
+        position: foundPos,
+        updatedAt: Date.now(),
+      };
+    });
+    
+    onItemsChange(updatedItems);
+    onSelectionChange([]);
+  }, [items, maxX, maxY, gridSize, openFolderId, openStackId, onItemsChange, onSelectionChange]);
 
   // 创建叠放（将选中的图片叠放在一起）
   const handleCreateStack = () => {
@@ -1410,6 +1568,37 @@ export const Desktop: React.FC<DesktopProps> = ({
         >
           {hideFileNames ? <EyeIcon className="w-3.5 h-3.5" /> : <EyeOffIcon className="w-3.5 h-3.5" />}
           <span>{hideFileNames ? '显示名称' : '隐藏名称'}</span>
+        </button>
+        {/* 一键刷新按钮 */}
+        <button
+          onClick={() => {
+            handleReorganizeLayout();
+            setNeedsLayoutRefresh(false);
+          }}
+          className={`relative flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg backdrop-blur-xl border transition-all hover:scale-105 ${
+            needsLayoutRefresh 
+              ? 'bg-orange-500/20 border-orange-500/50 animate-pulse' 
+              : 'hover:bg-green-500/10 hover:border-green-500/30'
+          }`}
+          style={!needsLayoutRefresh ? {
+            background: isLight ? 'rgba(255,255,255,0.9)' : 'rgba(18,18,26,0.95)',
+            borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)',
+            color: isLight ? '#475569' : '#a1a1aa'
+          } : { color: '#fb923c' }}
+          title={needsLayoutRefresh 
+            ? '检测到布局问题（重叠或超出边界），点击刷新以修复' 
+            : '重新排列所有图标，解决重叠问题或分辨率变化后的布局问题'
+          }
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {needsLayoutRefresh && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full animate-ping" />
+          )}
+          {needsLayoutRefresh && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-orange-500 rounded-full" />
+          )}
+          <RefreshIcon className={`w-3.5 h-3.5 ${needsLayoutRefresh ? 'animate-spin' : ''}`} style={needsLayoutRefresh ? { animationDuration: '2s' } : {}} />
+          <span>一键刷新</span>
         </button>
       </div>
       {/* 面包屑导航（在文件夹或叠放内时显示） */}
