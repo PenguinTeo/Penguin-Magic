@@ -354,41 +354,93 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
 
   // 加载单个画布
   const loadCanvas = useCallback(async (canvasId: string) => {
-    // 🔧 检查未保存的修改
-    if (hasUnsavedChanges && currentCanvasId && currentCanvasId !== canvasId) {
-      const confirmed = window.confirm(
-        '当前画布有未保存的修改，是否保存？\n\n点击“确定”保存后切换\n点击“取消”放弃修改并切换'
-      );
+    console.log('='.repeat(60));
+    console.log('[画布切换] 开始切换到画布:', canvasId);
+    
+    // 🔧 关键修复1：立即清除自动保存定时器，防止在切换过程中触发保存
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      console.log('[画布切换] 已清除自动保存定时器');
+    }
+    
+    // 🔧 关键修复2：先保存当前画布（如果有变化）
+    if (currentCanvasId && currentCanvasId !== canvasId) {
+      console.log('[画布切换] 💾 当前画布:', currentCanvasId.slice(0, 12));
+      console.log('[画布切换] 💾 nodesRef.current.length:', nodesRef.current.length);
+      console.log('[画布切换] 💾 nodesRef.current:', JSON.stringify(nodesRef.current.map(n => ({ id: n.id.slice(0, 8), type: n.type }))));
       
-      if (confirmed && saveCanvasRef.current) {
-        await saveCanvasRef.current();
-        setHasUnsavedChanges(false);
+      // 检查是否有变化（与 lastSaveRef 比较）
+      const currentNodesStr = JSON.stringify(nodesRef.current);
+      const currentConnsStr = JSON.stringify(connectionsRef.current);
+      const hasChanges = currentNodesStr !== lastSaveRef.current.nodes || 
+                         currentConnsStr !== lastSaveRef.current.connections;
+      
+      if (hasChanges || nodesRef.current.length > 0) {
+        console.log('[画布切换] ✅ 检测到数据，强制保存...');
+        try {
+          // 🔧 直接保存，不使用 ref，避免闭包陷阱
+          await canvasApi.updateCanvas(currentCanvasId, {
+            nodes: nodesRef.current,
+            connections: connectionsRef.current,
+          });
+          console.log('[画布切换] ✅ 当前画布已保存');
+          lastSaveRef.current = {
+            nodes: currentNodesStr,
+            connections: currentConnsStr
+          };
+          // 🆕 保存后刷新列表，更新节点数和修改时间
+          await loadCanvasList();
+        } catch (e) {
+          console.error('[画布切换] ❌ 保存失败:', e);
+        }
+      } else {
+        console.log('[画布切换] ⏭️ 当前画布无数据，跳过保存');
       }
     }
     
     setIsCanvasLoading(true);
     try {
+      console.log('[画布切换] 📥 开始调用 canvasApi.getCanvas:', canvasId.slice(0, 12));
       const result = await canvasApi.getCanvas(canvasId);
       if (result.success && result.data) {
         const loadedNodes = result.data.nodes || [];
         const loadedConnections = result.data.connections || [];
         
-        // 同时更新state和ref，确保一致性
+        console.log('[画布切换] 📦 后端返回数据:', result.data.name);
+        console.log('[画布切换] 📦 loadedNodes.length:', loadedNodes.length);
+        console.log('[画布切换] 📦 loadedNodes:', JSON.stringify(loadedNodes.map(n => ({ id: n.id.slice(0, 8), type: n.type }))));
+        
+        // 🔧 关键修复3：先更新 currentCanvasId，再更新 nodes/connections
+        // 这样自动保存的 useEffect 就会看到正确的 canvasId
+        setCurrentCanvasId(canvasId);
+        setCanvasName(result.data.name);
+        
+        // 🔧 关键：先清空 ref，再设置新值
+        nodesRef.current = [];
+        connectionsRef.current = [];
+        console.log('[画布切换] 🧹 已清空 nodesRef');
+        
+        // 然后更新 state 和 ref
         setNodes(loadedNodes);
         setConnections(loadedConnections);
         nodesRef.current = loadedNodes;
         connectionsRef.current = loadedConnections;
         
-        setCanvasName(result.data.name);
-        setCurrentCanvasId(canvasId);
+        console.log('[画布切换] 🔄 更新后的 nodesRef.length:', nodesRef.current.length);
+        console.log('[画布切换] 🔄 更新后的 nodesRef:', JSON.stringify(nodesRef.current.map(n => ({ id: n.id.slice(0, 8), type: n.type }))));
+        
         // 更新缓存，防止立即触发保存
         lastSaveRef.current = {
           nodes: JSON.stringify(loadedNodes),
           connections: JSON.stringify(loadedConnections)
         };
+        
         // 清除未保存标记
         setHasUnsavedChanges(false);
-        console.log('[Canvas] 加载画布:', result.data.name);
+        
+        console.log('[画布切换] ✅ 切换完成:', result.data.name);
+        console.log('='.repeat(60));
         
         // 自动恢复Video节点的异步任务
         setTimeout(() => {
@@ -396,27 +448,72 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
         }, 1000); // 延迟1秒执行，确保画布已完全加载
       }
     } catch (e) {
-      console.error('[Canvas] 加载画布失败:', e);
+      console.error('[画布切换] ❌ 加载画布失败:', e);
     }
     setIsCanvasLoading(false);
-  }, [currentCanvasId, hasUnsavedChanges]);
+  }, [currentCanvasId, loadCanvasList]);
 
   // 创建新画布
   const createNewCanvas = useCallback(async (name?: string) => {
-    // 🔧 检查未保存的修改
-    if (hasUnsavedChanges && currentCanvasId) {
-      const confirmed = window.confirm(
-        '当前画布有未保存的修改，是否保存？\n\n点击“确定”保存后创建\n点击“取消”放弃修改并创建'
-      );
+    console.log('[创建画布] 开始创建新画布:', name);
+    
+    // 🔧 关键修复：立即清除自动保存定时器
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      console.log('[创建画布] 已清除自动保存定时器');
+    }
+    
+    // 🔧 先保存当前画布（如果有变化）
+    if (currentCanvasId) {
+      console.log('[创建画布] 当前画布:', currentCanvasId, '节点数:', nodesRef.current.length);
       
-      if (confirmed && saveCanvasRef.current) {
-        await saveCanvasRef.current();
-        setHasUnsavedChanges(false);
+      const currentNodesStr = JSON.stringify(nodesRef.current);
+      const currentConnsStr = JSON.stringify(connectionsRef.current);
+      const hasChanges = currentNodesStr !== lastSaveRef.current.nodes || 
+                         currentConnsStr !== lastSaveRef.current.connections;
+      
+      if (hasChanges || nodesRef.current.length > 0) {
+        console.log('[创建画布] 检测到数据，强制保存...');
+        try {
+          // 🔧 直接保存，不使用 ref，避免闭包陷阱
+          await canvasApi.updateCanvas(currentCanvasId, {
+            nodes: nodesRef.current,
+            connections: connectionsRef.current,
+          });
+          console.log('[创建画布] 当前画布已保存');
+          lastSaveRef.current = {
+            nodes: currentNodesStr,
+            connections: currentConnsStr
+          };
+          // 🆕 保存后刷新列表，更新节点数和修改时间
+          await loadCanvasList();
+        } catch (e) {
+          console.error('[创建画布] 保存失败:', e);
+        }
+      } else {
+        console.log('[创建画布] 当前画布无数据，跳过保存');
       }
     }
     
     try {
-      const result = await canvasApi.createCanvas({ name: name || `画布 ${canvasList.length + 1}` });
+      // 🆕 智能命名：从“画布 1”开始轮询，重名则跳过
+      let finalName = name;
+      if (!finalName) {
+        // 刷新列表获取最新数据
+        const latestList = await loadCanvasList();
+        const existingNames = new Set(latestList.map(c => c.name));
+        
+        // 从 1 开始轮询，找到第一个未被使用的名字
+        let index = 1;
+        while (existingNames.has(`画布 ${index}`)) {
+          index++;
+        }
+        finalName = `画布 ${index}`;
+        console.log('[创建画布] 智能命名:', finalName);
+      }
+      
+      const result = await canvasApi.createCanvas({ name: finalName });
       if (result.success && result.data) {
         setCurrentCanvasId(result.data.id);
         setCanvasName(result.data.name);
@@ -427,20 +524,20 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
         lastSaveRef.current = { nodes: '[]', connections: '[]' };
         setHasUnsavedChanges(false);
         await loadCanvasList();
-        console.log('[Canvas] 创建新画布:', result.data.name);
-        
+        console.log('[创建画布] 创建新画布完成:', result.data.name);
+          
         // 通知外层创建桌面文件夹
         if (onCanvasCreated) {
           onCanvasCreated(result.data.id, result.data.name);
         }
-        
+          
         return result.data;
       }
     } catch (e) {
-      console.error('[Canvas] 创建画布失败:', e);
+      console.error('[创建画布] 创建画布失败:', e);
     }
     return null;
-  }, [canvasList.length, loadCanvasList, onCanvasCreated, currentCanvasId, hasUnsavedChanges]);
+  }, [loadCanvasList, onCanvasCreated, currentCanvasId]);
 
   // 保存当前画布（防抖）- 会自动将图片内容本地化到画布专属文件夹
   const saveCurrentCanvas = useCallback(async () => {
@@ -507,10 +604,13 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       
       lastSaveRef.current = { nodes: nodesStr, connections: connectionsStr };
       console.log('[Canvas] 自动保存');
+      
+      // 🆕 保存后刷新列表，更新节点数和修改时间
+      await loadCanvasList();
     } catch (e) {
       console.error('[Canvas] 保存失败:', e);
     }
-  }, [currentCanvasId, canvasList, canvasName]);
+  }, [currentCanvasId, canvasList, canvasName, loadCanvasList]);
 
   // 将saveCurrentCanvas赋值给ref，供其他函数调用（避免循环依赖）
   useEffect(() => {
@@ -550,19 +650,53 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   // 删除画布
   const deleteCanvasById = useCallback(async (canvasId: string) => {
     try {
+      console.log('[删除画布] 开始删除:', canvasId.slice(0, 12));
+      
+      // 🆕 先获取当前列表，确定删除后要切换到哪个画布
+      const currentList = canvasList.length > 0 ? canvasList : await loadCanvasList();
+      const deleteIndex = currentList.findIndex(c => c.id === canvasId);
+      const isDeletingCurrent = canvasId === currentCanvasId;
+      
+      console.log('[删除画布] 当前列表长度:', currentList.length);
+      console.log('[删除画布] 删除索引:', deleteIndex);
+      console.log('[删除画布] 是否删除当前画布:', isDeletingCurrent);
+      
       const result = await canvasApi.deleteCanvas(canvasId);
       if (result.success) {
-        await loadCanvasList();
-        // 如果删除的是当前画布，创建新画布
-        if (canvasId === currentCanvasId) {
-          await createNewCanvas();
+        console.log('[删除画布] ✅ 后端删除成功');
+        
+        // 刷新列表
+        const updatedList = await loadCanvasList();
+        console.log('[删除画布] 删除后列表长度:', updatedList.length);
+        
+        // 🆕 如果删除的是当前画布，需要自动切换
+        if (isDeletingCurrent) {
+          if (updatedList.length === 0) {
+            // 没有画布了，创建新画布
+            console.log('[删除画布] 没有画布了，创建新画布');
+            await createNewCanvas();
+          } else {
+            // 🆕 有其他画布，切换到下一个（或上一个）
+            let nextCanvas;
+            if (deleteIndex < updatedList.length) {
+              // 切换到同一位置的下一个画布
+              nextCanvas = updatedList[deleteIndex];
+              console.log('[删除画布] 切换到下一个画布:', nextCanvas.name);
+            } else {
+              // 删除的是最后一个，切换到倒数第二个
+              nextCanvas = updatedList[updatedList.length - 1];
+              console.log('[删除画布] 删除最后一个，切换到:', nextCanvas.name);
+            }
+            await loadCanvas(nextCanvas.id);
+          }
         }
-        console.log('[Canvas] 删除画布:', canvasId);
+        
+        console.log('[删除画布] ✅ 删除完成');
       }
     } catch (e) {
-      console.error('[Canvas] 删除画布失败:', e);
+      console.error('[删除画布] ❌ 删除失败:', e);
     }
-  }, [currentCanvasId, loadCanvasList, createNewCanvas]);
+  }, [currentCanvasId, canvasList, loadCanvasList, createNewCanvas, loadCanvas]);
 
   // 重命名画布（同步重命名文件夹）
   const renameCanvas = useCallback(async (newName: string) => {
@@ -596,30 +730,40 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
     initCanvas();
   }, []); // 只在组件挂载时执行一次
 
-  // 自动保存（防抖2000ms，避免拖拽时频繁触发）
+  // 自动保存（防拖2000ms，避免拖拽时频繁触发）
   useEffect(() => {
     if (!currentCanvasId) return;
-    
+      
     // 如果自动保存被禁用，跳过
     if (!autoSaveEnabled) {
       console.log('[自动保存] 已禁用，跳过');
       return;
     }
-    
+      
     // 如果正在拖拽节点，跳过自动保存
     if (draggingNodeId || isDragOperation) {
       console.log('[自动保存] 拖拽中，跳过');
       return;
     }
-    
+      
+    // 🔧 关键修复：检查当前 nodes/connections 是否与 lastSaveRef 一致
+    // 如果一致，说明是刚加载的数据，不需要保存
+    const currentNodesStr = JSON.stringify(nodes);
+    const currentConnsStr = JSON.stringify(connections);
+    if (currentNodesStr === lastSaveRef.current.nodes && 
+        currentConnsStr === lastSaveRef.current.connections) {
+      console.log('[自动保存] 数据未变化，跳过');
+      return;
+    }
+      
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
     }
-    
+      
     saveTimerRef.current = setTimeout(() => {
       saveCurrentCanvas();
-    }, 2000); // 增加防抖时间到2秒
-    
+    }, 2000); // 增加防拖时间到2秒
+      
     return () => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
@@ -627,21 +771,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
     };
   }, [nodes, connections, currentCanvasId, saveCurrentCanvas, draggingNodeId, isDragOperation, autoSaveEnabled]);
 
-  // 组件卸载前保存
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
-      // 同步保存一次
-      if (currentCanvasId && nodesRef.current.length > 0) {
-        canvasApi.updateCanvas(currentCanvasId, {
-          nodes: nodesRef.current,
-          connections: connectionsRef.current,
-        }).catch(e => console.error('[Canvas] 卸载保存失败:', e));
-      }
-    };
-  }, [currentCanvasId]);
 
   // Re-check API config when settings modal closes
   const handleCloseApiSettings = () => {
