@@ -8,6 +8,7 @@ import Sidebar from './Sidebar';
 import ContextMenu from './ContextMenu';
 import PresetCreationModal from './PresetCreationModal';
 import PresetInstantiationModal from './PresetInstantiationModal';
+import CanvasNameBadge from './CanvasNameBadge';
 import { editImageWithGemini, chatWithThirdPartyApi, getThirdPartyConfig, ImageEditConfig } from '../../services/geminiService';
 import * as canvasApi from '../../services/api/canvas';
 import { downloadRemoteToOutput } from '../../services/api/files';
@@ -3360,7 +3361,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           }}
       />
       
-      <div 
+      {/* 画布名称标识 - 独立模块 */}
+      <CanvasNameBadge 
+        canvasName={canvasName}
+        isLoading={isCanvasLoading}
+        hasUnsavedChanges={hasUnsavedChanges}
+      />
+      
+      <div
         ref={containerRef}
         className={`w-full h-full relative ${isSpacePressed ? 'cursor-grab' : 'cursor-default'} ${isDraggingCanvas ? '!cursor-grabbing' : ''}`}
         onMouseDown={onMouseDownCanvas}
