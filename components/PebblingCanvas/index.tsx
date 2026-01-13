@@ -136,6 +136,60 @@ const isValidImage = (content: string | undefined): boolean => {
   );
 };
 
+// 🔥 提取图片元数据(宽高/大小/格式)
+interface ImageMetadata {
+  width: number;
+  height: number;
+  size: string; // 格式化后的大小, 如 "125 KB"
+  format: string; // 图片格式, 如 "PNG", "JPEG"
+}
+
+const extractImageMetadata = async (imageUrl: string): Promise<ImageMetadata> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    
+    img.onload = () => {
+      const width = img.naturalWidth;
+      const height = img.naturalHeight;
+      
+      // 提取格式
+      let format = 'UNKNOWN';
+      if (imageUrl.startsWith('data:image/')) {
+        const match = imageUrl.match(/data:image\/(\w+);/);
+        format = match ? match[1].toUpperCase() : 'BASE64';
+      } else if (imageUrl.includes('.')) {
+        const ext = imageUrl.split('.').pop()?.split('?')[0];
+        format = ext ? ext.toUpperCase() : 'URL';
+      }
+      
+      // 计算大小
+      let size = 'Unknown';
+      if (imageUrl.startsWith('data:')) {
+        // Base64: 计算字符串长度
+        const base64Length = imageUrl.split(',')[1]?.length || 0;
+        const bytes = (base64Length * 3) / 4; // Base64解码后的字节数
+        if (bytes < 1024) {
+          size = `${Math.round(bytes)} B`;
+        } else if (bytes < 1024 * 1024) {
+          size = `${(bytes / 1024).toFixed(1)} KB`;
+        } else {
+          size = `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+      }
+      
+      resolve({ width, height, size, format });
+    };
+    
+    img.onerror = () => {
+      console.warn('[extractImageMetadata] 图片加载失败:', imageUrl.slice(0, 100));
+      // 返回默认值
+      resolve({ width: 0, height: 0, size: 'Unknown', format: 'Unknown' });
+    };
+    
+    img.src = imageUrl;
+  });
+};
+
 // === 画布组件开始 ===
 
 interface PebblingCanvasProps {
@@ -226,6 +280,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
   
   // 上次鼠标位置，用于计算画布平移时的增量
   const lastMousePosRef = useRef<Vec2>({ x: 0, y: 0 });
+  
+  // 缩放结束后的重绘定时器
+  const zoomEndTimerRef = useRef<number | null>(null);
   
   // Ref to handleExecuteNode for use in callbacks (避免依赖循环)
   const executeNodeRef = useRef<((nodeId: string, batchCount?: number) => Promise<void>) | null>(null);
@@ -862,6 +919,26 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
           setScale(newScale);
           setCanvasOffset({ x: newOffsetX, y: newOffsetY });
       });
+      
+      // 🔧 修复缩放后模糊问题：缩放停止后强制触发重绘
+      if (zoomEndTimerRef.current) clearTimeout(zoomEndTimerRef.current);
+      zoomEndTimerRef.current = window.setTimeout(() => {
+          // 强制重绘：多种方法组合确保有效
+          
+          // 方法1：操作 transform 容器
+          const canvasContent = container.querySelector('[style*="transform"]');
+          if (canvasContent instanceof HTMLElement) {
+              // 临时修改 CSS 属性强制重绘
+              const originalStyle = canvasContent.style.transform;
+              canvasContent.style.transform = 'translateZ(0)';
+              requestAnimationFrame(() => {
+                  canvasContent.style.transform = originalStyle;
+              });
+          }
+          
+          // 方法2：强制 React 重渲染
+          setScale(s => s);
+      }, 150); // 150ms 后触发重绘
   }, [scale, canvasOffset]);
 
   // 添加原生 wheel 事件监听器（非被动模式）
@@ -1155,11 +1232,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                   foundImageInThisPath = true; // 找到图片，这条路径停止
               }
           } else if (node.type === 'remove-bg' || node.type === 'upscale' || node.type === 'resize') {
-              // 必须检查 status === 'completed'，确保收集的是完成的输出
-              if (node.status === 'completed' && isValidImage(node.content)) {
-                  images.push(node.content);
-                  foundImageInThisPath = true; // 找到图片，这条路径停止
-              }
+              // 🔧 修复：这些工具节点不再存储content，结果在下游的Image节点
+              // 工具节点不提供图片输出，直接跳过
           } else if (node.type === 'bp') {
               // BP节点：优先从 data.output 获取（有下游连接时），否则从 content 获取
               const bpOutput = node.data?.output;
@@ -1511,6 +1585,124 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       console.log(`[BP/Idea批量] 全部完成`);
   };
 
+  // 工具节点批量执行（remove-bg/upscale）：创建多个结果节点
+  const handleToolBatchExecute = async (sourceNodeId: string, sourceNode: CanvasNode, count: number) => {
+      // 立即标记源节点为 running，防止重复点击
+      updateNode(sourceNodeId, { status: 'running' });
+      
+      console.log(`[工具批量] 开始生成 ${count} 个结果节点`);
+      
+      // 获取源节点的位置和输入
+      const inputs = resolveInputs(sourceNodeId);
+      const inputImages = inputs.images;
+      
+      if (inputImages.length === 0) {
+          console.warn('[工具批量] 无输入图片，无法执行');
+          updateNode(sourceNodeId, { status: 'error' });
+          return;
+      }
+      
+      // 创建结果节点，并自动连接到源节点
+      const resultNodeIds: string[] = [];
+      const newNodes: CanvasNode[] = [];
+      const newConnections: Connection[] = [];
+      
+      // 计算结果节点的位置（源节点右侧，垂直排列）
+      const baseX = sourceNode.x + sourceNode.width + 150; // 距离源节点150px
+      const nodeHeight = 300; // 预估节点高度
+      const gap = 20; // 节点间距
+      const totalHeight = count * nodeHeight + (count - 1) * gap;
+      const startY = sourceNode.y + (sourceNode.height / 2) - (totalHeight / 2);
+      
+      for (let i = 0; i < count; i++) {
+          const newId = uuid();
+          resultNodeIds.push(newId);
+          
+          const resultNode: CanvasNode = {
+              id: newId,
+              type: 'image',
+              content: '',
+              x: baseX,
+              y: startY + i * (nodeHeight + gap),
+              width: 300,
+              height: 300,
+              status: 'running', // 创建时就设为running
+              data: {}
+          };
+          newNodes.push(resultNode);
+          
+          // 创建连接：源节点 -> 结果节点
+          newConnections.push({
+              id: uuid(),
+              fromNode: sourceNodeId,
+              toNode: newId
+          });
+      }
+      
+      // 添加节点和连接
+      setNodes(prev => [...prev, ...newNodes]);
+      setConnections(prev => [...prev, ...newConnections]);
+      
+      // 更新ref
+      nodesRef.current = [...nodesRef.current, ...newNodes];
+      connectionsRef.current = [...connectionsRef.current, ...newConnections];
+      
+      console.log(`[工具批量] 已创建 ${count} 个结果节点，开始并发执行`);
+      
+      // 并发执行所有结果节点的生成
+      const execPromises = resultNodeIds.map(async (nodeId, index) => {
+          const abortController = new AbortController();
+          abortControllersRef.current.set(nodeId, abortController);
+          const signal = abortController.signal;
+          
+          try {
+              let result: string | null = null;
+              
+              if (sourceNode.type === 'remove-bg') {
+                  const prompt = "Remove the background, keep subject on transparent or white background";
+                  result = await editCreativeImage([inputImages[0]], prompt, undefined, signal);
+              } else if (sourceNode.type === 'upscale') {
+                  const prompt = "Upscale this image to high resolution while preserving all original details, colors, and composition. Enhance clarity and sharpness without altering the content.";
+                  const upscaleResolution = sourceNode.data?.settings?.resolution || '2K';
+                  const upscaleConfig: GenerationConfig = {
+                      resolution: upscaleResolution as '1K' | '2K' | '4K'
+                  };
+                  result = await editCreativeImage([inputImages[0]], prompt, upscaleConfig, signal);
+              }
+              
+              if (!signal.aborted) {
+                  if (result) {
+                      // 提取图片元数据
+                      const metadata = await extractImageMetadata(result);
+                      
+                      updateNode(nodeId, { 
+                          content: result, 
+                          status: 'completed',
+                          data: { imageMetadata: metadata }
+                      });
+                  } else {
+                      updateNode(nodeId, { status: 'error' });
+                  }
+              }
+          } catch (err) {
+              if (!signal.aborted) {
+                  updateNode(nodeId, { status: 'error' });
+                  console.error(`[工具批量] 结果 ${index + 1} 失败:`, err);
+              }
+          } finally {
+              abortControllersRef.current.delete(nodeId);
+          }
+      });
+      
+      // 等待所有执行完成
+      await Promise.all(execPromises);
+      
+      // 标记源节点为完成
+      updateNode(sourceNodeId, { status: 'completed' });
+      
+      console.log(`[工具批量] 全部完成`);
+  };
+
   const handleExecuteNode = async (nodeId: string, batchCount: number = 1) => {
       const node = nodesRef.current.find(n => n.id === nodeId);
       if (!node) {
@@ -1547,6 +1739,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       if (batchCount > 1 && ['image', 'edit'].includes(node.type)) {
           try {
               await handleBatchExecute(nodeId, node, batchCount);
+          } finally {
+              executingNodesRef.current.delete(nodeId); // 解锁
+          }
+          return;
+      }
+      
+      // 工具节点批量执行：自动创建图像节点
+      if (batchCount >= 1 && ['remove-bg', 'upscale'].includes(node.type)) {
+          try {
+              await handleToolBatchExecute(nodeId, node, batchCount);
           } finally {
               executingNodesRef.current.delete(nodeId); // 解锁
           }
@@ -1719,16 +1921,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               }
           }
           else if (node.type === 'edit') {
-               // Edit节点执行逻辑 - 执行后保持节点原貌，输出存到 data.output 供下游获取
-               // 先清除之前的输出，以便重新执行
-               updateNode(nodeId, { data: { ...node.data, output: undefined } });
-               
-               const nodePrompt = node.data?.prompt || '';
+               // Magic节点执行逻辑 - 立即创建Image节点来展示结果，不修改自身
                const inputTexts = inputs.texts.join('\n');
-               const combinedPrompt = nodePrompt || inputTexts;
                const inputImages = inputs.images;
                
-               // 获取 Edit 节点的设置
+               // 获取节点的设置和提示词
+               const nodePrompt = node.data?.prompt || '';
+               const combinedPrompt = nodePrompt || inputTexts;
+               
+               // 获取Edit节点的设置
                const editAspectRatio = node.data?.settings?.aspectRatio || 'AUTO';
                const editResolution = node.data?.settings?.resolution || 'AUTO';
                
@@ -1741,37 +1942,86 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                    };
                }
                
-               if (!combinedPrompt && inputImages.length === 0) {
-                   // 无prompt + 无图片 = 不执行
+               // 🎯 修复:点击RUN立即创建输出节点,显示loading状态
+               console.log(`[Magic] 开始执行,立即创建输出节点`);
+               
+               // 1. 立即创建右侧Image节点(空白+loading)
+               const outputNodeId = uuid();
+               const outputNode: CanvasNode = {
+                   id: outputNodeId,
+                   type: 'image',
+                   content: '', // 空白,等待API返回
+                   x: node.x + node.width + 100,
+                   y: node.y,
+                   width: 300,
+                   height: 300,
+                   data: {},
+                   status: 'running' // loading状态
+               };
+               
+               const newConnection = {
+                   id: uuid(),
+                   fromNode: nodeId,
+                   toNode: outputNodeId
+               };
+               
+               // 2. 立即更新UI:添加节点+连接
+               setNodes(prev => [...prev, outputNode]);
+               setConnections(prev => [...prev, newConnection]);
+               setHasUnsavedChanges(true);
+               console.log(`[Magic] 已创建输出节点 ${outputNodeId.slice(0,8)}, 状态:running`);
+               
+               // 3. 调用API
+               try {
+                   let result: string | null = null;
+                   
+                   if (!combinedPrompt && inputImages.length === 0) {
+                       // 无prompt + 无图片 = 不执行
+                       console.warn('[Magic] 无prompt且无图片，无法执行');
+                       updateNode(outputNodeId, { status: 'error' });
+                       updateNode(nodeId, { status: 'error' });
+                       return;
+                   } else if (combinedPrompt && inputImages.length === 0) {
+                       // 有prompt + 无图片 = 文生图
+                       result = await generateCreativeImage(combinedPrompt, finalConfig, signal);
+                   } else if (!combinedPrompt && inputImages.length > 0) {
+                       // 无prompt + 有图片 = 直接传递图片
+                       result = inputImages[0];
+                       // 标记Magic节点完成
+                       updateNode(nodeId, { status: 'completed' });
+                   } else {
+                       // 有prompt + 有图片 = 图生图
+                       result = await editCreativeImage(inputImages, combinedPrompt, finalConfig, signal);
+                   }
+                   
+                   if (!signal.aborted) {
+                       if (result) {
+                           console.log(`[Magic] API返回成功,更新输出节点内容`);
+                           
+                           // 🔥 提取图片元数据
+                           const metadata = await extractImageMetadata(result);
+                           console.log(`[Magic] 图片元数据:`, metadata);
+                           
+                           // 4. 更新已存在的输出节点:填充内容+元数据
+                           updateNode(outputNodeId, { 
+                               content: result,
+                               status: 'completed',
+                               data: { imageMetadata: metadata }
+                           });
+                           
+                           // 5. 标记Magic节点完成
+                           updateNode(nodeId, { status: 'completed' });
+                       } else {
+                           // API失败,更新输出节点为error
+                           updateNode(outputNodeId, { status: 'error' });
+                           updateNode(nodeId, { status: 'error' });
+                       }
+                   }
+               } catch (error) {
+                   console.error('[Magic] 执行失败:', error);
+                   // API失败,更新输出节点为error
+                   updateNode(outputNodeId, { status: 'error' });
                    updateNode(nodeId, { status: 'error' });
-               } else if (combinedPrompt && inputImages.length === 0) {
-                   // 有prompt + 无图片 = 文生图
-                   const result = await generateCreativeImage(combinedPrompt, finalConfig, signal);
-                   if (!signal.aborted) {
-                       // 输出存到 data.output，不覆盖节点显示
-                       updateNode(nodeId, { 
-                           data: { ...node.data, output: result },
-                           status: result ? 'completed' : 'error' 
-                       });
-                   }
-               } else if (!combinedPrompt && inputImages.length > 0) {
-                   // 无prompt + 有图片 = 直接传递图片
-                   if (!signal.aborted) {
-                       updateNode(nodeId, { 
-                           data: { ...node.data, output: inputImages[0] },
-                           status: 'completed' 
-                       });
-                   }
-               } else {
-                   // 有prompt + 有图片 = 图生图
-                   const result = await editCreativeImage(inputImages, combinedPrompt, finalConfig, signal);
-                   if (!signal.aborted) {
-                       // 输出存到 data.output，不覆盖节点显示
-                       updateNode(nodeId, { 
-                           data: { ...node.data, output: result },
-                           status: result ? 'completed' : 'error' 
-                       });
-                   }
                }
           }
           else if (node.type === 'video') {
@@ -2142,44 +2392,146 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
               }
           }
           else if (node.type === 'remove-bg') {
-              // Remove-BG节点：需要上游图片输入
+              // Remove-BG节点:需要上游图片输入
               const inputImages = inputs.images;
-              
+                        
               if (inputImages.length === 0) {
                   updateNode(nodeId, { status: 'error' });
-                  console.warn('Remove-BG节点执行失败：无输入图片');
+                  console.warn('Remove-BG节点执行失败:无输入图片');
               } else {
+                  // 🎯 修复:点击RUN立即创建输出节点,显示loading状态
+                  console.log(`[Remove-BG] 开始执行,立即创建输出节点`);
+                            
+                  // 1. 立即创建右侧Image节点(空白+loading)
+                  const outputNodeId = uuid();
+                  const outputNode: CanvasNode = {
+                      id: outputNodeId,
+                      type: 'image',
+                      content: '', // 空白,等待API返回
+                      x: node.x + node.width + 100,
+                      y: node.y,
+                      width: 300,
+                      height: 300,
+                      data: {},
+                      status: 'running' // loading状态
+                  };
+                            
+                  const newConnection = {
+                      id: uuid(),
+                      fromNode: nodeId,
+                      toNode: outputNodeId
+                  };
+                            
+                  // 2. 立即更新UI:添加节点+连接
+                  setNodes(prev => [...prev, outputNode]);
+                  setConnections(prev => [...prev, newConnection]);
+                  setHasUnsavedChanges(true);
+                  console.log(`[Remove-BG] 已创建输出节点 ${outputNodeId.slice(0,8)}, 状态:running`);
+                            
+                  // 3. 调用API
                   const prompt = "Remove the background, keep subject on transparent or white background";
                   const result = await editCreativeImage([inputImages[0]], prompt, undefined, signal);
+                            
                   if (!signal.aborted) {
-                       updateNode(nodeId, { content: result || '', status: result ? 'completed' : 'error' });
+                      if (result) {
+                          console.log(`[Remove-BG] API返回成功,更新输出节点内容`);
+                                    
+                          // 🔥 提取图片元数据
+                          const metadata = await extractImageMetadata(result);
+                          console.log(`[Remove-BG] 图片元数据:`, metadata);
+                                    
+                          // 4. 更新已存在的输出节点:填充内容+元数据
+                          updateNode(outputNodeId, { 
+                              content: result,
+                              status: 'completed',
+                              data: { imageMetadata: metadata }
+                          });
+                                    
+                          // 5. 标记工具节点完成
+                          updateNode(nodeId, { status: 'completed' });
+                      } else {
+                          // API失败,更新输出节点为error
+                          updateNode(outputNodeId, { status: 'error' });
+                          updateNode(nodeId, { status: 'error' });
+                      }
                   }
               }
           }
           else if (node.type === 'upscale') {
-              // Upscale节点：高清放大处理
+              // Upscale节点:高清放大处理
               const inputImages = inputs.images;
-              
+                        
               console.log(`[Upscale] 收集到的输入图片数量: ${inputImages.length}`);
               if (inputImages.length > 0) {
                   console.log(`[Upscale] 图片预览:`, inputImages[0]?.slice(0, 80));
               }
-              
+                        
               if (inputImages.length === 0) {
                   updateNode(nodeId, { status: 'error' });
-                  console.error('❌ Upscale节点执行失败：无输入图片！请检查上游节点是否已执行完成');
+                  console.error('❌ Upscale节点执行失败:无输入图片!请检查上游节点是否已执行完成');
               } else {
-                  // 固定提示词：保持画面内容不变，高清处理
+                  // 🎯 修复:点击RUN立即创建输出节点,显示loading状态
+                  console.log(`[Upscale] 开始执行,立即创建输出节点`);
+                            
+                  // 1. 立即创建右侧Image节点(空白+loading)
+                  const outputNodeId = uuid();
+                  const outputNode: CanvasNode = {
+                      id: outputNodeId,
+                      type: 'image',
+                      content: '', // 空白,等待API返回
+                      x: node.x + node.width + 100,
+                      y: node.y,
+                      width: 300,
+                      height: 300,
+                      data: {},
+                      status: 'running' // loading状态
+                  };
+                            
+                  const newConnection = {
+                      id: uuid(),
+                      fromNode: nodeId,
+                      toNode: outputNodeId
+                  };
+                            
+                  // 2. 立即更新UI:添加节点+连接
+                  setNodes(prev => [...prev, outputNode]);
+                  setConnections(prev => [...prev, newConnection]);
+                  setHasUnsavedChanges(true);
+                  console.log(`[Upscale] 已创建输出节点 ${outputNodeId.slice(0,8)}, 状态:running`);
+                            
+                  // 3. 调用API
                   const prompt = "Upscale this image to high resolution while preserving all original details, colors, and composition. Enhance clarity and sharpness without altering the content.";
-                  // 获取用户选择的分辨率，默认 2K
                   const upscaleResolution = node.data?.settings?.resolution || '2K';
-                  // 配置：只传分辨率，不传比例参数，让API保持原图比例
                   const upscaleConfig: GenerationConfig = {
                       resolution: upscaleResolution as '1K' | '2K' | '4K'
                   };
+                  console.log(`[Upscale] 开始调用API,分辨率: ${upscaleResolution}`);
                   const result = await editCreativeImage([inputImages[0]], prompt, upscaleConfig, signal);
+                  console.log(`[Upscale] API调用完成,result:`, result ? `有图片 (${result.slice(0,50)}...)` : 'null');
+                            
                   if (!signal.aborted) {
-                       updateNode(nodeId, { content: result || '', status: result ? 'completed' : 'error' });
+                      if (result) {
+                          console.log(`[Upscale] API返回成功,更新输出节点内容`);
+                                    
+                          // 🔥 提取图片元数据
+                          const metadata = await extractImageMetadata(result);
+                          console.log(`[Upscale] 图片元数据:`, metadata);
+                                    
+                          // 4. 更新已存在的输出节点:填充内容+元数据
+                          updateNode(outputNodeId, { 
+                              content: result,
+                              status: 'completed',
+                              data: { imageMetadata: metadata }
+                          });
+                                    
+                          // 5. 标记工具节点完成
+                          updateNode(nodeId, { status: 'completed' });
+                      } else {
+                          console.error(`[Upscale] API返回失败,result为空`);
+                          // API失败,更新输出节点为error
+                          updateNode(outputNodeId, { status: 'error' });
+                          updateNode(nodeId, { status: 'error' });
+                      }
                   }
               }
           }
@@ -2907,8 +3259,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
                 height: '100%',
                 willChange: 'transform',
                 backfaceVisibility: 'hidden',
+                imageRendering: 'high-quality',
+                WebkitFontSmoothing: 'antialiased',
                 pointerEvents: 'none'
-            }}
+            } as React.CSSProperties}
             className="absolute top-0 left-0"
         >
             {/* Connections */}

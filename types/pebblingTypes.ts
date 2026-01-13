@@ -15,12 +15,20 @@ export interface NodeData {
   settings?: Record<string, any>;
   files?: Array<{ name: string; type: string; data: string }>; // Base64 files
   
+  // 🔥 图片元数据(宽高/大小/格式)
+  imageMetadata?: {
+    width: number;
+    height: number;
+    size: string; // 格式化后的大小, 如 "125 KB"
+    format: string; // 图片格式, 如 "PNG", "JPEG"
+  };
+  
   // Resize Node Specifics
   resizeMode?: 'longest' | 'shortest' | 'width' | 'height' | 'exact';
   resizeWidth?: number;
   resizeHeight?: number;
   
-  // BP Node Specifics - 存储BP创意库配置
+  // BP Node Specifics - 存僨BP创意库配置
   bpTemplate?: {
     id: number;
     title: string;
