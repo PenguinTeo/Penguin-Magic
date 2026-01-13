@@ -43,6 +43,7 @@
   "build": {
     "appId": "com.penguin.magic",
     "productName": "PenguinMagic",
+    "afterPack": "./scripts/afterPack.cjs",
     "directories": {
       "output": "release"
     },
@@ -81,7 +82,9 @@
         "portable"
       ],
       "icon": "resources/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "requestedExecutionLevel": "asInvoker",
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,

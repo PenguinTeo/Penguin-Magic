@@ -446,8 +446,13 @@ app.whenReady().then(async () => {
   console.log('应用路径:', app.getAppPath());
   console.log('开发模式:', CONFIG.isDev);
 
-  // 创建菜单
-  createMenu();
+  // 创建菜单（仅在开发环境）
+  if (CONFIG.isDev) {
+    createMenu();
+  } else {
+    // 生产环境：隐藏菜单栏
+    Menu.setApplicationMenu(null);
+  }
 
   // 生产环境：先显示启动画面
   if (!CONFIG.isDev) {
