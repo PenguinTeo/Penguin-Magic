@@ -135,6 +135,10 @@ interface CanvasProps {
   onCanvasImageGenerated?: (imageUrl: string, prompt: string, canvasId?: string, canvasName?: string) => void;
   // 画布创建回调
   onCanvasCreated?: (canvasId: string, canvasName: string) => void;
+  // 添加图片到画布
+  pendingCanvasImage?: { imageUrl: string; imageName?: string } | null;
+  onClearPendingCanvasImage?: () => void;
+  onAddToCanvas?: (imageUrl: string, imageName?: string) => void;
 }
 
 // IndexedDB 相关操作已迁移到 services/db/ 目录
@@ -1473,6 +1477,9 @@ const Canvas: React.FC<CanvasProps> = ({
   isImportingById,
   onCanvasImageGenerated,
   onCanvasCreated,
+  pendingCanvasImage,
+  onClearPendingCanvasImage,
+  onAddToCanvas,
 }) => {
   const { theme, themeName } = useTheme();
   const isDark = themeName !== 'light';
@@ -1562,6 +1569,8 @@ const Canvas: React.FC<CanvasProps> = ({
             onCanvasCreated={onCanvasCreated}
             creativeIdeas={creativeIdeas}
             isActive={view === 'canvas'}
+            pendingImageToAdd={pendingCanvasImage}
+            onPendingImageAdded={onClearPendingCanvasImage}
           />
         </div>
       ) : null}
@@ -1589,6 +1598,7 @@ const Canvas: React.FC<CanvasProps> = ({
             onFileDrop={onFileDrop}
             onCreateCreativeIdea={onCreateCreativeIdea}
             isActive={view !== 'canvas'}
+            onAddToCanvas={onAddToCanvas}
           />
           
           {/* 生成结果浮层 - 毛玻璃效果 + 最小化联动 */}
@@ -1757,6 +1767,9 @@ const App: React.FC = () => {
   const [desktopSelectedIds, setDesktopSelectedIds] = useState<string[]>([]);
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const [openStackId, setOpenStackId] = useState<string | null>(null); // 叠放打开状态
+  
+  // 待添加到画布的图片（用于桌面->画布联动）
+  const [pendingCanvasImage, setPendingCanvasImage] = useState<{ imageUrl: string; imageName?: string } | null>(null);
   
   // 画布ID到桌面文件夹ID的映射（用于画布-桌面联动）
   const [canvasToFolderMap, setCanvasToFolderMap] = useState<Record<string, string>>(() => {
@@ -2034,6 +2047,19 @@ const App: React.FC = () => {
     setError(null); 
   };
   
+  // 处理添加图片到画布
+  const handleAddToCanvas = useCallback((imageUrl: string, imageName?: string) => {
+    // 设置待添加的图片
+    setPendingCanvasImage({ imageUrl, imageName });
+    // 切换到画布视图
+    setView('canvas');
+  }, []);
+
+  // 清除待添加的画布图片（由PebblingCanvas处理完成后调用）
+  const handleClearPendingCanvasImage = useCallback(() => {
+    setPendingCanvasImage(null);
+  }, []);
+
   const handleAutoSaveToggle = (enabled: boolean) => {
     setAutoSave(enabled);
     localStorage.setItem('auto_save_enabled', JSON.stringify(enabled));
@@ -3542,6 +3568,9 @@ const App: React.FC = () => {
           isImportingById={isImportingById}
           onCanvasImageGenerated={handleCanvasImageGenerated}
           onCanvasCreated={handleCanvasCreated}
+          pendingCanvasImage={pendingCanvasImage}
+          onClearPendingCanvasImage={handleClearPendingCanvasImage}
+          onAddToCanvas={handleAddToCanvas}
         />
         {view === 'editor' && (
              <div className="absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-300 bottom-6 flex items-center gap-3">

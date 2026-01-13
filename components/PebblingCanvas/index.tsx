@@ -198,9 +198,18 @@ interface PebblingCanvasProps {
   onCanvasCreated?: (canvasId: string, canvasName: string) => void; // 画布创建回调（用于桌面联动创建文件夹）
   creativeIdeas?: CreativeIdea[]; // 主项目创意库
   isActive?: boolean; // 画布是否处于活动状态（用于快捷键作用域控制）
+  pendingImageToAdd?: { imageUrl: string; imageName?: string } | null; // 待添加的图片（从桌面添加）
+  onPendingImageAdded?: () => void; // 图片添加完成后的回调
 }
 
-const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCanvasCreated, creativeIdeas = [], isActive = true }) => {
+const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ 
+  onImageGenerated, 
+  onCanvasCreated, 
+  creativeIdeas = [], 
+  isActive = true,
+  pendingImageToAdd,
+  onPendingImageAdded
+}) => {
   // --- 画布管理状态 ---
   const [currentCanvasId, setCurrentCanvasId] = useState<string | null>(null);
   const [canvasList, setCanvasList] = useState<canvasApi.CanvasListItem[]>([]);
@@ -727,6 +736,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
         // 创建第一个画布
         await createNewCanvas('画布 1');
       }
+      
+      // 画布初始化完成后，处理待添加的图片
+      canvasInitializedRef.current = true;
+      setTimeout(() => {
+        processPendingImage();
+      }, 200);
     };
     initCanvas();
   }, []); // 只在组件挂载时执行一次
@@ -1169,6 +1184,36 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ onImageGenerated, onCan
       
       return newNode;
   };
+
+  // 处理从桌面添加图片到画布 - 使用 ref 避免闭包问题
+  const pendingImageRef = useRef<{ imageUrl: string; imageName?: string } | null>(null);
+  const canvasInitializedRef = useRef(false); // 标记画布是否已初始化
+  
+  useEffect(() => {
+    pendingImageRef.current = pendingImageToAdd || null;
+    
+    // 如果画布已初始化且有待添加的图片，直接处理
+    if (canvasInitializedRef.current && pendingImageToAdd) {
+      setTimeout(() => {
+        processPendingImage();
+      }, 100);
+    }
+  }, [pendingImageToAdd]);
+  
+  // 处理待添加的图片（在画布初始化完成后调用）
+  const processPendingImage = useCallback(() => {
+    const pending = pendingImageRef.current;
+    if (!pending) return;
+    
+    console.log('[Canvas] 处理待添加的图片:', pending.imageName);
+    
+    // 添加图片节点
+    addNode('image', pending.imageUrl, undefined, pending.imageName);
+    
+    // 通知父组件图片已添加
+    onPendingImageAdded?.();
+    pendingImageRef.current = null;
+  }, [onPendingImageAdded]);
 
   const updateNode = (id: string, updates: Partial<CanvasNode>) => {
       // 先同步更新 ref，确保级联执行时能立即获取最新状态

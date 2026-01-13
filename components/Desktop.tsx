@@ -23,7 +23,8 @@ import {
   MoveRight as MoveOutIcon, 
   Type as RenameIcon, 
   Library as LibraryIcon, 
-  LayoutGrid as LayersIcon 
+  LayoutGrid as LayersIcon,
+  PlusSquare as AddToCanvasIcon
 } from 'lucide-react';
 // JSZip 导出逻辑已迁移到 services/export/desktopExporter.ts
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
@@ -58,6 +59,8 @@ interface DesktopProps {
   onCreateCreativeIdea?: (imageUrl: string, prompt?: string, aspectRatio?: string, resolution?: string) => void;
   // 桌面是否处于活动状态（用于快捷键作用域控制）
   isActive?: boolean;
+  // 添加图片到画布
+  onAddToCanvas?: (imageUrl: string, imageName?: string) => void;
 }
 
 const GRID_SIZE = 100; // 网格大小
@@ -98,6 +101,7 @@ export const Desktop: React.FC<DesktopProps> = ({
   onFileDrop,
   onCreateCreativeIdea,
   isActive = true,
+  onAddToCanvas,
 }) => {
   const { theme, themeName } = useTheme();
   const isLight = themeName === 'light';
@@ -2266,6 +2270,23 @@ export const Desktop: React.FC<DesktopProps> = ({
                     >
                       <LibraryIcon className="w-4 h-4 text-blue-400" />
                       <span>创建创意库</span>
+                    </button>
+                  )}
+                  {/* 添加到画布 - 青色 */}
+                  {onAddToCanvas && (
+                    <button
+                      onClick={() => {
+                        const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
+                        if (item && item.imageUrl) {
+                          onAddToCanvas(item.imageUrl, item.name);
+                        }
+                        setContextMenu(null);
+                      }}
+                      className="w-full px-3 py-2 text-left text-[12px] hover:bg-cyan-500/10 transition-colors flex items-center gap-2"
+                      style={{ color: theme.colors.textPrimary }}
+                    >
+                      <AddToCanvasIcon className="w-4 h-4 text-cyan-400" />
+                      <span>添加到画布</span>
                     </button>
                   )}
                   <div className="h-px my-1" style={{ background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }} />
