@@ -34,6 +34,9 @@ __pycache__/
 .env
 .env.*
 
+# 上传配置（包含服务器密码）
+release-uploader/config.json
+
 # 可执行文件和打包产物
 *.exe
 penguin-backend.exe

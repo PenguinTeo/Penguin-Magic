@@ -1,7 +1,7 @@
 {
   "name": "penguin-magic",
   "private": true,
-  "version": "1.2.4",
+  "version": "1.2.6",
   "description": "企鹅工坊 - AI 图像创意管理应用",
   "author": "PenguinCreative",
   "type": "module",
@@ -13,12 +13,15 @@
     "electron:dev": "concurrently \"cd backend-nodejs && npm start\" \"npm run dev\" \"wait-on http://localhost:5176 http://localhost:8765 && cross-env NODE_ENV=development electron .\"",
     "electron:build": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
     "package": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --x64",
-    "package:all": "npm run build && electron-builder -mwl"
+    "package:all": "npm run build && electron-builder -mwl",
+    "upload": "node release-uploader/upload.cjs",
+    "release": "npm run package && npm run upload"
   },
   "dependencies": {
     "@google/genai": "^1.16.0",
     "@types/three": "^0.182.0",
     "@xyflow/react": "^12.10.0",
+    "electron-updater": "^6.7.3",
     "jszip": "^3.10.1",
     "lucide-react": "^0.562.0",
     "react": "^19.1.1",
@@ -28,6 +31,7 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@types/pngjs": "^6.0.5",
+    "basic-ftp": "^5.1.0",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^39.2.7",
@@ -36,6 +40,7 @@
     "png-to-ico": "^3.0.1",
     "pngjs": "^7.0.0",
     "rcedit": "^5.0.2",
+    "ssh2-sftp-client": "^12.0.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "wait-on": "^9.0.3"
@@ -44,6 +49,10 @@
     "appId": "com.penguin.magic",
     "productName": "PenguinMagic",
     "afterPack": "./scripts/afterPack.cjs",
+    "publish": {
+      "provider": "generic",
+      "url": "http://updates.pebbling.cn/"
+    },
     "directories": {
       "output": "release"
     },

@@ -1,7 +1,8 @@
-const { app, BrowserWindow, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 // 配置参数
 const CONFIG = {
@@ -439,6 +440,87 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+// ============ 自动更新配置 ============
+function setupAutoUpdater() {
+  if (CONFIG.isDev) {
+    console.log('📦 开发模式，跳过自动更新检查');
+    return;
+  }
+
+  // 配置更新服务器
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: 'http://updates.pebbling.cn/'
+  });
+
+  // 禁用自动下载，让用户选择
+  autoUpdater.autoDownload = false;
+
+  // 检查更新出错
+  autoUpdater.on('error', (err) => {
+    console.error('❌ 更新检查出错:', err.message);
+  });
+
+  // 检查到新版本
+  autoUpdater.on('update-available', (info) => {
+    console.log('🆕 发现新版本:', info.version);
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '发现新版本',
+      message: `发现新版本 v${info.version}`,
+      detail: '是否立即下载更新？',
+      buttons: ['立即下载', '稍后提醒'],
+      defaultId: 0
+    }).then(({ response }) => {
+      if (response === 0) {
+        autoUpdater.downloadUpdate();
+      }
+    });
+  });
+
+  // 无新版本
+  autoUpdater.on('update-not-available', () => {
+    console.log('✅ 当前已是最新版本');
+  });
+
+  // 下载进度
+  autoUpdater.on('download-progress', (progress) => {
+    const percent = progress.percent.toFixed(1);
+    console.log(`📥 下载进度: ${percent}%`);
+    if (mainWindow) {
+      mainWindow.setProgressBar(progress.percent / 100);
+    }
+  });
+
+  // 下载完成
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('✅ 更新下载完成:', info.version);
+    if (mainWindow) {
+      mainWindow.setProgressBar(-1); // 清除进度条
+    }
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: '更新就绪',
+      message: `新版本 v${info.version} 已下载完成`,
+      detail: '应用将重启以完成更新',
+      buttons: ['立即重启', '稍后重启'],
+      defaultId: 0
+    }).then(({ response }) => {
+      if (response === 0) {
+        autoUpdater.quitAndInstall(false, true);
+      }
+    });
+  });
+
+  // 延迟 5 秒后检查更新
+  setTimeout(() => {
+    console.log('🔍 开始检查更新...');
+    autoUpdater.checkForUpdates().catch(err => {
+      console.error('检查更新失败:', err.message);
+    });
+  }, 5000);
+}
+
 // 应用启动
 app.whenReady().then(async () => {
   console.log('🐧 PenguinMagic 启动中...');
@@ -477,6 +559,9 @@ app.whenReady().then(async () => {
   
   // 关闭启动画面
   closeSplashWindow();
+
+  // 设置自动更新（生产环境）
+  setupAutoUpdater();
 
   // macOS 特定：点击 dock 图标时重新创建窗口
   app.on('activate', () => {
