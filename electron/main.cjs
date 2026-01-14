@@ -19,6 +19,51 @@ let mainWindow = null;
 let splashWindow = null;
 let backendServer = null;
 
+// 版本更新内容说明（业务向）
+const RELEASE_NOTES = {
+  '1.2.7': {
+    title: '🎉 欢迎使用新版本 v1.2.7',
+    content: '本次更新内容：\n\n• 修复了画布中 Veo 3.1 视频生成后无法正常显示的问题\n• 优化了视频下载稳定性\n• 减少了浏览器内存占用\n\n感谢您的使用！'
+  }
+};
+
+// 检查并显示更新后欢迎提示
+function checkAndShowWelcome() {
+  const currentVersion = app.getVersion();
+  const versionFile = path.join(app.getPath('userData'), 'last_version.txt');
+  
+  let lastVersion = '';
+  try {
+    if (fs.existsSync(versionFile)) {
+      lastVersion = fs.readFileSync(versionFile, 'utf-8').trim();
+    }
+  } catch (e) {
+    console.log('读取版本文件失败:', e.message);
+  }
+  
+  // 保存当前版本
+  try {
+    fs.writeFileSync(versionFile, currentVersion);
+  } catch (e) {
+    console.log('保存版本文件失败:', e.message);
+  }
+  
+  // 如果版本不同且有更新日志，显示欢迎提示
+  if (lastVersion && lastVersion !== currentVersion && RELEASE_NOTES[currentVersion]) {
+    const notes = RELEASE_NOTES[currentVersion];
+    setTimeout(() => {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: notes.title,
+        message: `已更新到 v${currentVersion}`,
+        detail: notes.content,
+        buttons: ['知道了'],
+        defaultId: 0
+      });
+    }, 2000); // 延迟2秒显示，等窗口加载完成
+  }
+}
+
 // 检查并释放端口（Windows）
 function killProcessOnPort(port) {
   return new Promise((resolve) => {
@@ -464,11 +509,19 @@ function setupAutoUpdater() {
   // 检查到新版本
   autoUpdater.on('update-available', (info) => {
     console.log('🆕 发现新版本:', info.version);
+    
+    // 版本更新内容说明（业务向）
+    const releaseNotes = {
+      '1.2.7': '✨ 本次更新\n\n• 修复了画布中 Veo 3.1 视频生成后无法正常显示的问题\n• 优化了视频下载稳定性\n• 减少了浏览器内存占用',
+    };
+    
+    const notes = releaseNotes[info.version] || '• 性能优化和问题修复';
+    
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: '发现新版本',
       message: `发现新版本 v${info.version}`,
-      detail: '是否立即下载更新？',
+      detail: `${notes}\n\n是否立即下载更新？`,
       buttons: ['立即下载', '稍后提醒'],
       defaultId: 0
     }).then(({ response }) => {
@@ -562,6 +615,11 @@ app.whenReady().then(async () => {
 
   // 设置自动更新（生产环境）
   setupAutoUpdater();
+
+  // 检查并显示更新后欢迎提示（生产环境）
+  if (!CONFIG.isDev) {
+    checkAndShowWelcome();
+  }
 
   // macOS 特定：点击 dock 图标时重新创建窗口
   app.on('activate', () => {
