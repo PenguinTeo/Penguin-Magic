@@ -1275,37 +1275,35 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         // 无视频时显示配置界面
         return (
             <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
-                {/* TAB切换 - 左上角 */}
-                <div className="absolute -top-7 left-0 z-30 flex">
-                    <button
-                        className={`px-3 py-1 text-[10px] font-bold uppercase rounded-t-lg transition-all ${
-                            videoService === 'sora' 
-                                ? 'bg-[#1c1c1e] text-white border-t border-l border-r border-white/20' 
-                                : 'bg-black/40 text-zinc-500 hover:text-zinc-300'
-                        }`}
-                        onClick={() => handleVideoSettingChange('videoService', 'sora')}
-                        onMouseDown={(e) => e.stopPropagation()}
-                    >
-                        Sora
-                    </button>
-                    <button
-                        className={`px-3 py-1 text-[10px] font-bold uppercase rounded-t-lg transition-all ${
-                            videoService === 'veo' 
-                                ? 'bg-[#1c1c1e] text-white border-t border-l border-r border-white/20' 
-                                : 'bg-black/40 text-zinc-500 hover:text-zinc-300'
-                        }`}
-                        onClick={() => handleVideoSettingChange('videoService', 'veo')}
-                        onMouseDown={(e) => e.stopPropagation()}
-                    >
-                        Veo3.1
-                    </button>
-                </div>
-                
-                {/* Header */}
+                {/* Header with TAB切换 */}
                 <div className="h-7 border-b border-white/10 flex items-center justify-between px-3 bg-white/5 shrink-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                         <Icons.Video size={12} className="text-white/70" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-white/80">Video</span>
+                        {/* TAB切换按钮 */}
+                        <div className="flex bg-black/40 rounded p-0.5 ml-1">
+                            <button
+                                className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded transition-all ${
+                                    videoService === 'sora' 
+                                        ? 'bg-white/20 text-white' 
+                                        : 'text-zinc-500 hover:text-zinc-300'
+                                }`}
+                                onClick={() => handleVideoSettingChange('videoService', 'sora')}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            >
+                                Sora
+                            </button>
+                            <button
+                                className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded transition-all ${
+                                    videoService === 'veo' 
+                                        ? 'bg-purple-500/30 text-purple-300' 
+                                        : 'text-zinc-500 hover:text-zinc-300'
+                                }`}
+                                onClick={() => handleVideoSettingChange('videoService', 'veo')}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            >
+                                Veo3.1
+                            </button>
+                        </div>
                     </div>
                     <span className="text-[7px] text-white/40 uppercase">
                         {videoService === 'sora' ? 'IMG+TXT → VIDEO' : (
@@ -1319,9 +1317,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 
                 {/* Settings */}
                 <div className="flex-1 p-2 flex flex-col gap-2 overflow-y-auto">
-                    {/* Prompt */}
+                    {/* Prompt - 限制最大高度避免覆盖按钮 */}
                     <textarea 
-                        className="flex-1 min-h-[60px] bg-black/40 border border-white/10 rounded p-2 text-[11px] text-zinc-200 outline-none resize-none focus:border-yellow-500/50 placeholder-zinc-600"
+                        className="min-h-[60px] max-h-[100px] bg-black/40 border border-white/10 rounded p-2 text-[11px] text-zinc-200 outline-none resize-none focus:border-yellow-500/50 placeholder-zinc-600"
                         placeholder="描述视频场景..."
                         value={localPrompt}
                         onChange={(e) => setLocalPrompt(e.target.value)}
@@ -1405,10 +1403,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             <div className="flex bg-black/40 rounded p-0.5">
                                 <button
                                     className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'text2video' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                    onClick={() => {
-                                        handleVideoSettingChange('veoMode', 'text2video');
-                                        handleVideoSettingChange('veoModel', 'veo3.1');
-                                    }}
+                                    onClick={() => handleVideoSettingChange('veoMode', 'text2video')}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="纯文字生成视频"
                                 >
@@ -1416,10 +1411,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                                 <button
                                     className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'image2video' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                    onClick={() => {
-                                        handleVideoSettingChange('veoMode', 'image2video');
-                                        handleVideoSettingChange('veoModel', 'veo3.1');
-                                    }}
+                                    onClick={() => handleVideoSettingChange('veoMode', 'image2video')}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="单图直出视频"
                                 >
@@ -1427,10 +1419,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                                 <button
                                     className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'keyframes' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                    onClick={() => {
-                                        handleVideoSettingChange('veoMode', 'keyframes');
-                                        handleVideoSettingChange('veoModel', 'veo3.1-pro');
-                                    }}
+                                    onClick={() => handleVideoSettingChange('veoMode', 'keyframes')}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="首尾帧控制视频"
                                 >
@@ -1438,10 +1427,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                                 <button
                                     className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'multi-reference' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                    onClick={() => {
-                                        handleVideoSettingChange('veoMode', 'multi-reference');
-                                        handleVideoSettingChange('veoModel', 'veo3.1-components');
-                                    }}
+                                    onClick={() => onUpdate(node.id, { data: { ...node.data, veoMode: 'multi-reference', veoModel: 'veo3.1-components' } })}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="多图参考生成"
                                 >
@@ -1449,42 +1435,49 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                             </div>
                             
+                            {/* Row 1.5: 模型选择 Flash/Pro（非 components 模式显示） */}
+                            {veoMode !== 'multi-reference' && (
+                                <div className="flex bg-black/40 rounded p-0.5">
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${
+                                            veoModel === 'veo3.1' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'
+                                        }`}
+                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title="标准模型，速度快"
+                                    >
+                                        ⚡ Flash
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${
+                                            veoModel === 'veo3.1-pro' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'
+                                        }`}
+                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-pro')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title="高质量模型，结果更精细"
+                                    >
+                                        ✨ Pro
+                                    </button>
+                                </div>
+                            )}
+                            
                             {/* Row 2: 宽高比（非 components 模式显示） */}
                             {veoMode !== 'multi-reference' && (
-                                <div className="flex gap-1.5">
-                                    <div className="flex bg-black/40 rounded p-0.5 flex-1">
-                                        <button
-                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '16:9' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                            onClick={() => handleVideoSettingChange('veoAspectRatio', '16:9')}
-                                            onMouseDown={(e) => e.stopPropagation()}
-                                        >
-                                            16:9
-                                        </button>
-                                        <button
-                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '9:16' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                            onClick={() => handleVideoSettingChange('veoAspectRatio', '9:16')}
-                                            onMouseDown={(e) => e.stopPropagation()}
-                                        >
-                                            9:16
-                                        </button>
-                                    </div>
-                                    {/* 高清开关 */}
-                                    <div className="flex bg-black/40 rounded p-0.5 flex-1">
-                                        <button
-                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${!veoEnableUpsample ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                            onClick={() => handleVideoSettingChange('veoEnableUpsample', false)}
-                                            onMouseDown={(e) => e.stopPropagation()}
-                                        >
-                                            SD
-                                        </button>
-                                        <button
-                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoEnableUpsample ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                            onClick={() => handleVideoSettingChange('veoEnableUpsample', true)}
-                                            onMouseDown={(e) => e.stopPropagation()}
-                                        >
-                                            HD
-                                        </button>
-                                    </div>
+                                <div className="flex bg-black/40 rounded p-0.5">
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '16:9' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                        onClick={() => handleVideoSettingChange('veoAspectRatio', '16:9')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        16:9
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '9:16' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                        onClick={() => handleVideoSettingChange('veoAspectRatio', '9:16')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        9:16
+                                    </button>
                                 </div>
                             )}
                             

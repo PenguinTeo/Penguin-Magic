@@ -34,17 +34,15 @@ interface VeoCreateResponse {
   data: string; // task_id
 }
 
-// Veo 任务查询响应
+// Veo 任务查询响应 - 匹配实际API结构
 interface VeoTaskResponse {
-  code: string;
-  data: {
-    status: VeoTaskStatus;
-    progress: string; // "0%~100%"
-    data: {
-      video_url?: string;
-    } | null;
-    fail_reason?: string;
-  };
+  status: VeoTaskStatus;       // 顶层 status
+  progress?: string;           // 顶层 progress "0%~100%"
+  fail_reason?: string;        // 顶层失败原因
+  data?: {
+    video_url?: string;        // 视频URL在 data.video_url
+    detail?: any;              // 详细信息
+  } | null;
 }
 
 export interface VeoGenerationParams {
@@ -216,19 +214,22 @@ export async function getVeoTaskStatus(taskId: string): Promise<{
 
     const result: VeoTaskResponse = await response.json();
     
-    if (result.code !== 'success') {
-      throw new Error(`Veo 查询失败: ${JSON.stringify(result)}`);
-    }
+    console.log('[Veo API] 任务状态响应:', {
+      status: result.status,
+      progress: result.progress,
+      hasVideoUrl: !!result.data?.video_url,
+      failReason: result.fail_reason
+    });
 
     // 解析进度 "50%" -> 50
-    const progressMatch = result.data.progress?.match(/(\d+)/);
+    const progressMatch = result.progress?.match(/(\d+)/);
     const progress = progressMatch ? parseInt(progressMatch[1], 10) : 0;
 
     return {
-      status: result.data.status,
+      status: result.status,
       progress,
-      videoUrl: result.data.data?.video_url,
-      failReason: result.data.fail_reason
+      videoUrl: result.data?.video_url,
+      failReason: result.fail_reason
     };
   } catch (error) {
     console.error('[Veo API] 获取任务状态失败:', error);
