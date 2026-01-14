@@ -34,14 +34,26 @@ interface VeoCreateResponse {
   data: string; // task_id
 }
 
-// Veo 任务查询响应 - 匹配实际API结构
+// Veo 任务查询响应 - 兼容多种 API 结构
 interface VeoTaskResponse {
-  status: VeoTaskStatus;       // 顶层 status
-  progress?: string;           // 顶层 progress "0%~100%"
-  fail_reason?: string;        // 顶层失败原因
+  // 结构 1: 顶层字段
+  status?: string;
+  progress?: string;
+  fail_reason?: string;
+  // 结构 2: data 包装（注意有两层 data）
+  code?: string;
   data?: {
-    video_url?: string;        // 视频URL在 data.video_url
-    detail?: any;              // 详细信息
+    status?: string;        // "SUCCESS" | "RUNNING" | "FAILURE"
+    progress?: string;      // "100%"
+    fail_reason?: string;
+    // 内层 data，包含 video_url
+    data?: {
+      status?: string;      // "completed"
+      video_url?: string;
+      detail?: any;
+    };
+    // 也可能直接在外层
+    video_url?: string;
   } | null;
 }
 
@@ -214,22 +226,49 @@ export async function getVeoTaskStatus(taskId: string): Promise<{
 
     const result: VeoTaskResponse = await response.json();
     
-    console.log('[Veo API] 任务状态响应:', {
-      status: result.status,
-      progress: result.progress,
-      hasVideoUrl: !!result.data?.video_url,
-      failReason: result.fail_reason
-    });
-
-    // 解析进度 "50%" -> 50
-    const progressMatch = result.progress?.match(/(\d+)/);
-    const progress = progressMatch ? parseInt(progressMatch[1], 10) : 0;
+    // 🔍 调试：打印完整原始响应
+    console.log('[Veo API] 原始响应:', JSON.stringify(result, null, 2));
+    
+    // 兼容多种响应结构：注意 API 有两层 data 嵌套
+    // 结构: { code, data: { status, progress, data: { video_url } } }
+    const outerData = result.data;
+    const innerData = outerData?.data as any;  // 内层 data
+    
+    const rawStatus = outerData?.status || result.status || '';
+    const rawProgress = outerData?.progress || result.progress;
+    // video_url 可能在内层 data 或外层 data
+    const videoUrl = innerData?.video_url || outerData?.video_url;
+    const failReason = outerData?.fail_reason || result.fail_reason;
+    
+    // 转换 status: "completed" -> "SUCCESS", "running" -> "RUNNING", "failed" -> "FAILURE"
+    let status: VeoTaskStatus = 'PENDING';
+    const statusLower = rawStatus.toLowerCase();
+    if (statusLower === 'completed' || statusLower === 'success') {
+      status = 'SUCCESS';
+    } else if (statusLower === 'running' || statusLower === 'in_progress') {
+      status = 'RUNNING';
+    } else if (statusLower === 'failed' || statusLower === 'failure') {
+      status = 'FAILURE';
+    } else if (statusLower === 'pending' || statusLower === 'not_start') {
+      status = 'PENDING';
+    }
+    
+    // 解析进度
+    let progress = 0;
+    if (typeof rawProgress === 'number') {
+      progress = rawProgress;
+    } else if (typeof rawProgress === 'string') {
+      const progressMatch = rawProgress.match(/(\d+)/);
+      progress = progressMatch ? parseInt(progressMatch[1], 10) : 0;
+    }
+    
+    console.log('[Veo API] 解析后状态:', { status, progress, hasVideoUrl: !!videoUrl, failReason });
 
     return {
-      status: result.status,
+      status,
       progress,
-      videoUrl: result.data?.video_url,
-      failReason: result.fail_reason
+      videoUrl,
+      failReason
     };
   } catch (error) {
     console.error('[Veo API] 获取任务状态失败:', error);
