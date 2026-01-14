@@ -163,6 +163,15 @@ export const editImageWithThirdPartyApi = async (
   }
   // 图生图 + Auto：不添加 aspect_ratio 字段，让API使用输入图片的原始尺寸
   
+  console.log('[贞贞API] 图生图请求参数:', {
+    aspectRatio: config.aspectRatio,
+    isAutoAspectRatio,
+    imageSize: config.imageSize,
+    hasInputImage,
+    finalAspectRatio: requestBody.aspect_ratio,
+    finalImageSize: requestBody.image_size
+  });
+  
   // 如果有上传图片，添加参考图（图生图模式，支持多图）
   if (files.length > 0) {
     const imagePromises = files.map(async (file) => {

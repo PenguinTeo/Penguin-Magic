@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
 import { SoraConfig, getSoraConfig, saveSoraConfig } from '../services/soraService';
+import { VeoConfig, getVeoConfig, saveVeoConfig } from '../services/veoService';
 import { Plug, Gem, Eye as EyeIcon, EyeOff as EyeOffIcon, Key as KeyIcon, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Info as InfoIcon, Check, X, Video } from 'lucide-react';
 
 // 应用版本号 - 从vite构建时注入，来源于package.json
@@ -57,12 +58,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [localGeminiKey, setLocalGeminiKey] = useState(geminiApiKey || '');
   const [showApiKey, setShowApiKey] = useState(false);
   const [showSoraKey, setShowSoraKey] = useState(false);
+  const [showVeoKey, setShowVeoKey] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   
   // Sora 视频 API 配置
   const [soraConfig, setSoraConfig] = useState<SoraConfig>({
     apiKey: '',
     baseUrl: 'https://api.openai.com'
+  });
+  
+  // Veo3.1 视频 API 配置
+  const [veoConfig, setVeoConfig] = useState<VeoConfig>({
+    apiKey: '',
+    baseUrl: 'https://ai.t8star.cn'
   });
 
   // 同步本地输入状态
@@ -80,6 +88,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (isOpen) {
       const savedSoraConfig = getSoraConfig();
       setSoraConfig(savedSoraConfig);
+      const savedVeoConfig = getVeoConfig();
+      setVeoConfig(savedVeoConfig);
     }
   }, [isOpen]);
 
@@ -122,6 +132,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSaveSoraConfig = () => {
     saveSoraConfig(soraConfig);
     setSaveSuccessMessage('Sora 视频 API 已保存');
+    setTimeout(() => setSaveSuccessMessage(null), 2000);
+  };
+
+  const handleSaveVeoConfig = () => {
+    saveVeoConfig(veoConfig);
+    setSaveSuccessMessage('Veo3.1 视频 API 已保存');
     setTimeout(() => setSaveSuccessMessage(null), 2000);
   };
 
@@ -471,8 +487,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* 视频 API 设置 */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.textSecondary }}>Sora 视频 API</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: colors.textSecondary }}>视频生成 API</h3>
             
+            {/* Sora API */}
             <div className="p-4 rounded-xl border" style={{ background: colors.bgTertiary, borderColor: colors.border }}>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #9333ea, #ec4899)' }}>
@@ -531,7 +548,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="w-full py-2 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90"
                   style={{ background: 'linear-gradient(135deg, #9333ea, #ec4899)' }}
                 >
-                  保存视频 API 配置
+                  保存 Sora 配置
+                </button>
+              </div>
+            </div>
+            
+            {/* Veo3.1 API */}
+            <div className="p-4 rounded-xl border" style={{ background: colors.bgTertiary, borderColor: colors.border }}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #4285f4, #34a853)' }}>
+                  <Video className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold" style={{ color: colors.textPrimary }}>Veo 3.1 视频生成</h4>
+                  <p className="text-xs" style={{ color: colors.textSecondary }}>Google Veo3.1 API，支持文生/图生/多图参考</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: colors.textSecondary }}>API 地址</label>
+                  <input
+                    type="text"
+                    value={veoConfig.baseUrl}
+                    onChange={(e) => setVeoConfig({ ...veoConfig, baseUrl: e.target.value })}
+                    placeholder="https://ai.t8star.cn"
+                    className="w-full px-3 py-2 text-sm border rounded-lg transition-all outline-none"
+                    style={{
+                      background: colors.bgPrimary,
+                      borderColor: colors.border,
+                      color: colors.textPrimary
+                    }}
+                  />
+                  <p className="text-xs mt-1" style={{ color: colors.textMuted }}>支持 Veo3.1 API 的第三方服务地址</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: colors.textSecondary }}>Veo API Key</label>
+                  <div className="relative">
+                    <input
+                      type={showVeoKey ? 'text' : 'password'}
+                      value={veoConfig.apiKey}
+                      onChange={(e) => setVeoConfig({ ...veoConfig, apiKey: e.target.value })}
+                      placeholder="sk-..."
+                      className="w-full px-3 py-2 pr-10 text-sm border rounded-lg transition-all outline-none"
+                      style={{
+                        background: colors.bgPrimary,
+                        borderColor: colors.border,
+                        color: colors.textPrimary
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowVeoKey(!showVeoKey)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 hover:opacity-70 transition-opacity"
+                      style={{ color: colors.textSecondary }}
+                    >
+                      {showVeoKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSaveVeoConfig}
+                  className="w-full py-2 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #4285f4, #34a853)' }}
+                >
+                  保存 Veo3.1 配置
                 </button>
               </div>
             </div>

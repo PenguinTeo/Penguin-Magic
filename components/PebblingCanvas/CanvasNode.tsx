@@ -1202,13 +1202,23 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         // 检查是否有视频内容
         const hasVideo = node.content && (node.content.startsWith('data:video') || node.content.includes('.mp4'));
         
-        // Video settings
+        // 视频服务类型: 'sora' | 'veo'
+        const videoService = node.data?.videoService || 'sora';
+        
+        // Sora settings
         const videoSize = node.data?.videoSize || '1280x720';
         const videoModel = node.data?.videoModel || 'sora-2';
         const videoSeconds = node.data?.videoSeconds || '10';
         const isHD = videoModel === 'sora-2-pro';
         
-        const handleVideoSettingChange = (key: string, value: string) => {
+        // Veo3.1 settings
+        const veoMode = node.data?.veoMode || 'text2video'; // text2video | image2video | keyframes | multi-reference
+        const veoModel = node.data?.veoModel || 'veo3.1';   // veo3.1 | veo3.1-pro | veo3.1-components
+        const veoAspectRatio = node.data?.veoAspectRatio || '16:9';
+        const veoEnhancePrompt = node.data?.veoEnhancePrompt ?? false;
+        const veoEnableUpsample = node.data?.veoEnableUpsample ?? false;
+        
+        const handleVideoSettingChange = (key: string, value: any) => {
             onUpdate(node.id, { data: { ...node.data, [key]: value } });
         };
 
@@ -1265,20 +1275,53 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         // 无视频时显示配置界面
         return (
             <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
+                {/* TAB切换 - 左上角 */}
+                <div className="absolute -top-7 left-0 z-30 flex">
+                    <button
+                        className={`px-3 py-1 text-[10px] font-bold uppercase rounded-t-lg transition-all ${
+                            videoService === 'sora' 
+                                ? 'bg-[#1c1c1e] text-white border-t border-l border-r border-white/20' 
+                                : 'bg-black/40 text-zinc-500 hover:text-zinc-300'
+                        }`}
+                        onClick={() => handleVideoSettingChange('videoService', 'sora')}
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        Sora
+                    </button>
+                    <button
+                        className={`px-3 py-1 text-[10px] font-bold uppercase rounded-t-lg transition-all ${
+                            videoService === 'veo' 
+                                ? 'bg-[#1c1c1e] text-white border-t border-l border-r border-white/20' 
+                                : 'bg-black/40 text-zinc-500 hover:text-zinc-300'
+                        }`}
+                        onClick={() => handleVideoSettingChange('videoService', 'veo')}
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        Veo3.1
+                    </button>
+                </div>
+                
                 {/* Header */}
                 <div className="h-7 border-b border-white/10 flex items-center justify-between px-3 bg-white/5 shrink-0">
                     <div className="flex items-center gap-2">
                         <Icons.Video size={12} className="text-white/70" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-white/80">Video</span>
                     </div>
-                    <span className="text-[7px] text-white/40 uppercase">IMG+TXT → VIDEO</span>
+                    <span className="text-[7px] text-white/40 uppercase">
+                        {videoService === 'sora' ? 'IMG+TXT → VIDEO' : (
+                            veoMode === 'text2video' ? 'TXT → VIDEO' :
+                            veoMode === 'image2video' ? 'IMG → VIDEO' :
+                            veoMode === 'keyframes' ? '首尾帧 → VIDEO' :
+                            '多图参考 → VIDEO'
+                        )}
+                    </span>
                 </div>
                 
                 {/* Settings */}
-                <div className="flex-1 p-2 flex flex-col gap-2">
+                <div className="flex-1 p-2 flex flex-col gap-2 overflow-y-auto">
                     {/* Prompt */}
                     <textarea 
-                        className="flex-1 bg-black/40 border border-white/10 rounded p-2 text-[11px] text-zinc-200 outline-none resize-none focus:border-yellow-500/50 placeholder-zinc-600"
+                        className="flex-1 min-h-[60px] bg-black/40 border border-white/10 rounded p-2 text-[11px] text-zinc-200 outline-none resize-none focus:border-yellow-500/50 placeholder-zinc-600"
                         placeholder="描述视频场景..."
                         value={localPrompt}
                         onChange={(e) => setLocalPrompt(e.target.value)}
@@ -1286,72 +1329,186 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         onMouseDown={(e) => e.stopPropagation()}
                     />
                     
-                    {/* Settings - Pill Buttons */}
-                    <div className="flex flex-col gap-1.5">
-                        {/* Row 1: Aspect + Quality */}
-                        <div className="flex gap-1.5">
-                            {/* Aspect Ratio */}
-                            <div className="flex bg-black/40 rounded p-0.5 flex-1">
-                                <button
-                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSize === '1280x720' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                    onClick={() => handleVideoSettingChange('videoSize', '1280x720')}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                >
-                                    16:9
-                                </button>
-                                <button
-                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSize === '720x1280' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                    onClick={() => handleVideoSettingChange('videoSize', '720x1280')}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                >
-                                    9:16
-                                </button>
+                    {/* Sora Settings */}
+                    {videoService === 'sora' && (
+                        <div className="flex flex-col gap-1.5">
+                            {/* Row 1: Aspect + Quality */}
+                            <div className="flex gap-1.5">
+                                {/* Aspect Ratio */}
+                                <div className="flex bg-black/40 rounded p-0.5 flex-1">
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSize === '1280x720' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                        onClick={() => handleVideoSettingChange('videoSize', '1280x720')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        16:9
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSize === '720x1280' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                        onClick={() => handleVideoSettingChange('videoSize', '720x1280')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        9:16
+                                    </button>
+                                </div>
+                                {/* Quality */}
+                                <div className="flex bg-black/40 rounded p-0.5 flex-1">
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${!isHD ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                        onClick={() => handleVideoSettingChange('videoModel', 'sora-2')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        SD
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${isHD ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                        onClick={() => handleVideoSettingChange('videoModel', 'sora-2-pro')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        HD
+                                    </button>
+                                </div>
                             </div>
-                            {/* Quality */}
-                            <div className="flex bg-black/40 rounded p-0.5 flex-1">
+                            {/* Row 2: Duration */}
+                            <div className="flex bg-black/40 rounded p-0.5">
                                 <button
-                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${!isHD ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                    onClick={() => handleVideoSettingChange('videoModel', 'sora-2')}
+                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSeconds === '10' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    onClick={() => handleVideoSettingChange('videoSeconds', '10')}
                                     onMouseDown={(e) => e.stopPropagation()}
                                 >
-                                    SD
+                                    10s
                                 </button>
                                 <button
-                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${isHD ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                    onClick={() => handleVideoSettingChange('videoModel', 'sora-2-pro')}
+                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSeconds === '15' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    onClick={() => handleVideoSettingChange('videoSeconds', '15')}
                                     onMouseDown={(e) => e.stopPropagation()}
                                 >
-                                    HD
+                                    15s
                                 </button>
+                                {isHD && (
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSeconds === '25' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                        onClick={() => handleVideoSettingChange('videoSeconds', '25')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        25s
+                                    </button>
+                                )}
                             </div>
                         </div>
-                        {/* Row 2: Duration */}
-                        <div className="flex bg-black/40 rounded p-0.5">
-                            <button
-                                className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSeconds === '10' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                onClick={() => handleVideoSettingChange('videoSeconds', '10')}
-                                onMouseDown={(e) => e.stopPropagation()}
-                            >
-                                10s
-                            </button>
-                            <button
-                                className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSeconds === '15' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                onClick={() => handleVideoSettingChange('videoSeconds', '15')}
-                                onMouseDown={(e) => e.stopPropagation()}
-                            >
-                                15s
-                            </button>
-                            {isHD && (
+                    )}
+                    
+                    {/* Veo3.1 Settings */}
+                    {videoService === 'veo' && (
+                        <div className="flex flex-col gap-1.5">
+                            {/* Row 1: 视频模式 */}
+                            <div className="flex bg-black/40 rounded p-0.5">
                                 <button
-                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSeconds === '25' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                    onClick={() => handleVideoSettingChange('videoSeconds', '25')}
+                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'text2video' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    onClick={() => {
+                                        handleVideoSettingChange('veoMode', 'text2video');
+                                        handleVideoSettingChange('veoModel', 'veo3.1');
+                                    }}
                                     onMouseDown={(e) => e.stopPropagation()}
+                                    title="纯文字生成视频"
                                 >
-                                    25s
+                                    文生视频
                                 </button>
+                                <button
+                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'image2video' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    onClick={() => {
+                                        handleVideoSettingChange('veoMode', 'image2video');
+                                        handleVideoSettingChange('veoModel', 'veo3.1');
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    title="单图直出视频"
+                                >
+                                    图生视频
+                                </button>
+                                <button
+                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'keyframes' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    onClick={() => {
+                                        handleVideoSettingChange('veoMode', 'keyframes');
+                                        handleVideoSettingChange('veoModel', 'veo3.1-pro');
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    title="首尾帧控制视频"
+                                >
+                                    首尾帧
+                                </button>
+                                <button
+                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'multi-reference' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    onClick={() => {
+                                        handleVideoSettingChange('veoMode', 'multi-reference');
+                                        handleVideoSettingChange('veoModel', 'veo3.1-components');
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    title="多图参考生成"
+                                >
+                                    多图参考
+                                </button>
+                            </div>
+                            
+                            {/* Row 2: 宽高比（非 components 模式显示） */}
+                            {veoMode !== 'multi-reference' && (
+                                <div className="flex gap-1.5">
+                                    <div className="flex bg-black/40 rounded p-0.5 flex-1">
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '16:9' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleVideoSettingChange('veoAspectRatio', '16:9')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            16:9
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '9:16' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleVideoSettingChange('veoAspectRatio', '9:16')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            9:16
+                                        </button>
+                                    </div>
+                                    {/* 高清开关 */}
+                                    <div className="flex bg-black/40 rounded p-0.5 flex-1">
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${!veoEnableUpsample ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleVideoSettingChange('veoEnableUpsample', false)}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            SD
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoEnableUpsample ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleVideoSettingChange('veoEnableUpsample', true)}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            HD
+                                        </button>
+                                    </div>
+                                </div>
                             )}
+                            
+                            {/* Row 3: 增强提示词开关 */}
+                            <div className="flex items-center justify-between px-2 py-1 bg-black/40 rounded">
+                                <span className="text-[9px] text-zinc-400">增强提示词</span>
+                                <button
+                                    className={`w-8 h-4 rounded-full transition-all ${veoEnhancePrompt ? 'bg-purple-500' : 'bg-zinc-600'}`}
+                                    onClick={() => handleVideoSettingChange('veoEnhancePrompt', !veoEnhancePrompt)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    <div className={`w-3 h-3 bg-white rounded-full transition-transform ${veoEnhancePrompt ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                </button>
+                            </div>
+                            
+                            {/* 模式说明 */}
+                            <div className="text-[8px] text-zinc-500 px-1">
+                                {veoMode === 'text2video' && '📝 纯文字描述生成视频，无需输入图片'}
+                                {veoMode === 'image2video' && '🖼️ 连接1张图片节点，直出动态视频'}
+                                {veoMode === 'keyframes' && '🎬 连接2张图片节点（上=首帧，下=尾帧）'}
+                                {veoMode === 'multi-reference' && '🎨 连接1-3张图片节点作为多图参考'}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
                 
                 {isRunning && (
@@ -1360,7 +1517,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             {node.data?.videoTaskStatus && (
                                 <div className="text-[9px] text-white/60 font-mono mb-1">
                                     {node.data.videoTaskStatus === 'NOT_START' && '📦 任务正在排队...'}
+                                    {node.data.videoTaskStatus === 'PENDING' && '📦 任务正在排队...'}
                                     {node.data.videoTaskStatus === 'IN_PROGRESS' && '🎨 正在生成视频...'}
+                                    {node.data.videoTaskStatus === 'RUNNING' && '🎨 正在生成视频...'}
                                     {node.data.videoTaskStatus === 'SUCCESS' && '✅ 生成完成，下载中...'}
                                     {node.data.videoTaskStatus === 'FAILURE' && '❌ 生成失败'}
                                 </div>

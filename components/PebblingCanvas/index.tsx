@@ -1422,6 +1422,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       updateNode(sourceNodeId, { status: 'running' });
       
       console.log(`[批量生成] 开始生成 ${count} 个结果节点`);
+      // 🔍 调试：查看源节点的设置
+      console.log('[批量生成] 源节点信息:', {
+          nodeId: sourceNodeId.slice(0, 8),
+          nodeType: sourceNode.type,
+          nodeData: sourceNode.data,
+          settings: sourceNode.data?.settings,
+          aspectRatio: sourceNode.data?.settings?.aspectRatio,
+          resolution: sourceNode.data?.settings?.resolution
+      });
       
       // 获取源节点的位置和输入
       const inputs = resolveInputs(sourceNodeId);
@@ -1508,16 +1517,30 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           try {
               let result: string | null = null;
               
+              // 🔧 修复：正确读取源节点的设置
+              const aspectRatio = sourceNode.data?.settings?.aspectRatio || 'AUTO';
+              const resolution = sourceNode.data?.settings?.resolution || '1K';
+              
               if (hasPrompt && !hasImage) {
                   // 文生图
-                  const imgAspectRatio = sourceNode.data?.settings?.aspectRatio || 'AUTO';
-                  const imgConfig = imgAspectRatio !== 'AUTO' 
-                      ? { aspectRatio: imgAspectRatio, resolution: '1K' as const }
-                      : { aspectRatio: '1:1', resolution: '1K' as const };
+                  const imgConfig = aspectRatio !== 'AUTO' 
+                      ? { aspectRatio, resolution }
+                      : { aspectRatio: '1:1', resolution };
                   result = await generateCreativeImage(combinedPrompt, imgConfig, signal);
               } else if (hasPrompt && hasImage) {
-                  // 图生图
-                  result = await editCreativeImage(imageSource, combinedPrompt, undefined, signal);
+                  // 图生图：正确传递设置参数
+                  let config: GenerationConfig | undefined = undefined;
+                  if (aspectRatio === 'AUTO') {
+                      // AUTO 模式：只传 resolution（如果不是默认值）
+                      if (resolution !== 'AUTO' && resolution !== '1K') {
+                          config = { resolution };
+                      }
+                  } else {
+                      // 用户指定了比例
+                      config = { aspectRatio, resolution: resolution !== 'AUTO' ? resolution : '1K' };
+                  }
+                  console.log('[批量生成] 图生图配置:', { aspectRatio, resolution, config });
+                  result = await editCreativeImage(imageSource, combinedPrompt, config, signal);
               } else if (!hasPrompt && hasImage) {
                   // 传递图片（容器模式）
                   result = imageSource[0];
@@ -2072,8 +2095,26 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   }
               } else {
                   // 有prompt + 有图片 = 图生图
-                  // 默认 AUTO，不传递参数，让 API 根据图片自动决定比例
-                  const result = await editCreativeImage(imageSource, combinedPrompt, undefined, signal);
+                  // 🔧 修复：正确使用 effectiveSettings（合并后的设置）
+                  const imgAspectRatio = effectiveSettings.aspectRatio || 'AUTO';
+                  const imgResolution = effectiveSettings.resolution || '1K';
+                  
+                  let imgConfig: GenerationConfig | undefined = undefined;
+                  if (imgAspectRatio === 'AUTO') {
+                      // AUTO 模式：只传 resolution（如果不是默认值），保持原图比例
+                      if (imgResolution !== 'AUTO' && imgResolution !== '1K') {
+                          imgConfig = { resolution: imgResolution as '1K' | '2K' | '4K' };
+                      }
+                  } else {
+                      // 用户指定了比例
+                      imgConfig = { 
+                          aspectRatio: imgAspectRatio, 
+                          resolution: imgResolution !== 'AUTO' ? imgResolution as '1K' | '2K' | '4K' : '1K'
+                      };
+                  }
+                  
+                  console.log('[Image节点] 图生图配置:', { imgAspectRatio, imgResolution, imgConfig });
+                  const result = await editCreativeImage(imageSource, combinedPrompt, imgConfig, signal);
                   if (!signal.aborted) {
                       updateNode(nodeId, { content: result || '', status: result ? 'completed' : 'error' });
                       // 立即保存画布（避免切换TAB时数据丢失）
@@ -2097,6 +2138,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               // 获取Edit节点的设置
                const editAspectRatio = node.data?.settings?.aspectRatio || 'AUTO';
                const editResolution = node.data?.settings?.resolution || 'AUTO';
+               
+               console.log('[Magic] 节点设置:', {
+                   aspectRatio: editAspectRatio,
+                   resolution: editResolution,
+                   nodeSettings: node.data?.settings
+               });
                          
                // 🔧 修复：AUTO 比例应该传递给服务层，让服务层根据是否有输入图片决定处理方式
                let finalConfig: GenerationConfig | undefined = undefined;
@@ -2115,6 +2162,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                        resolution: editResolution !== 'AUTO' ? editResolution as '1K' | '2K' | '4K' : '1K'
                    };
                }
+               
+               console.log('[Magic] 构建的 finalConfig:', finalConfig);
                          
                // 🔧 关键修复：检查是否已有下游节点（用户手动连接的）
                const existingDownstream = connectionsRef.current.filter(c => c.fromNode === nodeId);
@@ -2198,13 +2247,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                }
           }
           else if (node.type === 'video') {
-               // Video节点：使用Sora生成视频（异步任务）
+               // Video节点：支持 Sora 和 Veo3.1 生成视频（异步任务）
                const nodePrompt = node.data?.prompt || '';
                const inputTexts = inputs.texts.join('\n');
                const combinedPrompt = nodePrompt || inputTexts;
                const inputImages = inputs.images;
+               const videoService = node.data?.videoService || 'sora';
                
                console.log('[Video节点] ========== 开始处理 ==========');
+               console.log('[Video节点] 服务类型:', videoService);
                console.log('[Video节点] inputImages:', {
                    count: inputImages.length,
                    hasImages: inputImages.length > 0,
@@ -2235,75 +2286,69 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                if (node.status === 'running' && savedTaskId && !hasVideoContent) {
                    console.log('[Video节点] 检测到未完成的任务，恢复轮询:', savedTaskId);
                    try {
-                       const { getTaskStatus, waitForVideoCompletion } = await import('../../services/soraService');
-                       
-                       // 先检查任务状态
-                       const taskStatus = await getTaskStatus(savedTaskId);
-                       console.log('[Video节点] 任务当前状态:', taskStatus.status);
-                       
-                       // 更新界面显示的状态
-                       updateNode(nodeId, {
-                           data: { 
-                               ...node.data, 
-                               videoTaskStatus: taskStatus.status,
-                               videoFailReason: taskStatus.fail_reason
-                           }
-                       });
-                       
-                       if (taskStatus.status === 'SUCCESS' && taskStatus.data?.output) {
-                           // 任务已完成，直接处理结果
-                           const videoUrl = taskStatus.data.output;
-                           console.log('[Video节点] 任务已完成，开始下载视频');
-                           await downloadAndSaveVideo(videoUrl, nodeId, signal);
-                       } else if (taskStatus.status === 'FAILURE') {
-                           // 任务失败 - 保持 error 状态，但显示失败信息
-                           console.error('[Video节点] 任务失败:', taskStatus.fail_reason);
-                           updateNode(nodeId, { 
-                               status: 'error',
+                       if (videoService === 'veo') {
+                           // Veo3.1 任务恢复
+                           const { getVeoTaskStatus, waitForVeoCompletion } = await import('../../services/veoService');
+                           const taskStatus = await getVeoTaskStatus(savedTaskId);
+                           console.log('[Video节点] Veo任务当前状态:', taskStatus.status);
+                           
+                           updateNode(nodeId, {
                                data: { 
                                    ...node.data, 
-                                   videoTaskId: undefined,
-                                   videoTaskStatus: 'FAILURE',
-                                   videoFailReason: taskStatus.fail_reason || '未知错误'
+                                   videoTaskStatus: taskStatus.status,
+                                   videoFailReason: taskStatus.failReason
                                }
                            });
-                           // 不显示 alert，直接在界面上显示失败原因
-                       } else {
-                           // 任务还在进行中，继续轮询
-                           console.log('[Video节点] 任务进行中，继续轮询...');
-                           const videoUrl = await waitForVideoCompletion(
-                               savedTaskId,
-                               (progress, status) => {
-                                   console.log(`[Video节点] 恢复任务进度: ${progress}%, 状态: ${status}`);
-                                   // 更新进度到界面
-                                   updateNode(nodeId, {
-                                       data: {
-                                           ...nodesRef.current.find(n => n.id === nodeId)?.data,
-                                           videoProgress: progress,
-                                           videoTaskStatus: status
-                                       }
-                                   });
-                               }
-                           );
                            
-                           if (!signal.aborted && videoUrl) {
-                               await downloadAndSaveVideo(videoUrl, nodeId, signal);
+                           if (taskStatus.status === 'SUCCESS' && taskStatus.videoUrl) {
+                               await downloadAndSaveVideo(taskStatus.videoUrl, nodeId, signal);
+                           } else if (taskStatus.status === 'FAILURE') {
+                               updateNode(nodeId, { 
+                                   status: 'error',
+                                   data: { ...node.data, videoTaskId: undefined, videoTaskStatus: 'FAILURE', videoFailReason: taskStatus.failReason || '未知错误' }
+                               });
+                           } else {
+                               const videoUrl = await waitForVeoCompletion(savedTaskId, (progress, status) => {
+                                   updateNode(nodeId, { data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, videoProgress: progress, videoTaskStatus: status } });
+                               });
+                               if (!signal.aborted && videoUrl) {
+                                   await downloadAndSaveVideo(videoUrl, nodeId, signal);
+                               }
+                           }
+                       } else {
+                           // Sora 任务恢复
+                           const { getTaskStatus, waitForVideoCompletion } = await import('../../services/soraService');
+                           const taskStatus = await getTaskStatus(savedTaskId);
+                           console.log('[Video节点] Sora任务当前状态:', taskStatus.status);
+                           
+                           updateNode(nodeId, {
+                               data: { ...node.data, videoTaskStatus: taskStatus.status, videoFailReason: taskStatus.fail_reason }
+                           });
+                           
+                           if (taskStatus.status === 'SUCCESS' && taskStatus.data?.output) {
+                               await downloadAndSaveVideo(taskStatus.data.output, nodeId, signal);
+                           } else if (taskStatus.status === 'FAILURE') {
+                               updateNode(nodeId, { 
+                                   status: 'error',
+                                   data: { ...node.data, videoTaskId: undefined, videoTaskStatus: 'FAILURE', videoFailReason: taskStatus.fail_reason || '未知错误' }
+                               });
+                           } else {
+                               const videoUrl = await waitForVideoCompletion(savedTaskId, (progress, status) => {
+                                   updateNode(nodeId, { data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, videoProgress: progress, videoTaskStatus: status } });
+                               });
+                               if (!signal.aborted && videoUrl) {
+                                   await downloadAndSaveVideo(videoUrl, nodeId, signal);
+                               }
                            }
                        }
                    } catch (err) {
                        console.error('[Video节点] 恢复任务失败:', err);
                        updateNode(nodeId, { 
                            status: 'error',
-                           data: { 
-                               ...node.data, 
-                               videoTaskId: undefined,
-                               videoTaskStatus: 'FAILURE',
-                               videoFailReason: err instanceof Error ? err.message : String(err)
-                           }
+                           data: { ...node.data, videoTaskId: undefined, videoTaskStatus: 'FAILURE', videoFailReason: err instanceof Error ? err.message : String(err) }
                        });
-                       // 不显示 alert，直接在界面上显示失败原因
                    }
-                   return; // 恢复流程结束
+                   return;
                }
                
                // 前置验证：提前检查必需参数
@@ -2313,172 +2358,190 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                    return;
                }
                
-               try {
-                   // 动态导入 soraService
-                   const { createVideoTask, waitForVideoCompletion } = await import('../../services/soraService');
-                   
-                   // 获取视频生成参数
-                   const videoModel = node.data?.videoModel || 'sora-2';
-                   const aspectRatio = node.data?.aspectRatio || '16:9';
-                   const duration = node.data?.duration || '10';
-                   const hd = node.data?.hd || false;
-                   
-                   // 判断是图生视频还是文生视频
-                   const isImageToVideo = inputImages.length > 0;
-                   const videoType = isImageToVideo ? '图生视频' : '文生视频';
-                   
-                   // 📋 处理图片数据：确保格式正确
-                   let processedImages: string[] = [];
-                   if (isImageToVideo) {
-                       for (const img of inputImages) {
-                           if (img.startsWith('/files/')) {
-                               // 本地路径 -> 需要转换为 base64（因为 API 无法访问 localhost）
-                               console.log('[Video节点] 检测到本地路径，开始转换为 base64:', img);
+               // 📝 处理图片数据：确保格式正确
+               let processedImages: string[] = [];
+               if (inputImages.length > 0) {
+                   for (const img of inputImages) {
+                       if (img.startsWith('/files/')) {
+                           console.log('[Video节点] 检测到本地路径，开始转换为 base64:', img);
+                           try {
+                               const fullUrl = `${window.location.origin}${img}`;
+                               const response = await fetch(fullUrl);
+                               if (!response.ok) throw new Error(`获取图片失败: ${response.status}`);
+                               const blob = await response.blob();
+                               const base64 = await new Promise<string>((resolve, reject) => {
+                                   const reader = new FileReader();
+                                   reader.onloadend = () => resolve(reader.result as string);
+                                   reader.onerror = reject;
+                                   reader.readAsDataURL(blob);
+                               });
+                               console.log('[Video节点] 本地路径已转换为 base64, 大小:', (base64.length / 1024).toFixed(2), 'KB');
+                               processedImages.push(base64);
+                           } catch (err) {
+                               console.error('[Video节点] 转换本地图片失败:', err);
+                               throw new Error(`无法读取本地图片: ${img}`);
+                           }
+                       } else if (img.startsWith('data:image')) {
+                           const match = img.match(/^data:image\/(\w+);base64,/);
+                           if (match) {
+                               const format = match[1].toLowerCase();
+                               if (['png', 'jpg', 'jpeg', 'webp'].includes(format)) {
+                                   processedImages.push(img);
+                               } else {
+                                   throw new Error(`不支持的图片格式: ${format}`);
+                               }
+                           } else {
+                               throw new Error('Base64 图片格式错误');
+                           }
+                       } else if (img.startsWith('http://') || img.startsWith('https://')) {
+                           if (img.includes('localhost') || img.includes('127.0.0.1')) {
                                try {
-                                   // 构造完整 URL
-                                   const fullUrl = `${window.location.origin}${img}`;
-                                   // 使用 fetch 获取图片数据
-                                   const response = await fetch(fullUrl);
-                                   if (!response.ok) {
-                                       throw new Error(`获取图片失败: ${response.status}`);
-                                   }
+                                   const response = await fetch(img);
+                                   if (!response.ok) throw new Error(`获取图片失败: ${response.status}`);
                                    const blob = await response.blob();
-                                   // 转换为 base64
                                    const base64 = await new Promise<string>((resolve, reject) => {
                                        const reader = new FileReader();
                                        reader.onloadend = () => resolve(reader.result as string);
                                        reader.onerror = reject;
                                        reader.readAsDataURL(blob);
                                    });
-                                   console.log('[Video节点] 本地路径已转换为 base64, 大小:', (base64.length / 1024).toFixed(2), 'KB');
                                    processedImages.push(base64);
                                } catch (err) {
-                                   console.error('[Video节点] 转换本地图片失败:', err);
                                    throw new Error(`无法读取本地图片: ${img}`);
                                }
-                           } else if (img.startsWith('data:image')) {
-                               // Base64 图片 - 验证格式
-                               const match = img.match(/^data:image\/(\w+);base64,/);
-                               if (match) {
-                                   const format = match[1].toLowerCase();
-                                   if (['png', 'jpg', 'jpeg', 'webp'].includes(format)) {
-                                       console.log(`[Video节点] Base64 图片格式: ${format}, 大小:`, (img.length / 1024).toFixed(2), 'KB');
-                                       processedImages.push(img);
-                                   } else {
-                                       console.error(`[Video节点] 不支持的图片格式: ${format}`);
-                                       throw new Error(`不支持的图片格式: ${format}，仅支持 PNG/JPG/JPEG/WebP`);
-                                   }
-                               } else {
-                                   console.error('[Video节点] Base64 格式错误:', img.slice(0, 100));
-                                   throw new Error('Base64 图片格式错误');
-                               }
-                           } else if (img.startsWith('http://') || img.startsWith('https://')) {
-                               // HTTP URL - 检查是否是外网可访问的 URL
-                               if (img.includes('localhost') || img.includes('127.0.0.1')) {
-                                   console.warn('[Video节点] 检测到 localhost URL，API 无法访问，尝试转换为 base64');
-                                   try {
-                                       const response = await fetch(img);
-                                       if (!response.ok) throw new Error(`获取图片失败: ${response.status}`);
-                                       const blob = await response.blob();
-                                       const base64 = await new Promise<string>((resolve, reject) => {
-                                           const reader = new FileReader();
-                                           reader.onloadend = () => resolve(reader.result as string);
-                                           reader.onerror = reject;
-                                           reader.readAsDataURL(blob);
-                                       });
-                                       console.log('[Video节点] localhost URL 已转换为 base64');
-                                       processedImages.push(base64);
-                                   } catch (err) {
-                                       console.error('[Video节点] 转换 localhost URL 失败:', err);
-                                       throw new Error(`无法读取本地图片: ${img}`);
-                                   }
-                               } else {
-                                   // 外网 URL - 直接使用
-                                   console.log('[Video节点] 使用外网 HTTP URL:', img.slice(0, 100));
-                                   processedImages.push(img);
-                               }
                            } else {
-                               console.error('[Video节点] 未知图片格式:', img.slice(0, 100));
-                               throw new Error('不支持的图片数据格式');
+                               processedImages.push(img);
                            }
+                       } else {
+                           throw new Error('不支持的图片数据格式');
                        }
                    }
-                   
-                   console.log('[Video节点] 开始生成视频:', {
-                       type: videoType,
-                       prompt: combinedPrompt.slice(0, 100),
-                       model: videoModel,
-                       aspectRatio,
-                       duration,
-                       imagesCount: inputImages.length,
-                       hasImages: isImageToVideo
-                   });
-                   
-                   // 1. 创建异步任务（使用处理后的图片）
-                   const taskId = await createVideoTask({
-                       prompt: combinedPrompt,
-                       model: videoModel as any,
-                       images: processedImages.length > 0 ? processedImages : undefined,
-                       aspectRatio: aspectRatio as any,
-                       hd: hd,
-                       duration: duration as any
-                   });
-                   
-                   console.log('[Video节点] 任务已创建, taskId:', taskId);
-                   
-                   // 保存任务ID到节点数据（用于恢复）
-                   updateNode(nodeId, {
-                       data: { ...node.data, videoTaskId: taskId }
-                   });
-                   
-                   // 立即保存画布（确保任务ID被持久化）
-                   saveCurrentCanvas();
-                   
-                   // 2. 轮询等待任务完成（带进度更新）
-                   const videoUrl = await waitForVideoCompletion(
-                       taskId,
-                       (progress, status) => {
-                           console.log(`[Video节点] 进度: ${progress}%, 状态: ${status}`);
-                           // 更新进度到界面
-                           updateNode(nodeId, {
-                               data: {
-                                   ...nodesRef.current.find(n => n.id === nodeId)?.data,
-                                   videoProgress: progress,
-                                   videoTaskStatus: status
-                               }
-                           });
+               }
+               
+               try {
+                   if (videoService === 'veo') {
+                       // ===== Veo3.1 视频生成 =====
+                       const { createVeoTask, waitForVeoCompletion } = await import('../../services/veoService');
+                       
+                       const veoMode = node.data?.veoMode || 'text2video';
+                       const veoModel = node.data?.veoModel || 'veo3.1';
+                       const veoAspectRatio = node.data?.veoAspectRatio || '16:9';
+                       const veoEnhancePrompt = node.data?.veoEnhancePrompt ?? false;
+                       const veoEnableUpsample = node.data?.veoEnableUpsample ?? false;
+                       
+                       // 校验图片数量
+                       if (veoMode === 'image2video' && processedImages.length === 0) {
+                           throw new Error('图生视频模式需要连接1张图片');
                        }
-                   );
-                   
-                   console.log('[Video节点] API调用参数:', {
-                       type: videoType,
-                       imagesParam: isImageToVideo ? `${inputImages.length}张图片` : 'undefined'
-                   });
-                   
-                   // 检查是否被中断
-                   if (signal.aborted) {
-                       console.log('[Video节点] 任务已被中断');
-                       return;
-                   }
-                   
-                   if (videoUrl) {
-                       await downloadAndSaveVideo(videoUrl, nodeId, signal);
+                       if (veoMode === 'keyframes' && processedImages.length < 2) {
+                           throw new Error('首尾帧模式需要连接2张图片（上=首帧，下=尾帧）');
+                       }
+                       if (veoMode === 'multi-reference' && processedImages.length === 0) {
+                           throw new Error('多图参考模式需要连接1-3张图片');
+                       }
+                       
+                       console.log('[Video节点] Veo3.1 开始生成:', {
+                           mode: veoMode,
+                           model: veoModel,
+                           prompt: combinedPrompt.slice(0, 100),
+                           aspectRatio: veoAspectRatio,
+                           enhancePrompt: veoEnhancePrompt,
+                           enableUpsample: veoEnableUpsample,
+                           imagesCount: processedImages.length
+                       });
+                       
+                       // 1. 创建 Veo 任务
+                       const taskId = await createVeoTask({
+                           prompt: combinedPrompt,
+                           model: veoModel as any,
+                           images: processedImages.length > 0 ? processedImages : undefined,
+                           aspectRatio: veoAspectRatio as any,
+                           enhancePrompt: veoEnhancePrompt,
+                           enableUpsample: veoEnableUpsample
+                       });
+                       
+                       console.log('[Video节点] Veo 任务已创建, taskId:', taskId);
+                       
+                       updateNode(nodeId, { data: { ...node.data, videoTaskId: taskId } });
+                       saveCurrentCanvas();
+                       
+                       // 2. 轮询等待完成
+                       const videoUrl = await waitForVeoCompletion(taskId, (progress, status) => {
+                           console.log(`[Video节点] Veo 进度: ${progress}%, 状态: ${status}`);
+                           updateNode(nodeId, { data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, videoProgress: progress, videoTaskStatus: status } });
+                       });
+                       
+                       if (signal.aborted) {
+                           console.log('[Video节点] 任务已被中断');
+                           return;
+                       }
+                       
+                       if (videoUrl) {
+                           await downloadAndSaveVideo(videoUrl, nodeId, signal);
+                       } else {
+                           throw new Error('未返回视频URL');
+                       }
                    } else {
-                       throw new Error('未返回视频URL');
+                       // ===== Sora 视频生成 =====
+                       const { createVideoTask, waitForVideoCompletion } = await import('../../services/soraService');
+                       
+                       const videoModel = node.data?.videoModel || 'sora-2';
+                       const videoSize = node.data?.videoSize || '1280x720';
+                       const aspectRatio = videoSize === '720x1280' ? '9:16' : '16:9';
+                       const duration = node.data?.videoSeconds || '10';
+                       const hd = videoModel === 'sora-2-pro';
+                       
+                       const isImageToVideo = processedImages.length > 0;
+                       const videoType = isImageToVideo ? '图生视频' : '文生视频';
+                       
+                       console.log('[Video节点] Sora 开始生成:', {
+                           type: videoType,
+                           prompt: combinedPrompt.slice(0, 100),
+                           model: videoModel,
+                           aspectRatio,
+                           duration,
+                           imagesCount: processedImages.length
+                       });
+                       
+                       // 1. 创建 Sora 任务
+                       const taskId = await createVideoTask({
+                           prompt: combinedPrompt,
+                           model: videoModel as any,
+                           images: processedImages.length > 0 ? processedImages : undefined,
+                           aspectRatio: aspectRatio as any,
+                           hd: hd,
+                           duration: duration as any
+                       });
+                       
+                       console.log('[Video节点] Sora 任务已创建, taskId:', taskId);
+                       
+                       updateNode(nodeId, { data: { ...node.data, videoTaskId: taskId } });
+                       saveCurrentCanvas();
+                       
+                       // 2. 轮询等待完成
+                       const videoUrl = await waitForVideoCompletion(taskId, (progress, status) => {
+                           console.log(`[Video节点] Sora 进度: ${progress}%, 状态: ${status}`);
+                           updateNode(nodeId, { data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, videoProgress: progress, videoTaskStatus: status } });
+                       });
+                       
+                       if (signal.aborted) {
+                           console.log('[Video节点] 任务已被中断');
+                           return;
+                       }
+                       
+                       if (videoUrl) {
+                           await downloadAndSaveVideo(videoUrl, nodeId, signal);
+                       } else {
+                           throw new Error('未返回视频URL');
+                       }
                    }
                } catch (err) {
                    console.error('[Video节点] 生成失败:', err);
                    if (!signal.aborted) {
                        updateNode(nodeId, { 
                            status: 'error',
-                           data: { 
-                               ...node.data, 
-                               videoTaskId: undefined,
-                               videoTaskStatus: 'FAILURE',
-                               videoFailReason: err instanceof Error ? err.message : String(err)
-                           }
+                           data: { ...node.data, videoTaskId: undefined, videoTaskStatus: 'FAILURE', videoFailReason: err instanceof Error ? err.message : String(err) }
                        });
-                       // 不显示 alert，直接在界面上显示失败原因
                    }
                }
           }
@@ -2798,19 +2861,30 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       
                       // 4. 调用图片生成API
                       const settings = node.data?.settings || {};
-                      const config: GenerationConfig = {
-                          aspectRatio: settings.aspectRatio || '1:1',
-                          resolution: settings.resolution || '2K'
-                      };
+                      const aspectRatio = settings.aspectRatio || 'AUTO';
+                      const resolution = settings.resolution || '2K';
                       
                       let result: string | null = null;
                       if (inputImages.length > 0) {
                           // 有输入图片 = 图生图
-                          console.log('[BP节点] 调用图生图 API');
+                          let config: GenerationConfig | undefined = undefined;
+                          if (aspectRatio === 'AUTO') {
+                              // AUTO 模式：只传 resolution（如果不是默认值）
+                              if (resolution !== 'AUTO' && resolution !== '1K') {
+                                  config = { resolution: resolution as '1K' | '2K' | '4K' };
+                              }
+                          } else {
+                              config = { aspectRatio, resolution: resolution as '1K' | '2K' | '4K' };
+                          }
+                          console.log('[BP节点] 调用图生图 API, 配置:', { aspectRatio, resolution, config });
                           result = await editCreativeImage(inputImages, finalPrompt, config, signal);
                       } else {
                           // 无输入图片 = 文生图
-                          console.log('[BP节点] 调用文生图 API');
+                          const config: GenerationConfig = {
+                              aspectRatio: aspectRatio !== 'AUTO' ? aspectRatio : '1:1',
+                              resolution: resolution as '1K' | '2K' | '4K'
+                          };
+                          console.log('[BP节点] 调用文生图 API, 配置:', config);
                           result = await generateCreativeImage(finalPrompt, config, signal);
                       }
                       
