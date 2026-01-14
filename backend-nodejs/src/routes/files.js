@@ -190,6 +190,47 @@ router.post('/download-remote', async (req, res) => {
   }
 });
 
+// 下载远程视频并保存到本地output目录（后端代理，绕过CORS）
+router.post('/download-remote-video', async (req, res) => {
+  const { videoUrl, filename } = req.body;
+  
+  if (!videoUrl) {
+    return res.status(400).json({ success: false, error: '缺少视频URL' });
+  }
+  
+  // 验证是否为有效的URL
+  if (!videoUrl.startsWith('http://') && !videoUrl.startsWith('https://')) {
+    return res.status(400).json({ success: false, error: '无效的URL格式' });
+  }
+  
+  try {
+    console.log('[Download Video] 开始下载远程视频:', videoUrl.substring(0, 80) + '...');
+    
+    // 下载视频
+    const response = await fetch(videoUrl);
+    if (!response.ok) {
+      throw new Error(`下载失败: ${response.status} ${response.statusText}`);
+    }
+    
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString('base64');
+    
+    // 确定文件类型
+    const contentType = response.headers.get('content-type') || 'video/mp4';
+    const mimeType = contentType.split(';')[0].trim();
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+    
+    // 保存到output目录
+    const result = FileHandler.saveVideo(dataUrl, config.OUTPUT_DIR, filename);
+    
+    console.log('[Download Video] 远程视频已保存:', result.data?.filename, '大小:', (buffer.byteLength / 1024 / 1024).toFixed(2), 'MB');
+    res.json(result);
+  } catch (error) {
+    console.error('[Download Video] 下载远程视频失败:', error.message);
+    res.status(500).json({ success: false, error: `下载失败: ${error.message}` });
+  }
+});
+
 // 批量生成缩略图（用于历史数据迁移）
 router.post('/generate-thumbnails', async (req, res) => {
   try {

@@ -1238,46 +1238,41 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       );
   };
   
-  // Helper: 下载视频并保存（提取为公共函数）
+  // Helper: 下载视频并保存（通过后端代理，绕过CORS，节省浏览器内存）
   const downloadAndSaveVideo = async (videoUrl: string, nodeId: string, signal: AbortSignal) => {
-      console.log('[Video节点] 视频生成成功:', videoUrl);
+      console.log('[Video节点] 视频生成成功, 开始后端代理下载:', videoUrl);
       
-      // 下载视频并转换为base64
-      console.log('[Video节点] 开始下载视频...');
       try {
-          const response = await fetch(videoUrl);
+          // 通过后端代理下载视频（绕过CORS，节省浏览器内存）
+          const response = await fetch('/api/files/download-remote-video', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ videoUrl })
+          });
+          
           if (!response.ok) {
-              throw new Error(`下载视频失败: ${response.status}`);
+              const errorData = await response.json().catch(() => ({}));
+              throw new Error(errorData.error || `后端下载失败: ${response.status}`);
           }
           
-          const blob = await response.blob();
-          console.log('[Video节点] 视频下载完成, 大小:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
+          const result = await response.json();
           
-          // 再次检查是否被中断
+          if (!result.success || !result.data?.url) {
+              throw new Error(result.error || '后端返回数据异常');
+          }
+          
+          // 检查是否被中断
           if (signal.aborted) {
               console.log('[Video节点] 下载后检测到中断');
               return;
           }
           
-          // 转换为base64
-          const base64Video = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-          });
+          const localVideoUrl = result.data.url; // 本地文件路径，如 /files/output/video_xxx.mp4
+          console.log('[Video节点] 视频已保存到本地:', result.data.filename);
           
-          console.log('[Video节点] 视频转换为base64完成');
-          
-          // 最后检查是否被中断
-          if (signal.aborted) {
-              console.log('[Video节点] 转换后检测到中断');
-              return;
-          }
-          
-          // 更新节点内容为base64，并清除任务ID
+          // 更新节点内容为本地URL（不是base64，节省内存）
           updateNode(nodeId, { 
-              content: base64Video, 
+              content: localVideoUrl, 
               status: 'completed',
               data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, videoTaskId: undefined }
           });
@@ -1285,36 +1280,21 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           // 保存画布
           saveCurrentCanvas();
           
-          // 调用后端 API 保存视频文件到 output 目录
-          try {
-              const saveResponse = await fetch('/api/files/save-video', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ videoData: base64Video })
-              });
-              
-              if (saveResponse.ok) {
-                  const saveResult = await saveResponse.json();
-                  if (saveResult.success) {
-                      console.log('[Video节点] 视频已保存到本地:', saveResult.data.filename);
-                  }
-              }
-          } catch (saveErr) {
-              console.error('[Video节点] 保存视频到本地失败:', saveErr);
-          }
-          
           console.log('[Video节点] 视频处理完成');
       } catch (downloadErr) {
-          console.error('[Video节点] 下载视频失败:', downloadErr);
-          // 如果下载失败，直接使用URL
+          console.error('[Video节点] 后端代理下载失败:', downloadErr);
           if (!signal.aborted) {
+              // 失败时保留原始URL，方便用户手动下载
               updateNode(nodeId, { 
-                  content: videoUrl, 
-                  status: 'completed',
-                  data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, videoTaskId: undefined }
+                  status: 'error',
+                  data: { 
+                      ...nodesRef.current.find(n => n.id === nodeId)?.data, 
+                      videoTaskId: undefined,
+                      videoFailReason: `下载失败: ${downloadErr instanceof Error ? downloadErr.message : String(downloadErr)}`,
+                      videoUrl: videoUrl // 保留原始URL
+                  }
               });
               saveCurrentCanvas();
-              alert(`视频生成成功，但下载失败。视频URL: ${videoUrl}`);
           }
       }
   };
