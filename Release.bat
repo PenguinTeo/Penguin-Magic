@@ -21,7 +21,7 @@ if /i "%update_ver%"=="" set update_ver=Y
 if /i "%update_ver%"=="Y" (
     echo.
     echo 📝 正在更新版本号...
-    node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));const v=p.version.split('.').map(Number);v[2]++;p.version=v.join('.');fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('✅ 版本号已更新: '+p.version);"
+    node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));const v=p.version.split('.').map(Number);if(v[2]>=9){v[1]++;v[2]=0;}else{v[2]++;}p.version=v.join('.');fs.writeFileSync('package.json',JSON.stringify(p,null,2));console.log('✅ 版本号已更新: '+p.version);"
     if errorlevel 1 (
         echo ❌ 版本号更新失败
         pause
