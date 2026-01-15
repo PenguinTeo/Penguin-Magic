@@ -3,7 +3,7 @@ import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
 import { SoraConfig, getSoraConfig, saveSoraConfig } from '../services/soraService';
 import { VeoConfig, getVeoConfig, saveVeoConfig } from '../services/veoService';
-import { Eye as EyeIcon, EyeOff as EyeOffIcon, Check, X, RefreshCw, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon } from 'lucide-react';
+import { Eye as EyeIcon, EyeOff as EyeOffIcon, Check, X, RefreshCw, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Folder as FolderIcon, ExternalLink as ExternalLinkIcon } from 'lucide-react';
 
 // 应用版本号 - 从vite构建时注入，来源于package.json
 declare const __APP_VERSION__: string;
@@ -94,6 +94,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'error'>('idle');
   const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
 
+  // 存储路径相关状态
+  const [storagePath, setStoragePath] = useState<string>('');
+  const [isCustomPath, setIsCustomPath] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+
   useEffect(() => {
     setLocalThirdPartyUrl(thirdPartyConfig.baseUrl || 'https://ai.t8star.cn');
     setLocalThirdPartyKey(thirdPartyConfig.apiKey || '');
@@ -110,6 +115,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const savedVeoConfig = getVeoConfig();
       setVeoConfig({ ...savedVeoConfig, baseUrl: savedVeoConfig.baseUrl || 'https://ai.t8star.cn' });
       setUpdateStatus('idle');
+      
+      // 获取存储路径
+      if (isElectron) {
+        (window as any).electronAPI.getStoragePath().then((result: any) => {
+          setStoragePath(result.currentPath);
+          setIsCustomPath(result.isCustom);
+        });
+      }
     }
   }, [isOpen]);
 
@@ -185,6 +198,64 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSaveSuccessMessage('检查更新失败');
       setTimeout(() => setSaveSuccessMessage(null), 2000);
     }
+  };
+
+  // 选择存储路径
+  const handleSelectStoragePath = async () => {
+    if (!isElectron) return;
+    const result = await (window as any).electronAPI.selectStoragePath();
+    if (result.success) {
+      // 询问是否迁移数据
+      const shouldMigrate = window.confirm(
+        `是否将现有数据迁移到新位置？
+
+新路径: ${result.path}
+
+点击"确定"迁移数据，点击"取消"仅设置新路径（新数据将存储在新位置）`
+      );
+      
+      if (shouldMigrate) {
+        setIsMigrating(true);
+        const migrateResult = await (window as any).electronAPI.migrateData(result.path);
+        setIsMigrating(false);
+        if (migrateResult.success) {
+          setStoragePath(result.path);
+          setIsCustomPath(true);
+          setSaveSuccessMessage(migrateResult.message);
+          setTimeout(() => setSaveSuccessMessage(null), 3000);
+        } else {
+          setSaveSuccessMessage(migrateResult.message);
+          setTimeout(() => setSaveSuccessMessage(null), 3000);
+        }
+      } else {
+        const setResult = await (window as any).electronAPI.setStoragePath(result.path);
+        if (setResult.success) {
+          setStoragePath(result.path);
+          setIsCustomPath(true);
+          setSaveSuccessMessage(setResult.message);
+          setTimeout(() => setSaveSuccessMessage(null), 3000);
+        }
+      }
+    }
+  };
+
+  // 恢复默认存储路径
+  const handleResetStoragePath = async () => {
+    if (!isElectron) return;
+    const result = await (window as any).electronAPI.setStoragePath(null);
+    if (result.success) {
+      const pathInfo = await (window as any).electronAPI.getStoragePath();
+      setStoragePath(pathInfo.defaultPath);
+      setIsCustomPath(false);
+      setSaveSuccessMessage('已恢复默认存储路径，重启后生效');
+      setTimeout(() => setSaveSuccessMessage(null), 3000);
+    }
+  };
+
+  // 打开存储路径
+  const handleOpenStoragePath = () => {
+    if (!isElectron) return;
+    (window as any).electronAPI.openStoragePath();
   };
 
   return (
@@ -557,6 +628,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {activeMode === 'local-thirdparty' ? thirdPartyConfig.model || 'nano-banana-2' : 'Gemini 3 Pro'}
               </span>
             </div>
+
+            {/* 存储路径 */}
+            {isElectron && (
+              <div className="config-card">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="option-icon" style={{ background: 'rgba(59, 130, 246, 0.15)' }}>
+                      <FolderIcon className="w-5 h-5" style={{ color: styles.primaryLight }} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium" style={{ color: styles.textPrimary }}>数据存储位置</h4>
+                      <p className="text-xs" style={{ color: styles.textSecondary }}>
+                        {isCustomPath ? '自定义路径' : '默认路径'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleOpenStoragePath}
+                    className="text-xs flex items-center gap-1 px-2 py-1 rounded hover:bg-white/5 transition-colors"
+                    style={{ color: styles.primaryLight }}
+                    title="打开文件夹"
+                  >
+                    <ExternalLinkIcon className="w-3 h-3" />
+                    打开
+                  </button>
+                </div>
+                <div 
+                  className="text-xs px-3 py-2 rounded-lg mb-3 break-all"
+                  style={{ background: styles.inputBg, color: styles.textSecondary, border: `1px solid ${styles.border}` }}
+                >
+                  {storagePath || '加载中...'}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSelectStoragePath}
+                    disabled={isMigrating}
+                    className="btn btn-secondary flex-1 text-xs py-2"
+                  >
+                    {isMigrating ? '迁移中...' : '选择新位置'}
+                  </button>
+                  {isCustomPath && (
+                    <button
+                      onClick={handleResetStoragePath}
+                      className="btn btn-secondary flex-1 text-xs py-2"
+                    >
+                      恢复默认
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -728,6 +850,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           border: 1px solid rgba(59, 130, 246, 0.2);
         }
         .btn-link:hover { background: rgba(59, 130, 246, 0.15); }
+        .btn-secondary {
+          color: rgba(255, 255, 255, 0.7);
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .btn-secondary:hover {
+          background: rgba(255, 255, 255, 0.1);
+          color: rgba(255, 255, 255, 0.9);
+        }
+        .btn-secondary:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
         .btn:active { transform: translateY(0) scale(0.98); }
         
         /* 配置卡片 */

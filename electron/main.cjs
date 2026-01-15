@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, nativeImage, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, nativeImage, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
@@ -1023,12 +1023,17 @@ function startBackendServer() {
   return new Promise((resolve, reject) => {
     console.log('🚀 启动后端服务...');
 
+    // 读取自定义存储路径
+    const storageConfig = loadStorageConfig();
+    const userDataPath = storageConfig.customPath || app.getPath('userData');
+    console.log('数据存储路径:', userDataPath);
+
     // 设置环境变量
     process.env.NODE_ENV = 'production';
     process.env.PORT = CONFIG.backendPort.toString();
     process.env.HOST = CONFIG.backendHost;
     process.env.IS_ELECTRON = 'true';
-    process.env.USER_DATA_PATH = app.getPath('userData');
+    process.env.USER_DATA_PATH = userDataPath;
 
     // 计算后端路径
     let backendPath;
@@ -1277,6 +1282,160 @@ ipcMain.handle('check-for-updates', async () => {
   } catch (err) {
     return { status: 'error', message: err.message };
   }
+});
+
+// ============ 存储路径相关 IPC ============
+// 获取自定义存储路径配置文件路径
+function getStorageConfigPath() {
+  return path.join(app.getPath('userData'), 'storage_config.json');
+}
+
+// 读取存储路径配置
+function loadStorageConfig() {
+  const configPath = getStorageConfigPath();
+  try {
+    if (fs.existsSync(configPath)) {
+      const data = fs.readFileSync(configPath, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.log('读取存储配置失败:', e.message);
+  }
+  return { customPath: null };
+}
+
+// 保存存储路径配置
+function saveStorageConfig(config) {
+  const configPath = getStorageConfigPath();
+  try {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    return true;
+  } catch (e) {
+    console.log('保存存储配置失败:', e.message);
+    return false;
+  }
+}
+
+// 获取当前存储路径
+ipcMain.handle('get-storage-path', () => {
+  const config = loadStorageConfig();
+  const defaultPath = app.getPath('userData');
+  return {
+    currentPath: config.customPath || defaultPath,
+    isCustom: !!config.customPath,
+    defaultPath: defaultPath
+  };
+});
+
+// 选择存储路径
+ipcMain.handle('select-storage-path', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择数据存储位置',
+    properties: ['openDirectory', 'createDirectory'],
+    buttonLabel: '选择此文件夹'
+  });
+  
+  if (!result.canceled && result.filePaths.length > 0) {
+    return { success: true, path: result.filePaths[0] };
+  }
+  return { success: false };
+});
+
+// 设置存储路径
+ipcMain.handle('set-storage-path', (event, newPath) => {
+  try {
+    // 验证路径是否有效
+    if (newPath && !fs.existsSync(newPath)) {
+      fs.mkdirSync(newPath, { recursive: true });
+    }
+    
+    const config = loadStorageConfig();
+    config.customPath = newPath || null;
+    const saved = saveStorageConfig(config);
+    
+    return { 
+      success: saved, 
+      message: saved ? '存储路径已更新，重启应用后生效' : '保存配置失败',
+      needRestart: true
+    };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+});
+
+// 迁移数据到新路径
+ipcMain.handle('migrate-data', async (event, newPath) => {
+  try {
+    const config = loadStorageConfig();
+    const currentPath = config.customPath || app.getPath('userData');
+    
+    if (currentPath === newPath) {
+      return { success: true, message: '目标路径与当前路径相同' };
+    }
+    
+    // 要迁移的文件夹
+    const foldersToMigrate = ['data', 'input', 'output', 'creative_images', 'thumbnails', 'canvas_images'];
+    let migratedCount = 0;
+    let fileCount = 0;
+    
+    // 递归复制文件夹
+    function copyDirRecursive(src, dest) {
+      if (!fs.existsSync(src)) return 0;
+      
+      if (!fs.existsSync(dest)) {
+        fs.mkdirSync(dest, { recursive: true });
+      }
+      
+      let count = 0;
+      const entries = fs.readdirSync(src, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+        
+        if (entry.isDirectory()) {
+          count += copyDirRecursive(srcPath, destPath);
+        } else {
+          fs.copyFileSync(srcPath, destPath);
+          count++;
+        }
+      }
+      return count;
+    }
+    
+    for (const folder of foldersToMigrate) {
+      const srcDir = path.join(currentPath, folder);
+      const destDir = path.join(newPath, folder);
+      
+      if (fs.existsSync(srcDir)) {
+        const copied = copyDirRecursive(srcDir, destDir);
+        if (copied > 0) {
+          migratedCount++;
+          fileCount += copied;
+        }
+      }
+    }
+    
+    // 保存新路径配置
+    config.customPath = newPath;
+    saveStorageConfig(config);
+    
+    return { 
+      success: true, 
+      message: `已迁移 ${migratedCount} 个文件夹（${fileCount} 个文件），重启应用后生效`,
+      needRestart: true
+    };
+  } catch (e) {
+    return { success: false, message: '迁移失败: ' + e.message };
+  }
+});
+
+// 打开存储路径
+ipcMain.handle('open-storage-path', () => {
+  const config = loadStorageConfig();
+  const currentPath = config.customPath || app.getPath('userData');
+  shell.openPath(currentPath);
+  return { success: true };
 });
 
 // 应用启动
