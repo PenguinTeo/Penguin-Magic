@@ -15,6 +15,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeAllListeners('update-status');
   },
   
+  // 存储路径相关
+  selectStoragePath: () => ipcRenderer.invoke('select-storage-path'),
+  getStoragePath: () => ipcRenderer.invoke('get-storage-path'),
+  setStoragePath: (path) => ipcRenderer.invoke('set-storage-path', path),
+  migrateData: (newPath) => ipcRenderer.invoke('migrate-data', newPath),
+  openStoragePath: () => ipcRenderer.invoke('open-storage-path'),
+  
   // 环境标识
   isElectron: true
 });
