@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -28,7 +28,24 @@ export interface NodeData {
   resizeWidth?: number;
   resizeHeight?: number;
   
-  // BP Node Specifics - 存僨BP创意库配置
+  // Video Node Specifics
+  videoService?: 'sora' | 'veo';
+  videoModel?: string;
+  videoSize?: string;
+  videoSeconds?: string;
+  veoMode?: 'text2video' | 'image2video' | 'keyframes' | 'multi-reference';
+  veoModel?: string;
+  veoAspectRatio?: string;
+  veoEnhancePrompt?: boolean;
+  veoEnableUpsample?: boolean;
+  videoTaskId?: string;
+  videoProgress?: number;
+  videoTaskStatus?: string;
+  videoFailReason?: string;
+  videoUrl?: string; // 原始URL（下载失败时保留）
+  output?: string; // LLM/BP节点输出
+  
+  // BP Node Specifics - 存储BP创意库配置
   bpTemplate?: {
     id: number;
     title: string;
@@ -134,6 +151,7 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
       return { primary: ARCTIC_COLORS.auroraViolet, light: ARCTIC_COLORS.auroraVioletLight };
     
     case 'video':
+    case 'video-output':
       return { primary: ARCTIC_COLORS.snowBlue, light: ARCTIC_COLORS.snowBlueLight };
     
     case 'bp':

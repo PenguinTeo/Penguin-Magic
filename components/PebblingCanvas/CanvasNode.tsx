@@ -35,6 +35,7 @@ interface CanvasNodeProps {
   scale: number;
   effectiveColor?: string;
   onCreateToolNode?: (sourceNodeId: string, toolType: NodeType, position: { x: number, y: number }) => void;
+  onExtractFrame?: (nodeId: string, position: 'first' | 'last') => void; // 提取视频帧
   hasDownstream?: boolean; // 是否有下游连接
 }
 
@@ -53,6 +54,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   scale,
   effectiveColor,
   onCreateToolNode,
+  onExtractFrame,
   hasDownstream = false
 }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -1199,8 +1201,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     }
 
     if (node.type === 'video') {
-        // 检查是否有视频内容
-        const hasVideo = node.content && (node.content.startsWith('data:video') || node.content.includes('.mp4'));
+        // 视频配置节点 - 始终显示配置界面，视频输出到独立的 video-output 节点
         
         // 视频服务类型: 'sora' | 'veo'
         const videoService = node.data?.videoService || 'sora';
@@ -1222,57 +1223,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             onUpdate(node.id, { data: { ...node.data, [key]: value } });
         };
 
-        // 有视频时显示播放器
-        if (hasVideo) {
-            return (
-                <div className="w-full h-full bg-black rounded-xl overflow-hidden relative">
-                    <video 
-                        src={node.content} 
-                        controls
-                        loop
-                        autoPlay
-                        muted
-                        className="w-full h-full object-contain" 
-                    />
-                    <div className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded text-[9px] font-bold uppercase backdrop-blur-md bg-white/20 text-white">
-                        Video
-                    </div>
-                    
-                    {/* 信息查询按钮 */}
-                    <div 
-                      className="absolute top-2 right-2 z-20"
-                      onMouseEnter={() => setShowMediaInfo(true)}
-                      onMouseLeave={() => setShowMediaInfo(false)}
-                    >
-                      <div 
-                        className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center cursor-pointer transition-all"
-                        title="视频信息"
-                      >
-                        <Icons.Info size={14} className="text-white/70" />
-                      </div>
-                      
-                      {/* 信息浮窗 */}
-                      {showMediaInfo && mediaMetadata && (
-                        <div 
-                          className="absolute top-full right-0 mt-1 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-2 text-[10px] text-white/90 whitespace-nowrap shadow-lg"
-                          onMouseDown={(e) => e.stopPropagation()}
-                        >
-                          <div className="space-y-0.5">
-                            <div><span className="text-zinc-500">宽度:</span> {mediaMetadata.width} px</div>
-                            <div><span className="text-zinc-500">高度:</span> {mediaMetadata.height} px</div>
-                            <div><span className="text-zinc-500">比例:</span> {getAspectRatio(mediaMetadata.width, mediaMetadata.height)}</div>
-                            {mediaMetadata.duration && <div><span className="text-zinc-500">时长:</span> {mediaMetadata.duration}</div>}
-                            <div><span className="text-zinc-500">大小:</span> {mediaMetadata.size}</div>
-                            <div><span className="text-zinc-500">格式:</span> {mediaMetadata.format}</div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                </div>
-            );
-        }
-
-        // 无视频时显示配置界面
+        // 视频节点始终显示配置界面
         return (
             <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
                 {/* Header with TAB切换 */}
@@ -1558,6 +1509,145 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 <span className="text-[8px] text-zinc-500">预计 1-10 分钟</span>
                             )}
                         </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // Video Output 节点 - 显示生成的视频 + 工具栏
+    if (node.type === 'video-output') {
+        const hasVideo = node.content && (node.content.startsWith('data:video') || node.content.includes('.mp4') || node.content.startsWith('/files/'));
+        const videoNodeColor = getNodeTypeColor(node.type);
+        
+        return (
+            <div className="w-full h-full bg-black rounded-xl overflow-hidden relative">
+                {hasVideo ? (
+                    <>
+                        <video 
+                            src={node.content} 
+                            controls
+                            loop
+                            autoPlay
+                            muted
+                            className="w-full h-full object-contain" 
+                        />
+                        
+                        {/* 状态标签 */}
+                        <div className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded text-[9px] font-bold uppercase backdrop-blur-md bg-white/20 text-white">
+                            Video
+                        </div>
+                        
+                        {/* 信息查询按钮 */}
+                        <div 
+                          className="absolute top-2 right-2 z-20"
+                          onMouseEnter={() => setShowMediaInfo(true)}
+                          onMouseLeave={() => setShowMediaInfo(false)}
+                        >
+                          <div 
+                            className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center cursor-pointer transition-all"
+                            title="视频信息"
+                          >
+                            <Icons.Info size={14} className="text-white/70" />
+                          </div>
+                          
+                          {showMediaInfo && mediaMetadata && (
+                            <div 
+                              className="absolute top-full right-0 mt-1 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-2 text-[10px] text-white/90 whitespace-nowrap shadow-lg"
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
+                              <div className="space-y-0.5">
+                                <div><span className="text-zinc-500">宽度:</span> {mediaMetadata.width} px</div>
+                                <div><span className="text-zinc-500">高度:</span> {mediaMetadata.height} px</div>
+                                <div><span className="text-zinc-500">比例:</span> {getAspectRatio(mediaMetadata.width, mediaMetadata.height)}</div>
+                                {mediaMetadata.duration && <div><span className="text-zinc-500">时长:</span> {mediaMetadata.duration}</div>}
+                                <div><span className="text-zinc-500">大小:</span> {mediaMetadata.size}</div>
+                                <div><span className="text-zinc-500">格式:</span> {mediaMetadata.format}</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* 工具箱按钮 */}
+                        <div className="absolute bottom-6 right-6 z-20">
+                          <button
+                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center transition-all"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowToolbox(!showToolbox);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            title="视频工具"
+                          >
+                            <Icons.Wrench size={16} className="text-white/70" />
+                          </button>
+                          
+                          {/* 工具球 - 向上弹出 */}
+                          {showToolbox && onExtractFrame && (
+                            <div className="absolute bottom-full right-0 mb-2 flex flex-col gap-2">
+                              {/* 提取尾帧 */}
+                              <button
+                                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md flex items-center justify-center transition-all transform hover:scale-110"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onExtractFrame(node.id, 'last');
+                                  setShowToolbox(false);
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                title="提取尾帧"
+                                style={{ filter: `drop-shadow(0 0 4px ${videoNodeColor.light})` }}
+                              >
+                                <Icons.Image size={14} className="text-white" />
+                              </button>
+                              
+                              {/* 提取首帧 */}
+                              <button
+                                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md flex items-center justify-center transition-all transform hover:scale-110"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onExtractFrame(node.id, 'first');
+                                  setShowToolbox(false);
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                title="提取首帧"
+                                style={{ filter: `drop-shadow(0 0 4px ${videoNodeColor.light})` }}
+                              >
+                                <Icons.Play size={14} className="text-white" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                    </>
+                ) : node.status === 'error' ? (
+                    // 错误状态
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-red-950/30 border-2 border-red-500/50 rounded-xl">
+                        <Icons.Close size={24} className="text-red-400" />
+                        <span className="text-[11px] text-red-400 font-medium">生成失败</span>
+                        {node.data?.videoFailReason && (
+                            <span className="text-[9px] text-red-400/70 text-center px-4 max-w-full break-words">
+                                {node.data.videoFailReason.length > 100 
+                                    ? node.data.videoFailReason.slice(0, 100) + '...' 
+                                    : node.data.videoFailReason}
+                            </span>
+                        )}
+                    </div>
+                ) : (
+                    // Loading 状态
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-zinc-900/50">
+                        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span className="text-[10px] text-zinc-500">等待视频生成...</span>
+                        {node.data?.videoTaskStatus && (
+                            <span className="text-[9px] text-zinc-600">
+                                {node.data.videoTaskStatus === 'PENDING' && '任务排队中...'}
+                                {node.data.videoTaskStatus === 'RUNNING' && `生成中 ${node.data.videoProgress || 0}%`}
+                            </span>
+                        )}
+                    </div>
+                )}
+                
+                {isRunning && (
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center z-30">
+                        <div className="w-8 h-8 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
                     </div>
                 )}
             </div>
@@ -1979,7 +2069,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
              {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp'].includes(node.type) && (
                  <div className="flex items-center gap-0.5">
                    {/* 批量数量选择器 - 对图片生成类型节点显示 */}
-                   {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale'].includes(node.type) && !isRunning && (
+                   {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video'].includes(node.type) && !isRunning && (
                      <div className="flex items-center h-8 rounded-l-lg border border-r-0 border-white/10 bg-[#2c2c2e] overflow-hidden">
                        <button
                          onClick={(e) => { e.stopPropagation(); setBatchCount(Math.max(1, batchCount - 1)); }}
@@ -2011,7 +2101,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                       }}
                       disabled={!isRunning && node.status === 'running'}
                       className={`h-8 px-2.5 border border-white/10 shadow-lg transition-colors flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed
-                          ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
+                          ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
                           ${isRunning ? 'bg-red-500/20 text-red-300 border-red-500/50 hover:bg-red-500/30' : 'bg-[#2c2c2e] text-green-400 hover:bg-green-500/20 hover:text-green-300'}
                       `}
                    >

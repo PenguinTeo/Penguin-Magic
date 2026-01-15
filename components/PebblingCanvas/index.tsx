@@ -1871,6 +1871,211 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       console.log(`[工具批量] 全部完成`);
   };
 
+  // 视频节点批量执行：创建多个 video-output 节点
+  const handleVideoBatchExecute = async (sourceNodeId: string, sourceNode: CanvasNode, count: number) => {
+      // 立即标记源节点为 running，防止重复点击
+      updateNode(sourceNodeId, { status: 'running' });
+      
+      console.log(`[视频批量] 开始生成 ${count} 个视频输出节点`);
+      
+      // 获取输入
+      const inputs = resolveInputs(sourceNodeId);
+      const nodePrompt = sourceNode.data?.prompt || '';
+      const inputTexts = inputs.texts.join('\n');
+      const combinedPrompt = nodePrompt || inputTexts;
+      const inputImages = inputs.images;
+      
+      if (!combinedPrompt) {
+          console.error('[视频批量] 无提示词');
+          updateNode(sourceNodeId, { status: 'error' });
+          return;
+      }
+      
+      // 创建结果节点（video-output 类型）
+      const resultNodeIds: string[] = [];
+      const newNodes: CanvasNode[] = [];
+      const newConnections: Connection[] = [];
+      
+      const baseX = sourceNode.x + sourceNode.width + 150;
+      const nodeHeight = 300;
+      const nodeWidth = 400;
+      const gap = 20;
+      const totalHeight = count * nodeHeight + (count - 1) * gap;
+      const startY = sourceNode.y + (sourceNode.height / 2) - (totalHeight / 2);
+      
+      for (let i = 0; i < count; i++) {
+          const newId = uuid();
+          resultNodeIds.push(newId);
+          
+          const resultNode: CanvasNode = {
+              id: newId,
+              type: 'video-output',
+              title: `视频 ${i + 1}`,
+              content: '',
+              x: baseX,
+              y: startY + i * (nodeHeight + gap),
+              width: nodeWidth,
+              height: nodeHeight,
+              status: 'running',
+              data: {}
+          };
+          newNodes.push(resultNode);
+          
+          newConnections.push({
+              id: uuid(),
+              fromNode: sourceNodeId,
+              toNode: newId
+          });
+      }
+      
+      // 添加节点和连接
+      setNodes(prev => [...prev, ...newNodes]);
+      setConnections(prev => [...prev, ...newConnections]);
+      nodesRef.current = [...nodesRef.current, ...newNodes];
+      connectionsRef.current = [...connectionsRef.current, ...newConnections];
+      setHasUnsavedChanges(true);
+      
+      console.log(`[视频批量] 已创建 ${count} 个视频输出节点，开始并发执行`);
+      
+      // 获取视频设置
+      const videoService = sourceNode.data?.videoService || 'sora';
+      
+      // 并发执行所有结果节点的生成
+      const execPromises = resultNodeIds.map(async (outputNodeId, index) => {
+          const abortController = new AbortController();
+          abortControllersRef.current.set(outputNodeId, abortController);
+          const signal = abortController.signal;
+          
+          try {
+              // 处理图片输入（如果有）
+              let processedImages: string[] = [];
+              if (inputImages.length > 0) {
+                  for (const imgSrc of inputImages) {
+                      if (imgSrc.startsWith('data:')) {
+                          processedImages.push(imgSrc);
+                      } else if (imgSrc.startsWith('/files/')) {
+                          const fullUrl = `${window.location.origin}${imgSrc}`;
+                          const resp = await fetch(fullUrl);
+                          const blob = await resp.blob();
+                          const base64 = await new Promise<string>(resolve => {
+                              const reader = new FileReader();
+                              reader.onloadend = () => resolve(reader.result as string);
+                              reader.readAsDataURL(blob);
+                          });
+                          processedImages.push(base64);
+                      }
+                  }
+              }
+              
+              if (videoService === 'veo') {
+                  // ===== Veo 视频生成 =====
+                  const { createVeoTask, waitForVeoCompletion } = await import('../../services/veoService');
+                  
+                  const veoMode = sourceNode.data?.veoMode || 'text2video';
+                  const veoModel = sourceNode.data?.veoModel || 'veo3.1-fast';
+                  const veoAspectRatio = sourceNode.data?.veoAspectRatio || '16:9';
+                  const veoEnhancePrompt = sourceNode.data?.veoEnhancePrompt ?? false;
+                  const veoEnableUpsample = sourceNode.data?.veoEnableUpsample ?? false;
+                  
+                  console.log(`[视频批量] Veo 开始生成 ${index + 1}:`, {
+                      mode: veoMode,
+                      model: veoModel,
+                      aspectRatio: veoAspectRatio,
+                      enhancePrompt: veoEnhancePrompt,
+                      enableUpsample: veoEnableUpsample,
+                      prompt: combinedPrompt.slice(0, 100)
+                  });
+                  
+                  const taskId = await createVeoTask({
+                      prompt: combinedPrompt,
+                      model: veoModel as any,
+                      images: processedImages.length > 0 ? processedImages : undefined,
+                      aspectRatio: veoAspectRatio as any,
+                      enhancePrompt: veoEnhancePrompt,
+                      enableUpsample: veoEnableUpsample
+                  });
+                  
+                  console.log(`[视频批量] Veo 任务已创建 ${index + 1}, taskId:`, taskId);
+                  
+                  updateNode(outputNodeId, { data: { videoTaskId: taskId } });
+                  
+                  const videoUrl = await waitForVeoCompletion(taskId, (progress, status) => {
+                      updateNode(outputNodeId, { data: { ...nodesRef.current.find(n => n.id === outputNodeId)?.data, videoProgress: progress, videoTaskStatus: status } });
+                  });
+                  
+                  if (signal.aborted) return;
+                  
+                  if (videoUrl) {
+                      await downloadAndSaveVideo(videoUrl, outputNodeId, signal);
+                  } else {
+                      throw new Error('未返回视频URL');
+                  }
+              } else {
+                  // ===== Sora 视频生成 =====
+                  const { createVideoTask, waitForVideoCompletion } = await import('../../services/soraService');
+                  
+                  const videoModel = sourceNode.data?.videoModel || 'sora-2';
+                  const videoSize = sourceNode.data?.videoSize || '1280x720';
+                  const aspectRatio = videoSize === '720x1280' ? '9:16' : '16:9';
+                  const duration = sourceNode.data?.videoSeconds || '10';
+                  const hd = videoModel === 'sora-2-pro';
+                  
+                  console.log(`[视频批量] Sora 开始生成 ${index + 1}:`, {
+                      model: videoModel,
+                      aspectRatio,
+                      duration,
+                      prompt: combinedPrompt.slice(0, 100)
+                  });
+                  
+                  const taskId = await createVideoTask({
+                      prompt: combinedPrompt,
+                      model: videoModel as any,
+                      images: processedImages.length > 0 ? processedImages : undefined,
+                      aspectRatio: aspectRatio as any,
+                      hd: hd,
+                      duration: duration as any
+                  });
+                  
+                  console.log(`[视频批量] Sora 任务已创建 ${index + 1}, taskId:`, taskId);
+                  
+                  updateNode(outputNodeId, { data: { videoTaskId: taskId } });
+                  
+                  const videoUrl = await waitForVideoCompletion(taskId, (progress, status) => {
+                      updateNode(outputNodeId, { data: { ...nodesRef.current.find(n => n.id === outputNodeId)?.data, videoProgress: progress, videoTaskStatus: status } });
+                  });
+                  
+                  if (signal.aborted) return;
+                  
+                  if (videoUrl) {
+                      await downloadAndSaveVideo(videoUrl, outputNodeId, signal);
+                  } else {
+                      throw new Error('未返回视频URL');
+                  }
+              }
+              
+              console.log(`[视频批量] 结果 ${index + 1} 完成`);
+          } catch (err) {
+              console.error(`[视频批量] 结果 ${index + 1} 失败:`, err);
+              if (!signal.aborted) {
+                  updateNode(outputNodeId, { 
+                      status: 'error',
+                      data: { ...nodesRef.current.find(n => n.id === outputNodeId)?.data, videoFailReason: err instanceof Error ? err.message : String(err) }
+                  });
+              }
+          } finally {
+              abortControllersRef.current.delete(outputNodeId);
+          }
+      });
+      
+      await Promise.all(execPromises);
+      
+      // 标记源节点为完成
+      updateNode(sourceNodeId, { status: 'completed' });
+      
+      saveCurrentCanvas();
+      console.log(`[视频批量] 全部完成`);
+  };
+
   const handleExecuteNode = async (nodeId: string, batchCount: number = 1) => {
       const node = nodesRef.current.find(n => n.id === nodeId);
       if (!node) {
@@ -1927,6 +2132,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (batchCount >= 1 && ['bp', 'idea'].includes(node.type)) {
           try {
               await handleBpIdeaBatchExecute(nodeId, node, batchCount);
+          } finally {
+              executingNodesRef.current.delete(nodeId); // 解锁
+          }
+          return;
+      }
+      
+      // 视频节点批量执行：自动创建 video-output 节点
+      if (batchCount >= 1 && node.type === 'video') {
+          try {
+              await handleVideoBatchExecute(nodeId, node, batchCount);
           } finally {
               executingNodesRef.current.delete(nodeId); // 解锁
           }
@@ -3267,6 +3482,92 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       setHasUnsavedChanges(true); // 标记未保存
   };
 
+  // 处理视频帧提取
+  const handleExtractFrame = async (nodeId: string, position: 'first' | 'last') => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node || !node.content) {
+          console.warn('[ExtractFrame] 节点无内容:', nodeId);
+          return;
+      }
+
+      console.log('[ExtractFrame] 开始提取帧:', { nodeId, position, content: node.content.substring(0, 100) });
+
+      try {
+          // 创建视频元素来提取帧
+          const video = document.createElement('video');
+          video.crossOrigin = 'anonymous';
+          
+          // 处理视频 URL
+          let videoUrl = node.content;
+          if (videoUrl.startsWith('/files/')) {
+              videoUrl = `http://localhost:8765${videoUrl}`;
+          }
+          
+          // 等待视频加载
+          await new Promise<void>((resolve, reject) => {
+              video.onloadedmetadata = () => {
+                  console.log('[ExtractFrame] 视频元数据加载完成:', { duration: video.duration, width: video.videoWidth, height: video.videoHeight });
+                  resolve();
+              };
+              video.onerror = (e) => {
+                  console.error('[ExtractFrame] 视频加载失败:', e);
+                  reject(new Error('视频加载失败'));
+              };
+              video.src = videoUrl;
+              video.load();
+          });
+
+          // 跳转到指定帧位置
+          const targetTime = position === 'first' ? 0 : Math.max(0, video.duration - 0.1);
+          await new Promise<void>((resolve) => {
+              video.onseeked = () => {
+                  console.log('[ExtractFrame] 跳转完成:', targetTime);
+                  resolve();
+              };
+              video.currentTime = targetTime;
+          });
+
+          // 使用 canvas 提取帧
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('无法创建 canvas context');
+          
+          ctx.drawImage(video, 0, 0);
+          const frameDataUrl = canvas.toDataURL('image/png');
+          console.log('[ExtractFrame] 帧提取成功, 大小:', frameDataUrl.length);
+
+          // 保存到 output 目录
+          const { saveToOutput } = await import('@/services/api/files');
+          const result = await saveToOutput(frameDataUrl, `frame_${Date.now()}.png`);
+          if (!result.success || !result.data) {
+              throw new Error(result.error || '保存帧失败');
+          }
+          const savedPath = result.data.url;
+          console.log('[ExtractFrame] 保存成功:', savedPath);
+
+          // 创建新的图片节点
+          const sourceNode = nodes.find(n => n.id === nodeId);
+          const newNodeX = (sourceNode?.x || 0) + (sourceNode?.width || 300) + 50;
+          const newNodeY = sourceNode?.y || 0;
+
+          const newNode = addNode('image', savedPath, { x: newNodeX, y: newNodeY });
+          
+          // 建立连接
+          setConnections(prev => [...prev, {
+              id: uuid(),
+              fromNode: nodeId,
+              toNode: newNode.id
+          }]);
+          setHasUnsavedChanges(true);
+
+          console.log('[ExtractFrame] 完成，新节点:', newNode.id);
+      } catch (error) {
+          console.error('[ExtractFrame] 提取帧失败:', error);
+      }
+  };
+
   // --- FLOATING GENERATOR HANDLER ---
   const handleGenerate = async (type: NodeType, prompt: string, config: GenerationConfig, files?: File[]) => {
       console.log('[FloatingInput] 开始生成:', { type, prompt, config });
@@ -3769,6 +4070,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     }}
                     onEndConnection={handleEndConnection}
                     onCreateToolNode={handleCreateToolNode}
+                    onExtractFrame={handleExtractFrame}
                 />
             ))}
         </div>
