@@ -160,16 +160,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <DraggableButton type="edit" icon={<BananaIcon />} label="Magic" onDragStart={onDragStart} onClick={() => onAdd('edit')} />
             </div>
 
-            <div className="w-8 h-px bg-white/10 my-1" />
-            
-            {/* Tools Group */}
-            <div className="flex flex-col gap-1.5">
-                <span className="text-[9px] font-bold text-zinc-600 text-center uppercase tracking-wider">Tools</span>
-                <DraggableButton type="remove-bg" icon={<Icons.Scissors />} label="Remove BG" onDragStart={onDragStart} onClick={() => onAdd('remove-bg')} />
-                <DraggableButton type="upscale" icon={<Icons.Upscale />} label="Upscale" onDragStart={onDragStart} onClick={() => onAdd('upscale')} />
-                <DraggableButton type="resize" icon={<Icons.Resize />} label="Resize" onDragStart={onDragStart} onClick={() => onAdd('resize')} />
-            </div>
-
         </div>
         </div>
 

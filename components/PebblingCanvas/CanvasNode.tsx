@@ -1213,7 +1213,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         
         // Veo3.1 settings
         const veoMode = node.data?.veoMode || 'text2video'; // text2video | image2video | keyframes | multi-reference
-        const veoModel = node.data?.veoModel || 'veo3.1';   // veo3.1 | veo3.1-pro | veo3.1-components
+        const veoModel = node.data?.veoModel || 'veo3.1-fast';   // veo3.1-fast | veo3.1-pro | veo3.1-4k | veo3.1-pro-4k | veo3.1-components | veo3.1-components-4k
         const veoAspectRatio = node.data?.veoAspectRatio || '16:9';
         const veoEnhancePrompt = node.data?.veoEnhancePrompt ?? false;
         const veoEnableUpsample = node.data?.veoEnableUpsample ?? false;
@@ -1316,10 +1316,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 </div>
                 
                 {/* Settings */}
-                <div className="flex-1 p-2 flex flex-col gap-2 overflow-y-auto">
-                    {/* Prompt - 限制最大高度避免覆盖按钮 */}
+                <div className="flex-1 p-2 flex flex-col gap-2 overflow-hidden">
+                    {/* Prompt - 可扩展的提示词区域 */}
                     <textarea 
-                        className="min-h-[60px] max-h-[100px] bg-black/40 border border-white/10 rounded p-2 text-[11px] text-zinc-200 outline-none resize-none focus:border-yellow-500/50 placeholder-zinc-600"
+                        className="flex-1 min-h-[60px] bg-black/40 border border-white/10 rounded p-2 text-[11px] text-zinc-200 outline-none resize-none focus:border-yellow-500/50 placeholder-zinc-600"
                         placeholder="描述视频场景..."
                         value={localPrompt}
                         onChange={(e) => setLocalPrompt(e.target.value)}
@@ -1329,7 +1329,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     
                     {/* Sora Settings */}
                     {videoService === 'sora' && (
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5 shrink-0">
                             {/* Row 1: Aspect + Quality */}
                             <div className="flex gap-1.5">
                                 {/* Aspect Ratio */}
@@ -1398,7 +1398,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     
                     {/* Veo3.1 Settings */}
                     {videoService === 'veo' && (
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5 shrink-0">
                             {/* Row 1: 视频模式 */}
                             <div className="flex bg-black/40 rounded p-0.5">
                                 <button
@@ -1435,71 +1435,93 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                             </div>
                             
-                            {/* Row 1.5: 模型选择 Flash/Pro（非 components 模式显示） */}
-                            {veoMode !== 'multi-reference' && (
-                                <div className="flex bg-black/40 rounded p-0.5">
+                            {/* Row 1.5: 模型选择 - 6个模型分两行 */}
+                            <div className="flex flex-col gap-1">
+                                {/* 第一行: fast, 4k, pro */}
+                                <div className="flex bg-black/40 rounded-lg p-0.5">
                                     <button
-                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${
-                                            veoModel === 'veo3.1' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'
-                                        }`}
-                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1')}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-fast' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-fast')}
                                         onMouseDown={(e) => e.stopPropagation()}
-                                        title="标准模型，速度快"
+                                        title="快速模式"
                                     >
-                                        ⚡ Flash
+                                        fast
                                     </button>
                                     <button
-                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${
-                                            veoModel === 'veo3.1-pro' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'
-                                        }`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-4k' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-4k')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title="4K 标准"
+                                    >
+                                        4k
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
                                         onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-pro')}
                                         onMouseDown={(e) => e.stopPropagation()}
-                                        title="高质量模型，结果更精细"
+                                        title="高质量"
                                     >
-                                        ✨ Pro
+                                        pro
                                     </button>
                                 </div>
-                            )}
+                                {/* 第二行: pro-4k, components, components-4k */}
+                                <div className="flex bg-black/40 rounded-lg p-0.5">
+                                    <button
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro-4k' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-pro-4k')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title="4K 高质量"
+                                    >
+                                        pro-4k
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-components')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title="多图参考"
+                                    >
+                                        comp
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components-4k' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-components-4k')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title="4K 多图参考"
+                                    >
+                                        comp-4k
+                                    </button>
+                                </div>
+                            </div>
                             
-                            {/* Row 2: 宽高比（非 components 模式显示） */}
+                            {/* Row 2: 宽高比 + 增强提示词 */}
                             {veoMode !== 'multi-reference' && (
-                                <div className="flex bg-black/40 rounded p-0.5">
+                                <div className="flex gap-1.5">
+                                    <div className="flex bg-black/40 rounded p-0.5 flex-1">
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '16:9' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleVideoSettingChange('veoAspectRatio', '16:9')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            16:9
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '9:16' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleVideoSettingChange('veoAspectRatio', '9:16')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            9:16
+                                        </button>
+                                    </div>
                                     <button
-                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '16:9' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                        onClick={() => handleVideoSettingChange('veoAspectRatio', '16:9')}
+                                        className={`px-2 py-1 text-[8px] font-medium rounded transition-all ${veoEnhancePrompt ? 'bg-purple-500/30 text-purple-300' : 'bg-black/40 text-zinc-400 hover:text-zinc-200'}`}
+                                        onClick={() => handleVideoSettingChange('veoEnhancePrompt', !veoEnhancePrompt)}
                                         onMouseDown={(e) => e.stopPropagation()}
+                                        title="AI自动优化提示词"
                                     >
-                                        16:9
-                                    </button>
-                                    <button
-                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '9:16' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-                                        onClick={() => handleVideoSettingChange('veoAspectRatio', '9:16')}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                    >
-                                        9:16
+                                        {veoEnhancePrompt ? '✓ 增强' : '增强'}
                                     </button>
                                 </div>
                             )}
-                            
-                            {/* Row 3: 增强提示词开关 */}
-                            <div className="flex items-center justify-between px-2 py-1 bg-black/40 rounded">
-                                <span className="text-[9px] text-zinc-400">增强提示词</span>
-                                <button
-                                    className={`w-8 h-4 rounded-full transition-all ${veoEnhancePrompt ? 'bg-purple-500' : 'bg-zinc-600'}`}
-                                    onClick={() => handleVideoSettingChange('veoEnhancePrompt', !veoEnhancePrompt)}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                >
-                                    <div className={`w-3 h-3 bg-white rounded-full transition-transform ${veoEnhancePrompt ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                                </button>
-                            </div>
-                            
-                            {/* 模式说明 */}
-                            <div className="text-[8px] text-zinc-500 px-1">
-                                {veoMode === 'text2video' && '📝 纯文字描述生成视频，无需输入图片'}
-                                {veoMode === 'image2video' && '🖼️ 连接1张图片节点，直出动态视频'}
-                                {veoMode === 'keyframes' && '🎬 连接2张图片节点（上=首帧，下=尾帧）'}
-                                {veoMode === 'multi-reference' && '🎨 连接1-3张图片节点作为多图参考'}
-                            </div>
                         </div>
                     )}
                 </div>

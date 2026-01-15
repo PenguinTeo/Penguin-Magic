@@ -1,14 +1,17 @@
 /**
  * Google Veo3.1 视频生成服务
- * 使用 /google/v1/models/veo/videos 接口
+ * 使用 /v2/videos/generations 接口
  * 参考文档: veo3.1.md
  */
 
-// Veo 模型类型
+// Veo 模型类型 - veo3.1 系列 6 个模型
 export type VeoModel = 
-  | 'veo3.1'            // 文生视频/图生视频
-  | 'veo3.1-pro'        // 文生/图生 + 首尾帧，高质量
-  | 'veo3.1-components';// 多图参考 1–2 张，多参 + 首尾帧
+  | 'veo3.1-fast'           // 快速模式
+  | 'veo3.1-pro-4k'         // 4K 高质量
+  | 'veo3.1-components-4k'  // 4K 多图参考
+  | 'veo3.1-4k'             // 4K 标准
+  | 'veo3.1-components'     // 多图参考
+  | 'veo3.1-pro';           // 高质量
 
 // Veo 视频模式
 export type VeoVideoMode = 
@@ -28,33 +31,30 @@ export interface VeoConfig {
   baseUrl: string;
 }
 
-// Veo 创建任务响应
+// Veo 创建任务响应 - 支持新旧两种格式
 interface VeoCreateResponse {
-  code: string;
-  data: string; // task_id
+  // 新格式: { task_id: "xxx" }
+  task_id?: string;
+  // 旧格式: { code: "success", data: "xxx" }
+  code?: string;
+  data?: string;
 }
 
-// Veo 任务查询响应 - 兼容多种 API 结构
+// Veo 任务查询响应 - v2 API 格式
 interface VeoTaskResponse {
-  // 结构 1: 顶层字段
-  status?: string;
-  progress?: string;
+  task_id?: string;
+  platform?: string;
+  action?: string;
+  status?: string;           // "SUCCESS" | "RUNNING" | "FAILURE" | "PENDING"
   fail_reason?: string;
-  // 结构 2: data 包装（注意有两层 data）
-  code?: string;
+  submit_time?: number;
+  start_time?: number;
+  finish_time?: number;
+  progress?: string;         // "100%"
   data?: {
-    status?: string;        // "SUCCESS" | "RUNNING" | "FAILURE"
-    progress?: string;      // "100%"
-    fail_reason?: string;
-    // 内层 data，包含 video_url
-    data?: {
-      status?: string;      // "completed"
-      video_url?: string;
-      detail?: any;
-    };
-    // 也可能直接在外层
-    video_url?: string;
-  } | null;
+    output?: string;         // 视频 URL
+  };
+  cost?: number;
 }
 
 export interface VeoGenerationParams {
@@ -90,15 +90,15 @@ export function saveVeoConfig(config: VeoConfig) {
 export function autoSelectVeoModel(mode: VeoVideoMode, imageCount: number): VeoModel {
   switch (mode) {
     case 'text2video':
-      return 'veo3.1';
+      return 'veo3.1-fast';
     case 'image2video':
-      return 'veo3.1';
+      return 'veo3.1-fast';
     case 'keyframes':
       return 'veo3.1-pro'; // 首尾帧用 pro
     case 'multi-reference':
       return 'veo3.1-components'; // 多图参考
     default:
-      return 'veo3.1';
+      return 'veo3.1-fast';
   }
 }
 
@@ -116,7 +116,7 @@ export function imageToBase64DataUri(base64Content: string): string {
 
 /**
  * 创建 Veo 视频生成任务
- * POST /google/v1/models/veo/videos
+ * POST /v2/videos/generations
  */
 export async function createVeoTask(params: VeoGenerationParams): Promise<string> {
   const config = getVeoConfig();
@@ -125,12 +125,12 @@ export async function createVeoTask(params: VeoGenerationParams): Promise<string
     throw new Error('请先配置 Veo API Key');
   }
 
-  const url = `${config.baseUrl}/google/v1/models/veo/videos`;
+  const url = `${config.baseUrl}/v2/videos/generations`;
 
   // 构建请求体
   const requestBody: any = {
     prompt: params.prompt,
-    model: params.model || 'veo3.1',
+    model: params.model || 'veo3.1-fast',
   };
 
   // 添加可选参数
@@ -143,13 +143,14 @@ export async function createVeoTask(params: VeoGenerationParams): Promise<string
     requestBody.seed = params.seed;
   }
 
-  // aspect_ratio 仅在非 veo3.1-components 模型时写入
-  if (params.aspectRatio && params.model !== 'veo3.1-components') {
+  // aspect_ratio 仅在非 components 系列模型时写入
+  const isComponentsModel = params.model?.includes('components');
+  if (params.aspectRatio && !isComponentsModel) {
     requestBody.aspect_ratio = params.aspectRatio;
   }
 
-  // enable_upsample 仅在非 veo3.1-components 模型时写入
-  if (params.enableUpsample !== undefined && params.model !== 'veo3.1-components') {
+  // enable_upsample 仅在非 components 系列模型时写入
+  if (params.enableUpsample !== undefined && !isComponentsModel) {
     requestBody.enable_upsample = params.enableUpsample;
   }
 
@@ -186,11 +187,14 @@ export async function createVeoTask(params: VeoGenerationParams): Promise<string
     const data: VeoCreateResponse = await response.json();
     console.log('[Veo API] 任务创建响应:', data);
     
-    if (data.code !== 'success') {
+    // 支持新旧两种响应格式
+    const taskId = data.task_id || data.data;
+    
+    if (!taskId) {
       throw new Error(`Veo 任务创建失败: ${JSON.stringify(data)}`);
     }
     
-    return data.data; // 返回 task_id
+    return taskId; // 返回 task_id
   } catch (error) {
     console.error('[Veo API] 创建任务失败:', error);
     throw error;
@@ -199,7 +203,7 @@ export async function createVeoTask(params: VeoGenerationParams): Promise<string
 
 /**
  * 查询 Veo 任务状态
- * GET /google/v1/tasks/{taskId}
+ * GET /v2/videos/generations/{taskId}
  */
 export async function getVeoTaskStatus(taskId: string): Promise<{
   status: VeoTaskStatus;
@@ -209,7 +213,7 @@ export async function getVeoTaskStatus(taskId: string): Promise<{
 }> {
   const config = getVeoConfig();
   
-  const url = `${config.baseUrl}/google/v1/tasks/${taskId}`;
+  const url = `${config.baseUrl}/v2/videos/generations/${taskId}`;
 
   try {
     const response = await fetch(url, {
@@ -229,16 +233,13 @@ export async function getVeoTaskStatus(taskId: string): Promise<{
     // 🔍 调试：打印完整原始响应
     console.log('[Veo API] 原始响应:', JSON.stringify(result, null, 2));
     
-    // 兼容多种响应结构：注意 API 有两层 data 嵌套
-    // 结构: { code, data: { status, progress, data: { video_url } } }
-    const outerData = result.data;
-    const innerData = outerData?.data as any;  // 内层 data
-    
-    const rawStatus = outerData?.status || result.status || '';
-    const rawProgress = outerData?.progress || result.progress;
-    // video_url 可能在内层 data 或外层 data
-    const videoUrl = innerData?.video_url || outerData?.video_url;
-    const failReason = outerData?.fail_reason || result.fail_reason;
+    // 解析新的 v2 API 响应格式
+    // 结构: { task_id, status, progress, data: { output: "url" } }
+    const rawStatus = result.status || '';
+    const rawProgress = result.progress;
+    // 视频 URL 在 data.output 字段
+    const videoUrl = (result.data as any)?.output;
+    const failReason = result.fail_reason;
     
     // 转换 status: "completed" -> "SUCCESS", "running" -> "RUNNING", "failed" -> "FAILURE"
     let status: VeoTaskStatus = 'PENDING';
