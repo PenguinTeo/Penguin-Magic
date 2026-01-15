@@ -1562,8 +1562,8 @@ const Canvas: React.FC<CanvasProps> = ({
           />
         </div>
       ) : view === 'canvas' ? (
-        /* 画布全屏显示 */
-        <div className="absolute inset-0 z-50 pt-12">
+        /* 画布全屏显示 - 覆盖整个区域，标签栏浮在上方 */
+        <div className="absolute inset-0 z-50 overflow-hidden">
           <PebblingCanvas 
             onImageGenerated={onCanvasImageGenerated} 
             onCanvasCreated={onCanvasCreated}
@@ -1575,8 +1575,9 @@ const Canvas: React.FC<CanvasProps> = ({
         </div>
       ) : null}
       
-      {/* 桌面模式 - 始终显示（画布模式下作为背景） */}
-      <div className={`relative z-10 flex-1 overflow-hidden ${view === 'canvas' ? 'pointer-events-none' : ''}`}>
+      {/* 桌面模式 - 非画布模式时显示 */}
+      {view !== 'canvas' && (
+      <div className="relative z-10 flex-1 overflow-hidden">
           <Desktop
             items={desktopItems}
             onItemsChange={onDesktopItemsChange}
@@ -1677,6 +1678,7 @@ const Canvas: React.FC<CanvasProps> = ({
             </>
           )}
         </div>
+      )}
    </main>
   );
 };

@@ -2404,7 +2404,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                        const { createVeoTask, waitForVeoCompletion } = await import('../../services/veoService');
                        
                        const veoMode = node.data?.veoMode || 'text2video';
-                       const veoModel = node.data?.veoModel || 'veo3.1';
+                       const veoModel = node.data?.veoModel || 'veo3.1-fast';
                        const veoAspectRatio = node.data?.veoAspectRatio || '16:9';
                        const veoEnhancePrompt = node.data?.veoEnhancePrompt ?? false;
                        const veoEnableUpsample = node.data?.veoEnableUpsample ?? false;
@@ -3786,9 +3786,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
             />
         )}
       </div>
-
-      {/* Floating Input Bar */}
-      <FloatingInput onGenerate={handleGenerate} isGenerating={isGenerating} />
 
       {/* Context Menu */}
       {contextMenu && (
