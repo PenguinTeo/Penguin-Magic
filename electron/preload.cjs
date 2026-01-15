@@ -8,9 +8,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 应用信息
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   
-  // 文件操作（可选，后续扩展）
-  // selectFile: () => ipcRenderer.invoke('select-file'),
-  // selectDirectory: () => ipcRenderer.invoke('select-directory'),
+  // 更新相关
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  onUpdateStatus: (callback) => {
+    ipcRenderer.on('update-status', (event, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners('update-status');
+  },
   
   // 环境标识
   isElectron: true

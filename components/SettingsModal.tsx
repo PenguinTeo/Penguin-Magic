@@ -3,7 +3,7 @@ import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
 import { SoraConfig, getSoraConfig, saveSoraConfig } from '../services/soraService';
 import { VeoConfig, getVeoConfig, saveVeoConfig } from '../services/veoService';
-import { Plug, Gem, Eye as EyeIcon, EyeOff as EyeOffIcon, Key as KeyIcon, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Info as InfoIcon, Check, X, Video } from 'lucide-react';
+import { Plug, Gem, Eye as EyeIcon, EyeOff as EyeOffIcon, Key as KeyIcon, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Info as InfoIcon, Check, X, Video, RefreshCw } from 'lucide-react';
 
 // 应用版本号 - 从vite构建时注入，来源于package.json
 declare const __APP_VERSION__: string;
@@ -73,6 +73,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     baseUrl: 'https://ai.t8star.cn'
   });
 
+  // 更新检查状态
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'error'>('idle');
+  const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
+
   // 同步本地输入状态
   useEffect(() => {
     setLocalThirdPartyUrl(thirdPartyConfig.baseUrl || '');
@@ -90,6 +94,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSoraConfig(savedSoraConfig);
       const savedVeoConfig = getVeoConfig();
       setVeoConfig(savedVeoConfig);
+      setUpdateStatus('idle'); // 重置更新状态
     }
   }, [isOpen]);
 
@@ -141,6 +146,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTimeout(() => setSaveSuccessMessage(null), 2000);
   };
 
+  // 检查更新
+  const handleCheckUpdate = async () => {
+    if (!isElectron) {
+      setSaveSuccessMessage('请在桌面客户端中检查更新');
+      setTimeout(() => setSaveSuccessMessage(null), 3000);
+      return;
+    }
+    setUpdateStatus('checking');
+    try {
+      const result = await (window as any).electronAPI.checkForUpdates();
+      if (result.status === 'dev-mode') {
+        setUpdateStatus('idle');
+        setSaveSuccessMessage('开发模式下不检查更新');
+        setTimeout(() => setSaveSuccessMessage(null), 2000);
+      } else if (result.status === 'checking') {
+        // 检查中，等待 autoUpdater 事件回调
+        setTimeout(() => {
+          // 如果 3 秒后还是 checking 状态，说明已是最新
+          setUpdateStatus(prev => {
+            if (prev === 'checking') {
+              setSaveSuccessMessage('已是最新版本');
+              setTimeout(() => setSaveSuccessMessage(null), 2000);
+              return 'up-to-date';
+            }
+            return prev;
+          });
+        }, 3000);
+      } else if (result.status === 'error') {
+        setUpdateStatus('error');
+        setSaveSuccessMessage('检查更新失败');
+        setTimeout(() => setSaveSuccessMessage(null), 2000);
+      }
+    } catch (err) {
+      setUpdateStatus('error');
+      setSaveSuccessMessage('检查更新失败');
+      setTimeout(() => setSaveSuccessMessage(null), 2000);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* 背景遮罩 */}
@@ -153,8 +197,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <div 
         className="relative w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden animate-fade-in"
         style={{
-          background: colors.bgSecondary,
-          borderColor: colors.border
+          background: `linear-gradient(180deg, rgba(23, 23, 23, 0.98) 0%, rgba(10, 10, 10, 0.98) 100%)`,
+          borderColor: 'rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05)'
         }}
       >
         {/* 保存成功提示 */}
@@ -622,22 +667,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div style={{ borderTop: `1px solid ${colors.border}` }} />
 
           {/* 关于信息 */}
-          <div className="flex items-center justify-between p-3 rounded-xl"
-            style={{ background: colors.bgTertiary, border: `1px solid ${colors.border}` }}>
+          <div className="flex items-center justify-between p-4 rounded-xl"
+            style={{ 
+              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.02) 100%)', 
+              border: '1px solid rgba(59, 130, 246, 0.15)' 
+            }}>
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center"
-                style={{ background: `${colors.textMuted}15` }}>
-                <InfoIcon className="w-4.5 h-4.5" style={{ color: colors.textMuted }} />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                </svg>
               </div>
               <div>
-                <h4 className="text-sm font-medium" style={{ color: colors.textPrimary }}>企鹅魔法</h4>
-                <p className="text-xs" style={{ color: colors.textSecondary }}>Penguin Magic Creative</p>
+                <h4 className="text-sm font-semibold" style={{ color: '#ffffff' }}>企鹅魔法</h4>
+                <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Penguin Magic Creative</p>
               </div>
             </div>
-            <span className="text-xs font-mono px-2.5 py-1 rounded-md"
-              style={{ background: colors.bgSecondary, color: colors.textMuted, border: `1px solid ${colors.border}` }}>
-              v{APP_VERSION}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCheckUpdate}
+                disabled={updateStatus === 'checking'}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-all hover:opacity-80 disabled:opacity-50"
+                style={{ 
+                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%)', 
+                  color: '#60a5fa',
+                  border: '1px solid rgba(59, 130, 246, 0.3)'
+                }}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${updateStatus === 'checking' ? 'animate-spin' : ''}`} />
+                {updateStatus === 'checking' ? '检查中...' : '检查更新'}
+              </button>
+              <span className="text-xs font-mono px-3 py-2 rounded-lg"
+                style={{ 
+                  background: 'rgba(255,255,255,0.05)', 
+                  color: 'rgba(255,255,255,0.6)', 
+                  border: '1px solid rgba(255,255,255,0.08)' 
+                }}>
+                v{APP_VERSION}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -659,6 +728,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           to { opacity: 1; transform: scale(1); }
         }
         .animate-fade-in { animation: fade-in 0.2s ease-out; }
+        /* 自定义滚动条 */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { 
+          background: rgba(255,255,255,0.12); 
+          border-radius: 3px; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { 
+          background: rgba(255,255,255,0.22); 
+        }
       `}</style>
     </div>
   );

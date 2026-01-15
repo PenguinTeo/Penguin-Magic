@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, Menu, nativeImage, dialog, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
@@ -28,10 +28,26 @@ const RELEASE_NOTES = {
   '1.3.0': {
     title: '🎉 欢迎使用新版本 v1.3.0',
     content: '本次更新内容：\n\n• 优化了应用性能和稳定性\n• 修复了已知问题\n\n感谢您的使用！'
+  },
+  '1.3.1': {
+    title: '🎉 欢迎使用新版本 v1.3.1',
+    content: '本次更新内容：\n\n• 优化了应用性能和稳定性\n• 修复了已知问题\n\n感谢您的使用！'
+  },
+  '1.3.2': {
+    title: '🎉 欢迎使用新版本 v1.3.2',
+    content: '本次更新内容：\n\n• 全新自定义更新弹窗样式，更精美的UI体验\n• 设置中新增检查更新按钮\n• 优化了应用性能和稳定性\n\n感谢您的使用！'
+  },
+  '1.3.3': {
+    title: '🎉 欢迎使用新版本 v1.3.3',
+    content: '本次更新内容：\n\n• 修复更新弹窗内容显示不全的问题\n• 优化设置弹窗UI风格\n• 统一应用内滚动条样式\n\n感谢您的使用！'
+  },
+  '1.3.4': {
+    title: '🎉 欢迎使用新版本 v1.3.4',
+    content: '本次更新内容：\n\n• 修复更新弹窗图标无法显示的问题\n• 修复弹窗可拖动的问题\n• 修复内容区域无法滚动的问题\n\n感谢您的使用！'
   }
 };
 
-// 检查并显示更新后欢迎提示
+// 检查并显示更新后欢迎提示（自定义弹窗）
 function checkAndShowWelcome() {
   const currentVersion = app.getVersion();
   const versionFile = path.join(app.getPath('userData'), 'last_version.txt');
@@ -52,20 +68,681 @@ function checkAndShowWelcome() {
     console.log('保存版本文件失败:', e.message);
   }
   
-  // 如果版本不同且有更新日志，显示欢迎提示
+  // 如果版本不同且有更新日志，显示自定义欢迎弹窗
   if (lastVersion && lastVersion !== currentVersion && RELEASE_NOTES[currentVersion]) {
     const notes = RELEASE_NOTES[currentVersion];
     setTimeout(() => {
-      dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: notes.title,
-        message: `已更新到 v${currentVersion}`,
-        detail: notes.content,
-        buttons: ['知道了'],
-        defaultId: 0
-      });
-    }, 2000); // 延迟2秒显示，等窗口加载完成
+      showUpdateDialog(currentVersion, notes);
+    }, 2000);
   }
+}
+
+// 显示自定义更新弹窗
+function showUpdateDialog(version, notes) {
+  const contentLines = notes.content.split('\n').filter(line => line.trim());
+  const contentHtml = contentLines.map(line => {
+    if (line.startsWith('•')) {
+      return `<div class="item"><span class="dot"></span><span>${line.substring(1).trim()}</span></div>`;
+    }
+    return `<div class="text">${line}</div>`;
+  }).join('');
+
+  const updateWindow = new BrowserWindow({
+    width: 380,
+    height: 440,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    parent: mainWindow,
+    modal: true,
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  updateWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.95) translateY(10px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        html, body {
+          height: 100%;
+          overflow: hidden;
+        }
+        body {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background: transparent;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        /* 自定义滚动条 */
+        .content::-webkit-scrollbar { width: 4px; }
+        .content::-webkit-scrollbar-track { background: transparent; }
+        .content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+        .content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+        .card {
+          width: 340px;
+          max-height: 400px;
+          background: linear-gradient(180deg, rgba(23, 23, 23, 0.98) 0%, rgba(10, 10, 10, 0.98) 100%);
+          backdrop-filter: blur(24px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+          overflow: hidden;
+          animation: fadeIn 0.3s ease-out;
+          display: flex;
+          flex-direction: column;
+        }
+        .header {
+          padding: 24px 24px 16px;
+          text-align: center;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          flex-shrink: 0;
+        }
+        .icon-wrap {
+          width: 56px;
+          height: 56px;
+          margin: 0 auto 12px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 12px;
+          background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%);
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          border-radius: 20px;
+          margin-bottom: 8px;
+        }
+        .badge-text {
+          font-size: 11px;
+          font-weight: 600;
+          color: #60a5fa;
+          letter-spacing: 0.02em;
+        }
+        .version {
+          font-size: 22px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 4px;
+        }
+        .subtitle {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.5);
+        }
+        .content {
+          padding: 20px 24px;
+          flex: 1;
+          overflow-y: auto;
+          min-height: 0;
+          max-height: 150px;
+        }
+        .section-title {
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.4);
+          margin-bottom: 12px;
+        }
+        .item {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          padding: 6px 0;
+        }
+        .dot {
+          width: 6px;
+          height: 6px;
+          background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+          border-radius: 50%;
+          margin-top: 5px;
+          flex-shrink: 0;
+        }
+        .item span:last-child {
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.85);
+          line-height: 1.5;
+        }
+        .text {
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.6);
+          line-height: 1.6;
+          padding: 4px 0;
+        }
+        .footer {
+          padding: 16px 24px 20px;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          flex-shrink: 0;
+        }
+        .btn {
+          width: 100%;
+          padding: 12px;
+          font-size: 13px;
+          font-weight: 600;
+          color: white;
+          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+          border: none;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+        }
+        .btn:active {
+          transform: translateY(0) scale(0.98);
+        }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="icon-wrap">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+            </svg>
+          </div>
+          <div class="badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2.5">
+              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+            </svg>
+            <span class="badge-text">NEW VERSION</span>
+          </div>
+          <div class="version">v${version}</div>
+          <div class="subtitle">已成功更新到最新版本</div>
+        </div>
+        <div class="content">
+          <div class="section-title">更新内容</div>
+          ${contentHtml}
+        </div>
+        <div class="footer">
+          <button class="btn" onclick="window.close()">开始使用</button>
+        </div>
+      </div>
+    </body>
+    </html>
+  `)}`);
+
+  updateWindow.once('ready-to-show', () => {
+    updateWindow.show();
+  });
+}
+
+// 下载进度弹窗引用
+let downloadProgressWindow = null;
+
+// 显示发现新版本弹窗
+function showUpdateAvailableDialog(version, notes) {
+  const iconPath = getIconPath().replace(/\\/g, '/');
+  const contentLines = notes.split('\n').filter(line => line.trim());
+  const contentHtml = contentLines.map(line => {
+    if (line.startsWith('•')) {
+      return `<div class="item"><span class="dot"></span><span>${line.substring(1).trim()}</span></div>`;
+    }
+    return `<div class="text">${line}</div>`;
+  }).join('');
+
+  const updateAvailableWindow = new BrowserWindow({
+    width: 380,
+    height: 380,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    parent: mainWindow,
+    modal: true,
+    show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  updateAvailableWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.95) translateY(10px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        body {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background: transparent;
+          height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          -webkit-app-region: drag;
+        }
+        .card {
+          width: 340px;
+          background: linear-gradient(180deg, rgba(23, 23, 23, 0.98) 0%, rgba(10, 10, 10, 0.98) 100%);
+          backdrop-filter: blur(24px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+          overflow: hidden;
+          animation: fadeIn 0.3s ease-out;
+        }
+        .header {
+          padding: 24px 24px 16px;
+          text-align: center;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .icon { font-size: 40px; margin-bottom: 12px; }
+        .badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 12px;
+          background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(34, 197, 94, 0.1) 100%);
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          border-radius: 20px;
+          margin-bottom: 8px;
+        }
+        .badge-text {
+          font-size: 11px;
+          font-weight: 600;
+          color: #4ade80;
+          letter-spacing: 0.02em;
+        }
+        .version {
+          font-size: 22px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 4px;
+        }
+        .subtitle {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.5);
+        }
+        .content {
+          padding: 20px 24px;
+          max-height: 150px;
+          overflow-y: auto;
+        }
+        .section-title {
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.4);
+          margin-bottom: 12px;
+        }
+        .item {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          padding: 6px 0;
+        }
+        .dot {
+          width: 6px;
+          height: 6px;
+          background: linear-gradient(135deg, #22c55e 0%, #4ade80 100%);
+          border-radius: 50%;
+          margin-top: 5px;
+          flex-shrink: 0;
+        }
+        .item span:last-child {
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.85);
+          line-height: 1.5;
+        }
+        .text {
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.6);
+          line-height: 1.6;
+          padding: 4px 0;
+        }
+        .footer {
+          padding: 16px 24px 20px;
+          border-top: 1px solid rgba(255, 255, 255, 0.06);
+          display: flex;
+          gap: 10px;
+        }
+        .btn {
+          flex: 1;
+          padding: 12px;
+          font-size: 13px;
+          font-weight: 600;
+          border: none;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          -webkit-app-region: no-drag;
+        }
+        .btn-primary {
+          color: white;
+          background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        }
+        .btn-primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 20px rgba(34, 197, 94, 0.4);
+        }
+        .btn-secondary {
+          color: rgba(255, 255, 255, 0.7);
+          background: rgba(255, 255, 255, 0.08);
+        }
+        .btn-secondary:hover {
+          background: rgba(255, 255, 255, 0.12);
+        }
+        .btn:active { transform: translateY(0) scale(0.98); }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <div class="icon">
+            <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="20" fill="url(#rocket-bg)" />
+              <path d="M24 12c-2 4-3 8-3 12 0 2 .5 4 1.5 6l-4.5 3 1.5-6-3-3h5l2.5-5 2.5 5h5l-3 3 1.5 6-4.5-3c1-2 1.5-4 1.5-6 0-4-1-8-3-12z" fill="#fff"/>
+              <circle cx="24" cy="22" r="2" fill="#4ade80"/>
+              <defs>
+                <linearGradient id="rocket-bg" x1="4" y1="4" x2="44" y2="44">
+                  <stop stop-color="#22c55e"/>
+                  <stop offset="1" stop-color="#16a34a"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div class="badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5">
+              <path d="M12 2v20M2 12h20"/>
+            </svg>
+            <span class="badge-text">UPDATE AVAILABLE</span>
+          </div>
+          <div class="version">v${version}</div>
+          <div class="subtitle">发现新版本</div>
+        </div>
+        <div class="content">
+          <div class="section-title">更新内容</div>
+          ${contentHtml}
+        </div>
+        <div class="footer">
+          <button class="btn btn-secondary" onclick="require('electron').ipcRenderer.send('update-response', 'later');window.close()">稍后</button>
+          <button class="btn btn-primary" onclick="require('electron').ipcRenderer.send('update-response', 'download');window.close()">立即更新</button>
+        </div>
+      </div>
+    </body>
+    </html>
+  `)}`);
+
+  updateAvailableWindow.once('ready-to-show', () => {
+    updateAvailableWindow.show();
+  });
+}
+
+// 显示下载进度弹窗
+function showDownloadProgressWindow() {
+  if (downloadProgressWindow) return;
+
+  downloadProgressWindow = new BrowserWindow({
+    width: 340,
+    height: 180,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    parent: mainWindow,
+    modal: false,
+    show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  downloadProgressWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        body {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background: transparent;
+          height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          -webkit-app-region: drag;
+        }
+        .card {
+          width: 300px;
+          padding: 24px;
+          background: linear-gradient(180deg, rgba(23, 23, 23, 0.98) 0%, rgba(10, 10, 10, 0.98) 100%);
+          backdrop-filter: blur(24px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+          animation: fadeIn 0.3s ease-out;
+          text-align: center;
+        }
+        .icon { font-size: 32px; margin-bottom: 12px; }
+        .title {
+          font-size: 14px;
+          font-weight: 600;
+          color: #ffffff;
+          margin-bottom: 16px;
+        }
+        .progress-bg {
+          width: 100%;
+          height: 8px;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 4px;
+          overflow: hidden;
+          margin-bottom: 12px;
+        }
+        .progress-bar {
+          height: 100%;
+          background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+          border-radius: 4px;
+          transition: width 0.3s ease;
+        }
+        .percent {
+          font-size: 24px;
+          font-weight: 700;
+          color: #60a5fa;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon">
+          <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="20" fill="url(#dl-bg)" opacity="0.15"/>
+            <path d="M24 14v14m0 0l-5-5m5 5l5-5" stroke="#60a5fa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 32h20" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="dl-bg" x1="4" y1="4" x2="44" y2="44">
+                <stop stop-color="#3b82f6"/>
+                <stop offset="1" stop-color="#60a5fa"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="title">正在下载更新...</div>
+        <div class="progress-bg"><div class="progress-bar" id="progress" style="width: 0%"></div></div>
+        <div class="percent" id="percent">0%</div>
+      </div>
+    </body>
+    </html>
+  `)}`);
+
+  downloadProgressWindow.once('ready-to-show', () => {
+    downloadProgressWindow.show();
+  });
+}
+
+// 更新下载进度
+function updateDownloadProgress(percent) {
+  if (!downloadProgressWindow) {
+    showDownloadProgressWindow();
+    return;
+  }
+  downloadProgressWindow.webContents.executeJavaScript(`
+    document.getElementById('progress').style.width = '${percent}%';
+    document.getElementById('percent').textContent = '${percent.toFixed(1)}%';
+  `).catch(() => {});
+}
+
+// 关闭下载进度弹窗
+function closeDownloadProgressWindow() {
+  if (downloadProgressWindow) {
+    downloadProgressWindow.close();
+    downloadProgressWindow = null;
+  }
+}
+
+// 显示更新就绪弹窗
+function showUpdateReadyDialog(version) {
+  const updateReadyWindow = new BrowserWindow({
+    width: 380,
+    height: 280,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    parent: mainWindow,
+    modal: true,
+    show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false
+    }
+  });
+
+  updateReadyWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.95) translateY(10px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes bounce {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+        }
+        body {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background: transparent;
+          height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          -webkit-app-region: drag;
+        }
+        .card {
+          width: 340px;
+          padding: 32px 24px;
+          background: linear-gradient(180deg, rgba(23, 23, 23, 0.98) 0%, rgba(10, 10, 10, 0.98) 100%);
+          backdrop-filter: blur(24px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+          animation: fadeIn 0.3s ease-out;
+          text-align: center;
+        }
+        .icon {
+          font-size: 48px;
+          margin-bottom: 16px;
+          animation: bounce 1s ease-in-out infinite;
+        }
+        .title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #ffffff;
+          margin-bottom: 8px;
+        }
+        .subtitle {
+          font-size: 13px;
+          color: rgba(255, 255, 255, 0.5);
+          margin-bottom: 24px;
+        }
+        .footer {
+          display: flex;
+          gap: 10px;
+        }
+        .btn {
+          flex: 1;
+          padding: 12px;
+          font-size: 13px;
+          font-weight: 600;
+          border: none;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          -webkit-app-region: no-drag;
+        }
+        .btn-primary {
+          color: white;
+          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+        .btn-primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+        }
+        .btn-secondary {
+          color: rgba(255, 255, 255, 0.7);
+          background: rgba(255, 255, 255, 0.08);
+        }
+        .btn-secondary:hover {
+          background: rgba(255, 255, 255, 0.12);
+        }
+        .btn:active { transform: translateY(0) scale(0.98); }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon">
+          <svg width="52" height="52" viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="20" fill="url(#check-bg)"/>
+            <path d="M16 24l6 6 10-12" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="check-bg" x1="4" y1="4" x2="44" y2="44">
+                <stop stop-color="#22c55e"/>
+                <stop offset="1" stop-color="#16a34a"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="title">v${version} 已准备就绪</div>
+        <div class="subtitle">重启应用以完成更新</div>
+        <div class="footer">
+          <button class="btn btn-secondary" onclick="window.close()">稍后</button>
+          <button class="btn btn-primary" onclick="require('electron').ipcRenderer.send('update-response', 'install');window.close()">立即重启</button>
+        </div>
+      </div>
+    </body>
+    </html>
+  `)}`);
+
+  updateReadyWindow.once('ready-to-show', () => {
+    updateReadyWindow.show();
+  });
 }
 
 // 检查并释放端口（Windows）
@@ -514,31 +1191,25 @@ function setupAutoUpdater() {
   autoUpdater.on('update-available', (info) => {
     console.log('🆕 发现新版本:', info.version);
     
-    // 版本更新内容说明（业务向）
+    // 版本更新内容说明
     const releaseNotes = {
-      '1.2.7': '✨ 本次更新\n\n• 修复了画布中 Veo 3.1 视频生成后无法正常显示的问题\n• 优化了视频下载稳定性\n• 减少了浏览器内存占用',
-      '1.3.0': '✨ 本次更新\n\n• 优化了应用性能和稳定性\n• 修复了已知问题',
+      '1.2.7': '• 修复了画布中 Veo 3.1 视频生成后无法正常显示的问题\n• 优化了视频下载稳定性\n• 减少了浏览器内存占用',
+      '1.3.0': '• 优化了应用性能和稳定性\n• 修复了已知问题',
+      '1.3.1': '• 优化了应用性能和稳定性\n• 修复了已知问题',
+      '1.3.2': '• 全新自定义更新弹窗样式\n• 设置中新增检查更新按钮\n• 优化了应用性能和稳定性',
     };
     
     const notes = releaseNotes[info.version] || '• 性能优化和问题修复';
-    
-    dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: '发现新版本',
-      message: `发现新版本 v${info.version}`,
-      detail: `${notes}\n\n是否立即下载更新？`,
-      buttons: ['立即下载', '稍后提醒'],
-      defaultId: 0
-    }).then(({ response }) => {
-      if (response === 0) {
-        autoUpdater.downloadUpdate();
-      }
-    });
+    showUpdateAvailableDialog(info.version, notes);
   });
 
   // 无新版本
   autoUpdater.on('update-not-available', () => {
     console.log('✅ 当前已是最新版本');
+    // 通知渲染进程
+    if (mainWindow) {
+      mainWindow.webContents.send('update-status', { status: 'up-to-date', version: app.getVersion() });
+    }
   });
 
   // 下载进度
@@ -547,27 +1218,20 @@ function setupAutoUpdater() {
     console.log(`📥 下载进度: ${percent}%`);
     if (mainWindow) {
       mainWindow.setProgressBar(progress.percent / 100);
+      mainWindow.webContents.send('update-status', { status: 'downloading', percent: progress.percent });
     }
+    // 更新进度弹窗
+    updateDownloadProgress(progress.percent);
   });
 
   // 下载完成
   autoUpdater.on('update-downloaded', (info) => {
     console.log('✅ 更新下载完成:', info.version);
     if (mainWindow) {
-      mainWindow.setProgressBar(-1); // 清除进度条
+      mainWindow.setProgressBar(-1);
     }
-    dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: '更新就绪',
-      message: `新版本 v${info.version} 已下载完成`,
-      detail: '应用将重启以完成更新',
-      buttons: ['立即重启', '稍后重启'],
-      defaultId: 0
-    }).then(({ response }) => {
-      if (response === 0) {
-        autoUpdater.quitAndInstall(false, true);
-      }
-    });
+    closeDownloadProgressWindow();
+    showUpdateReadyDialog(info.version);
   });
 
   // 延迟 5 秒后检查更新
@@ -578,6 +1242,34 @@ function setupAutoUpdater() {
     });
   }, 5000);
 }
+
+// ============ IPC 通信处理 ============
+// 处理更新弹窗的响应
+ipcMain.on('update-response', (event, action) => {
+  if (action === 'download') {
+    autoUpdater.downloadUpdate();
+  } else if (action === 'install') {
+    autoUpdater.quitAndInstall(false, true);
+  }
+});
+
+// 获取应用版本
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+// 手动检查更新
+ipcMain.handle('check-for-updates', async () => {
+  if (CONFIG.isDev) {
+    return { status: 'dev-mode' };
+  }
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { status: 'checking', version: result?.updateInfo?.version };
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+});
 
 // 应用启动
 app.whenReady().then(async () => {
