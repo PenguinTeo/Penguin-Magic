@@ -16,6 +16,18 @@ const PROJECT_ROOT = path.join(UPLOADER_DIR, '..');
 const RELEASE_DIR = path.join(PROJECT_ROOT, 'release');
 const CONFIG_PATH = path.join(UPLOADER_DIR, 'config.json');
 const CONFIG_EXAMPLE_PATH = path.join(UPLOADER_DIR, 'config.example.json');
+const PACKAGE_JSON_PATH = path.join(PROJECT_ROOT, 'package.json');
+
+// 获取当前版本号
+function getCurrentVersion() {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf-8'));
+    return pkg.version;
+  } catch (err) {
+    logError(`无法读取 package.json: ${err.message}`);
+    process.exit(1);
+  }
+}
 
 // 颜色输出
 const colors = {
@@ -55,9 +67,8 @@ function loadConfig() {
   }
 }
 
-// 获取需要上传的文件
-function getFilesToUpload(config) {
-  const patterns = config.filesToUpload || ['latest.yml', '*.exe', '*.blockmap'];
+// 获取需要上传的文件（只匹配当前版本）
+function getFilesToUpload(config, version) {
   const files = [];
 
   // 读取 release 目录
@@ -69,25 +80,23 @@ function getFilesToUpload(config) {
 
   const allFiles = fs.readdirSync(RELEASE_DIR);
 
-  for (const pattern of patterns) {
-    if (pattern.includes('*')) {
-      // 通配符匹配
-      const regex = new RegExp('^' + pattern.replace(/\./g, '\\.').replace(/\*/g, '.*') + '$', 'i');
-      for (const file of allFiles) {
-        const filePath = path.join(RELEASE_DIR, file);
-        if (fs.statSync(filePath).isFile() && regex.test(file)) {
-          files.push(file);
-        }
-      }
-    } else {
-      // 精确匹配
-      if (allFiles.includes(pattern)) {
-        files.push(pattern);
+  // 只上传当前版本的必要文件（安装包 + 自动更新配置）
+  const targetFiles = [
+    'latest.yml',
+    `PenguinMagic Setup ${version}.exe`,
+    `PenguinMagic Setup ${version}.exe.blockmap`
+  ];
+
+  for (const target of targetFiles) {
+    if (allFiles.includes(target)) {
+      const filePath = path.join(RELEASE_DIR, target);
+      if (fs.statSync(filePath).isFile()) {
+        files.push(target);
       }
     }
   }
 
-  return [...new Set(files)]; // 去重
+  return files;
 }
 
 // 格式化文件大小
@@ -238,15 +247,19 @@ async function main() {
   // 加载配置
   const config = loadConfig();
 
-  // 获取文件列表
-  const files = getFilesToUpload(config);
+  // 获取当前版本
+  const version = getCurrentVersion();
+  logInfo(`当前版本: ${version}`);
+
+  // 获取文件列表（只匹配当前版本）
+  const files = getFilesToUpload(config, version);
   if (files.length === 0) {
     logError('没有找到需要上传的文件');
-    logInfo('请确保 release 目录中存在以下文件: ' + (config.filesToUpload || []).join(', '));
+    logInfo(`请确保 release 目录中存在版本 ${version} 的文件`);
     process.exit(1);
   }
 
-  log(`\n📁 找到 ${files.length} 个文件:`, colors.blue);
+  log(`\n📁 找到 ${files.length} 个文件 (版本 ${version}):`, colors.blue);
   files.forEach(f => {
     const size = formatSize(fs.statSync(path.join(RELEASE_DIR, f)).size);
     console.log(`   - ${f} (${size})`);
