@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -44,6 +44,12 @@ export interface NodeData {
   videoFailReason?: string;
   videoUrl?: string; // 原始URL（下载失败时保留）
   output?: string; // LLM/BP节点输出
+  
+  // Frame Extractor Node Specifics
+  sourceVideoUrl?: string; // 源视频URL
+  currentFrameTime?: number; // 当前选中的帧时间（秒）
+  videoDuration?: number; // 视频时长（秒）
+  frameThumbnails?: string[]; // 帧缩略图列表
   
   // BP Node Specifics - 存储BP创意库配置
   bpTemplate?: {
@@ -152,6 +158,7 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
     
     case 'video':
     case 'video-output':
+    case 'frame-extractor':
       return { primary: ARCTIC_COLORS.snowBlue, light: ARCTIC_COLORS.snowBlueLight };
     
     case 'bp':

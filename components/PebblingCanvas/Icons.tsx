@@ -22,6 +22,7 @@ import {
   Scissors,
   MonitorUp,
   Play,
+  Pause,
   Square,
   Download,
   Maximize,
@@ -29,7 +30,8 @@ import {
   Copy,
   Info,
   Wrench,
-  Expand
+  Expand,
+  Camera
 } from 'lucide-react';
 
 export const Icons = {
@@ -61,5 +63,7 @@ export const Icons = {
   Copy,
   Info,
   Wrench,
-  Expand
+  Expand,
+  Pause,
+  Camera
 };

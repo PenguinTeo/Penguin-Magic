@@ -1032,6 +1032,20 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
   // Wheel event handler for zooming
   const onWheel = useCallback((e: WheelEvent) => {
+      // 🔧 检查事件源是否在文本类节点内，如果是则不缩放画布，让内容自然滚动
+      const target = e.target as HTMLElement;
+      // 检查是否在 textarea/文本容器内，或者父元素有 scrollable 类
+      const isInTextArea = target.tagName === 'TEXTAREA' || 
+                           target.tagName === 'INPUT' ||
+                           target.closest('.overflow-y-auto') !== null ||
+                           target.closest('.scrollbar-hide') !== null ||
+                           target.closest('[data-scrollable]') !== null;
+      
+      if (isInTextArea) {
+          // 不阻止默认行为，让内容自然滚动
+          return;
+      }
+      
       // Wheel = Zoom centered on cursor
       e.preventDefault(); 
 
@@ -1354,23 +1368,42 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   }
               }
           } else if (node.type === 'text' || node.type === 'idea') {
+              // 文本节点：输入=文本，输出=文本
+              // 文本可以为空，但不管有没有内容，都不应该向上追溯找图片
               if (node.content) {
                   texts.push(node.content);
               }
-              // 文本节点不停止，继续往上找图片
+              // 文本节点的输入输出都是文本，不可能有图片，停止这条路径
+              foundImageInThisPath = true;
           } else if (node.type === 'llm') {
+              // LLM节点：输入=图片+文本，输出=文本
+              // LLM 上游的图片是给 LLM 用的，不是给下游节点的
               if (node.data?.output && node.status === 'completed') {
                   texts.push(node.data.output);
               }
-              // LLM节点不停止，继续往上找图片
+              // 不管 LLM 有没有完成，都不应该追溯它的上游图片
+              foundImageInThisPath = true;
+          } else if (node.type === 'relay') {
+              // 转接器：什么进来什么出去，透传上游数据
+              // 不停止，继续向上追溯
+          } else if (node.type === 'video' || node.type === 'video-output' || node.type === 'frame-extractor') {
+              // 视频节点/帧提取器：输入=视频，输出=视频/图片
+              // 不提供图片或文本输出（图片在下游Image节点），停止追溯
+              foundImageInThisPath = true;
           } else if (node.type === 'edit') {
+              // Magic节点：输入=图片或文字，输出=图片
+              // Magic 的输出在下游创建的 Image 节点中，不在自身
+              // 如果有人直接连接到 Magic，不应该追溯它的上游（那是 Magic 的输入）
               if (node.data?.output && node.status === 'completed' && isValidImage(node.data.output)) {
                   images.push(node.data.output);
-                  foundImageInThisPath = true; // 找到图片，这条路径停止
               }
+              // 不管有没有输出，都停止追溯
+              foundImageInThisPath = true;
           } else if (node.type === 'remove-bg' || node.type === 'upscale' || node.type === 'resize') {
-              // 🔧 修复：这些工具节点不再存储content，结果在下游的Image节点
-              // 工具节点不提供图片输出，直接跳过
+              // 工具节点：输入=图片，输出=图片
+              // 输出在下游创建的 Image 节点中，不在自身
+              // 不应该追溯它们的上游（那是工具节点的输入）
+              foundImageInThisPath = true;
           } else if (node.type === 'bp') {
               // BP节点：优先从 data.output 获取（有下游连接时），否则从 content 获取
               const bpOutput = node.data?.output;
@@ -1416,7 +1449,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       const inputs = resolveInputs(sourceNodeId);
       const nodePrompt = sourceNode.data?.prompt || '';
       const inputTexts = inputs.texts.join('\n');
-      const combinedPrompt = nodePrompt || inputTexts;
+      // 🔧 上游输入优先替代节点自身prompt
+      const combinedPrompt = inputTexts || nodePrompt;
       const inputImages = inputs.images;
       
       // 获取源节点自身的图片
@@ -1882,7 +1916,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       const inputs = resolveInputs(sourceNodeId);
       const nodePrompt = sourceNode.data?.prompt || '';
       const inputTexts = inputs.texts.join('\n');
-      const combinedPrompt = nodePrompt || inputTexts;
+      // 🔧 上游输入优先替代节点自身prompt
+      const combinedPrompt = inputTexts || nodePrompt;
       const inputImages = inputs.images;
       
       if (!combinedPrompt) {
@@ -2224,8 +2259,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   }
               }
               
-              // 合并prompt：自身 > 上游节点prompt > 上游文本输入
-              const combinedPrompt = nodePrompt || upstreamPrompt || inputTexts;
+              // 合并prompt：上游文本输入 > 上游节点prompt > 自身
+              // 🔧 修改优先级：上游输入替代节点自身prompt
+              const combinedPrompt = inputTexts || upstreamPrompt || nodePrompt;
               
               // 合并设置：自身 > 上游节点设置 > 默认
               const effectiveSettings = node.data?.settings || upstreamSettings || {};
@@ -2328,7 +2364,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                          
                // 获取节点的设置和提示词
                const nodePrompt = node.data?.prompt || '';
-               const combinedPrompt = nodePrompt || inputTexts;
+               // 🔧 上游输入优先替代节点自身prompt
+               const combinedPrompt = inputTexts || nodePrompt;
                          
               // 获取Edit节点的设置
                const editAspectRatio = node.data?.settings?.aspectRatio || 'AUTO';
@@ -2360,47 +2397,30 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                
                console.log('[Magic] 构建的 finalConfig:', finalConfig);
                          
-               // 🔧 关键修复：检查是否已有下游节点（用户手动连接的）
-               const existingDownstream = connectionsRef.current.filter(c => c.fromNode === nodeId);
-               const hasExistingOutput = existingDownstream.length > 0;
+               // 🔧 每次运行都创建新的输出节点
+               const outputNodeId = uuid();
+               const outputNode: CanvasNode = {
+                   id: outputNodeId,
+                   type: 'image',
+                   content: '',
+                   x: node.x + node.width + 100,
+                   y: node.y,
+                   width: 300,
+                   height: 300,
+                   data: {},
+                   status: 'running'
+               };
                          
-               console.log(`[Magic] 开始执行, 已有下游连接: ${hasExistingOutput}`);
+               const newConnection = {
+                   id: uuid(),
+                   fromNode: nodeId,
+                   toNode: outputNodeId
+               };
                          
-               let outputNodeId: string;
-                         
-               if (hasExistingOutput) {
-                   // 💡 已有下游节点，不创建新节点，更新现有的第一个下游节点
-                   outputNodeId = existingDownstream[0].toNode;
-                   const existingNode = nodesRef.current.find(n => n.id === outputNodeId);
-                   console.log(`[Magic] 使用现有下游节点 ${outputNodeId.slice(0,8)}, 类型: ${existingNode?.type}`);
-                   // 更新现有节点为 running 状态
-                   updateNode(outputNodeId, { status: 'running' });
-               } else {
-                   // 🆕 没有下游节点，创建新的 Image 节点
-                   outputNodeId = uuid();
-                   const outputNode: CanvasNode = {
-                       id: outputNodeId,
-                       type: 'image',
-                       content: '',
-                       x: node.x + node.width + 100,
-                       y: node.y,
-                       width: 300,
-                       height: 300,
-                       data: {},
-                       status: 'running'
-                   };
-                             
-                   const newConnection = {
-                       id: uuid(),
-                       fromNode: nodeId,
-                       toNode: outputNodeId
-                   };
-                             
-                   setNodes(prev => [...prev, outputNode]);
-                   setConnections(prev => [...prev, newConnection]);
-                   setHasUnsavedChanges(true);
-                   console.log(`[Magic] 已创建新输出节点 ${outputNodeId.slice(0,8)}`);
-               }
+               setNodes(prev => [...prev, outputNode]);
+               setConnections(prev => [...prev, newConnection]);
+               setHasUnsavedChanges(true);
+               console.log(`[Magic] 已创建新输出节点 ${outputNodeId.slice(0,8)}`);
                          
                // 调用API
                try {
@@ -2445,7 +2465,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                // Video节点：支持 Sora 和 Veo3.1 生成视频（异步任务）
                const nodePrompt = node.data?.prompt || '';
                const inputTexts = inputs.texts.join('\n');
-               const combinedPrompt = nodePrompt || inputTexts;
+               // 🔧 上游输入优先替代节点自身prompt
+               const combinedPrompt = inputTexts || nodePrompt;
                const inputImages = inputs.images;
                const videoService = node.data?.videoService || 'sora';
                
@@ -2783,10 +2804,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           }
           else if (node.type === 'llm') {
               // LLM节点：可以处理图片+文本输入
-              // 执行后保持节点原貌，输出存到 data.output 供下游获取
+              // 执行后创建文字节点展示结果
               const nodePrompt = node.data?.prompt || '';
               const inputTexts = inputs.texts.join('\n');
-              const userPrompt = nodePrompt || inputTexts;
+              // 🔧 上游输入优先替代节点自身prompt
+              const userPrompt = inputTexts || nodePrompt;
               const systemPrompt = node.data?.systemInstruction;
               const inputImages = inputs.images;
               
@@ -2794,13 +2816,50 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   updateNode(nodeId, { status: 'error' });
                   console.warn('LLM节点执行失败：无输入');
               } else {
+                  // 🔧 每次运行都创建新的文字节点展示输出
+                  const outputNodeId = uuid();
+                  const outputNode: CanvasNode = {
+                      id: outputNodeId,
+                      type: 'text',
+                      title: 'LLM输出',
+                      content: '',
+                      x: node.x + node.width + 100,
+                      y: node.y,
+                      width: 300,
+                      height: 200,
+                      data: {},
+                      status: 'running'
+                  };
+                  
+                  const newConnection = {
+                      id: uuid(),
+                      fromNode: nodeId,
+                      toNode: outputNodeId
+                  };
+                  
+                  setNodes(prev => [...prev, outputNode]);
+                  setConnections(prev => [...prev, newConnection]);
+                  setHasUnsavedChanges(true);
+                  console.log(`[LLM] 已创建输出文字节点 ${outputNodeId.slice(0,8)}`);
+                  
+                  // 调用 LLM API
                   const result = await generateAdvancedLLM(userPrompt, systemPrompt, inputImages);
                   if (!signal.aborted) {
-                      // 输出存到 data.output，不覆盖节点显示
+                      // 更新LLM节点自身的输出（供下游节点获取）
                       updateNode(nodeId, { 
                           data: { ...node.data, output: result },
                           status: 'completed' 
                       });
+                      
+                      // 更新输出节点内容
+                      if (result) {
+                          updateNode(outputNodeId, { 
+                              content: result,
+                              status: 'completed' 
+                          });
+                      } else {
+                          updateNode(outputNodeId, { status: 'error' });
+                      }
                   }
               }
           }
@@ -3208,10 +3267,25 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                 };
                 reader.readAsDataURL(file);
             } else if (file.type.startsWith('video/')) {
-                 const reader = new FileReader();
-                reader.onload = (ev) => {
+                // 🆕 视频拖入：创建 video-output 节点直接展示视频
+                const reader = new FileReader();
+                reader.onload = async (ev) => {
                     if (ev.target?.result) {
-                        addNode('video', ev.target.result as string, { x: offsetX, y: offsetY });
+                        // 保存视频到 output 目录
+                        const base64Data = ev.target.result as string;
+                        try {
+                            const { saveVideoToOutput } = await import('@/services/api/files');
+                            const result = await saveVideoToOutput(base64Data, `video_${Date.now()}.mp4`);
+                            if (result.success && result.data?.url) {
+                                addNode('video-output', result.data.url, { x: offsetX, y: offsetY }, file.name);
+                            } else {
+                                // 保存失败，直接使用 base64
+                                addNode('video-output', base64Data, { x: offsetX, y: offsetY }, file.name);
+                            }
+                        } catch (err) {
+                            // 保存失败，直接使用 base64
+                            addNode('video-output', base64Data, { x: offsetX, y: offsetY }, file.name);
+                        }
                     }
                 };
                 reader.readAsDataURL(file);
@@ -3483,7 +3557,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   };
 
   // 处理视频帧提取
-  const handleExtractFrame = async (nodeId: string, position: 'first' | 'last') => {
+  const handleExtractFrame = async (nodeId: string, position: 'first' | 'last' | number) => {
       const node = nodes.find(n => n.id === nodeId);
       if (!node || !node.content) {
           console.warn('[ExtractFrame] 节点无内容:', nodeId);
@@ -3517,8 +3591,18 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               video.load();
           });
 
+          // 计算目标时间
+          let targetTime: number;
+          if (position === 'first') {
+              targetTime = 0;
+          } else if (position === 'last') {
+              targetTime = Math.max(0, video.duration - 0.1);
+          } else {
+              // 任意秒数，确保不超出视频时长
+              targetTime = Math.min(Math.max(0, position), video.duration - 0.1);
+          }
+          
           // 跳转到指定帧位置
-          const targetTime = position === 'first' ? 0 : Math.max(0, video.duration - 0.1);
           await new Promise<void>((resolve) => {
               video.onseeked = () => {
                   console.log('[ExtractFrame] 跳转完成:', targetTime);
@@ -3565,6 +3649,114 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           console.log('[ExtractFrame] 完成，新节点:', newNode.id);
       } catch (error) {
           console.error('[ExtractFrame] 提取帧失败:', error);
+      }
+  };
+
+  // 创建帧提取器节点
+  const handleCreateFrameExtractor = (sourceVideoNodeId: string) => {
+      const sourceNode = nodes.find(n => n.id === sourceVideoNodeId);
+      if (!sourceNode || !sourceNode.content) {
+          console.warn('[FrameExtractor] 源视频节点无内容');
+          return;
+      }
+      
+      console.log('[FrameExtractor] 创建帧提取器, 源视频:', sourceNode.content.slice(0, 100));
+      
+      // 计算新节点位置（源节点右侧）
+      const newX = sourceNode.x + sourceNode.width + 50;
+      const newY = sourceNode.y;
+      
+      // 创建帧提取器节点
+      const newNode = addNode('frame-extractor', sourceNode.content, { x: newX, y: newY }, '帧提取器', {
+          sourceVideoUrl: sourceNode.content,
+          currentFrameTime: 0
+      });
+      
+      // 创建连接
+      setConnections(prev => [...prev, {
+          id: uuid(),
+          fromNode: sourceVideoNodeId,
+          toNode: newNode.id
+      }]);
+      setHasUnsavedChanges(true);
+      
+      console.log('[FrameExtractor] 创建完成:', newNode.id);
+  };
+
+  // 从帧提取器提取帧
+  const handleExtractFrameFromExtractor = async (nodeId: string, time: number) => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) {
+          console.warn('[FrameExtractor] 节点不存在');
+          return;
+      }
+      
+      const videoUrl = node.data?.sourceVideoUrl || node.content;
+      if (!videoUrl) {
+          console.warn('[FrameExtractor] 无视频源');
+          return;
+      }
+      
+      console.log('[FrameExtractor] 提取帧:', { nodeId, time, videoUrl: videoUrl.slice(0, 100) });
+      
+      try {
+          // 创建视频元素
+          const video = document.createElement('video');
+          video.crossOrigin = 'anonymous';
+          
+          let fullVideoUrl = videoUrl;
+          if (videoUrl.startsWith('/files/')) {
+              fullVideoUrl = `http://localhost:8765${videoUrl}`;
+          }
+          
+          // 加载视频
+          await new Promise<void>((resolve, reject) => {
+              video.onloadedmetadata = () => resolve();
+              video.onerror = reject;
+              video.src = fullVideoUrl;
+              video.load();
+          });
+          
+          // 跳转到指定时间
+          await new Promise<void>((resolve) => {
+              video.onseeked = () => resolve();
+              video.currentTime = Math.min(time, video.duration - 0.1);
+          });
+          
+          // 提取帧
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('无法创建 canvas context');
+          
+          ctx.drawImage(video, 0, 0);
+          const frameDataUrl = canvas.toDataURL('image/png');
+          
+          // 保存到 output 目录
+          const { saveToOutput } = await import('@/services/api/files');
+          const result = await saveToOutput(frameDataUrl, `frame_${Date.now()}.png`);
+          if (!result.success || !result.data) {
+              throw new Error(result.error || '保存帧失败');
+          }
+          const savedPath = result.data.url;
+          
+          // 创建图片节点
+          const newNodeX = node.x + node.width + 50;
+          const newNodeY = node.y;
+          const newNode = addNode('image', savedPath, { x: newNodeX, y: newNodeY }, `帧 ${time.toFixed(1)}s`);
+          
+          // 创建连接
+          setConnections(prev => [...prev, {
+              id: uuid(),
+              fromNode: nodeId,
+              toNode: newNode.id
+          }]);
+          setHasUnsavedChanges(true);
+          
+          console.log('[FrameExtractor] 提取完成:', newNode.id);
+      } catch (error) {
+          console.error('[FrameExtractor] 提取帧失败:', error);
       }
   };
 
@@ -4071,6 +4263,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     onEndConnection={handleEndConnection}
                     onCreateToolNode={handleCreateToolNode}
                     onExtractFrame={handleExtractFrame}
+                    onCreateFrameExtractor={handleCreateFrameExtractor}
+                    onExtractFrameFromExtractor={handleExtractFrameFromExtractor}
                 />
             ))}
         </div>

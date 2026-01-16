@@ -65,6 +65,15 @@ export const getInputFileUrl = (filename: string): string => {
   return `/files/input/${filename}`;
 };
 
+// 保存视频到输出目录
+export const saveVideoToOutput = async (videoData: string, filename?: string): Promise<{ 
+  success: boolean; 
+  data?: { filename: string; path: string; url: string }; 
+  error?: string 
+}> => {
+  return post('/files/save-video', { videoData, filename });
+};
+
 // 下载远程图片并保存到output目录（用于处理第三方API返回的URL）
 export const downloadRemoteToOutput = async (imageUrl: string, filename?: string): Promise<{ 
   success: boolean; 
