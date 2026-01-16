@@ -95,15 +95,28 @@ function getFilesToUpload(config, version) {
   let targetFiles = [];
   
   if (platform === 'darwin') {
-    // Mac 平台文件
+    // Mac 平台文件 - 使用正则匹配支持不同架构 (arm64/x64)
     logInfo('检测到 Mac 平台，上传 Mac 版本文件');
-    targetFiles = [
-      'latest-mac.yml',
-      `PenguinMagic-${version}.dmg`,
-      `PenguinMagic-${version}.dmg.blockmap`,
-      `PenguinMagic-${version}-mac.zip`,
-      `PenguinMagic-${version}-mac.zip.blockmap`
-    ];
+    
+    // 必须上传: yml
+    if (allFiles.includes('latest-mac.yml')) {
+      files.push('latest-mac.yml');
+    }
+    
+    // 匹配 dmg 和 dmg.blockmap (支持 arm64/x64 架构)
+    const dmgPattern = new RegExp(`^PenguinMagic-${version}(-arm64|-x64)?\\.dmg$`);
+    const blockmapPattern = new RegExp(`^PenguinMagic-${version}(-arm64|-x64)?\\.dmg\\.blockmap$`);
+    
+    for (const file of allFiles) {
+      if (dmgPattern.test(file) || blockmapPattern.test(file)) {
+        const filePath = path.join(RELEASE_DIR, file);
+        if (fs.statSync(filePath).isFile()) {
+          files.push(file);
+        }
+      }
+    }
+    
+    return files;
   } else {
     // Windows 平台文件
     logInfo('检测到 Windows 平台，上传 Windows 版本文件');
