@@ -67,25 +67,52 @@ function loadConfig() {
   }
 }
 
+// 检测当前平台
+function detectPlatform() {
+  const platform = process.platform;
+  // 也支持通过命令行参数强制指定平台
+  const args = process.argv.slice(2);
+  if (args.includes('--mac')) return 'darwin';
+  if (args.includes('--win')) return 'win32';
+  return platform;
+}
+
 // 获取需要上传的文件（只匹配当前版本）
 function getFilesToUpload(config, version) {
   const files = [];
+  const platform = detectPlatform();
 
   // 读取 release 目录
   if (!fs.existsSync(RELEASE_DIR)) {
     logError(`release 目录不存在: ${RELEASE_DIR}`);
-    logInfo('请先运行: npm run package');
+    logInfo('请先运行: npm run package 或 npm run pack:mac');
     process.exit(1);
   }
 
   const allFiles = fs.readdirSync(RELEASE_DIR);
 
-  // 只上传当前版本的必要文件（安装包 + 自动更新配置）
-  const targetFiles = [
-    'latest.yml',
-    `PenguinMagic Setup ${version}.exe`,
-    `PenguinMagic Setup ${version}.exe.blockmap`
-  ];
+  // 根据平台选择要上传的文件
+  let targetFiles = [];
+  
+  if (platform === 'darwin') {
+    // Mac 平台文件
+    logInfo('检测到 Mac 平台，上传 Mac 版本文件');
+    targetFiles = [
+      'latest-mac.yml',
+      `PenguinMagic-${version}.dmg`,
+      `PenguinMagic-${version}.dmg.blockmap`,
+      `PenguinMagic-${version}-mac.zip`,
+      `PenguinMagic-${version}-mac.zip.blockmap`
+    ];
+  } else {
+    // Windows 平台文件
+    logInfo('检测到 Windows 平台，上传 Windows 版本文件');
+    targetFiles = [
+      'latest.yml',
+      `PenguinMagic Setup ${version}.exe`,
+      `PenguinMagic Setup ${version}.exe.blockmap`
+    ];
+  }
 
   for (const target of targetFiles) {
     if (allFiles.includes(target)) {

@@ -16,7 +16,9 @@
     "package:all": "npm run build && electron-builder -mwl",
     "pack:mac": "npm run build && electron-builder --mac",
     "upload": "node release-uploader/upload.cjs",
-    "release": "npm run package && npm run upload"
+    "upload:mac": "node release-uploader/upload.cjs --mac",
+    "release": "npm run package && npm run upload",
+    "release:mac": "npm run pack:mac && npm run upload:mac"
   },
   "dependencies": {
     "@google/genai": "^1.16.0",
