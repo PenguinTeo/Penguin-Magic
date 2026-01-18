@@ -1859,12 +1859,13 @@ export const Desktop: React.FC<DesktopProps> = ({
                     <span className="text-[9px] text-purple-200 font-medium">视频</span>
                   </div>
                 ) : (
-                  // 正常状态：显示图片
+                  // 正常状态：显示缩略图（🔧 性能优化：只加载缩略图，启用懒加载）
                   <img
                     src={getThumbnailUrl((item as DesktopImageItem).imageUrl)}
                     alt={item.name}
                     className="w-full h-full object-cover"
                     draggable={false}
+                    loading="lazy"
                     onError={async (e) => {
                       const target = e.target as HTMLImageElement;
                       const imageUrl = (item as DesktopImageItem).imageUrl;
@@ -1907,7 +1908,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                   />
                 )
               ) : item.type === 'video' ? (
-                // 🔧 视频项目：显示缩略图或视频图标
+                // 🔧 视频项目：只显示缩略图，不预加载视频（播放时才加载）
                 <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/60 to-gray-900">
                   {(item as DesktopVideoItem).thumbnailUrl ? (
                     <img
@@ -1915,6 +1916,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                       alt={item.name}
                       className="w-full h-full object-cover"
                       draggable={false}
+                      loading="lazy"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
                       }}
@@ -1965,10 +1967,12 @@ export const Desktop: React.FC<DesktopProps> = ({
                         );
                       }
                       return (
+                      // 🔧 性能优化：叠放预览只加载缩略图，启用懒加载
                       <img
                         key={img.id}
                         src={getThumbnailUrl(img.imageUrl)}
                         alt={img.name}
+                        loading="lazy"
                         onError={async (e) => {
                           const target = e.target as HTMLImageElement;
                           const imageUrl = img.imageUrl;
