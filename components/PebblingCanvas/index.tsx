@@ -2539,7 +2539,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                const hasVideoContent = isValidVideo(node.content);
                
                // 如果节点状态是 running 但没有内容，说明是恢复的未完成任务
-               if (node.status === 'running' && savedTaskId && !hasVideoContent) {
+               if ((node.status as string) === 'running' && savedTaskId && !hasVideoContent) {
                    console.log('[Video节点] 检测到未完成的任务，恢复轮询:', savedTaskId);
                    try {
                        if (videoService === 'veo') {
@@ -3905,7 +3905,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
       <Sidebar 
           onDragStart={(type) => { /* HTML5 drag handled in drop */ }}
-          onAdd={addNode}
+          onAdd={(type, data, title) => addNode(type, '', undefined, title, data)}
           userPresets={userPresets}
           onAddPreset={(pid) => {
              const p = userPresets.find(pr => pr.id === pid);

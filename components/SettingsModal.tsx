@@ -564,7 +564,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             : 'rgba(255,255,255,0.06)',
                         }}
                       >
-                        <ThemeIcon className={`w-5 h-5 ${isActive ? 'text-white' : ''}`} style={{ color: isActive ? 'white' : styles.textSecondary }} />
+                        <ThemeIcon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-zinc-400'}`} />
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-semibold" style={{ color: styles.textPrimary }}>{t.displayName}</p>

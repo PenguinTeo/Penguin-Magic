@@ -91,7 +91,7 @@ interface CanvasProps {
     onExportIdeas: () => void;
   onImportIdeas: () => void;
   isImporting?: boolean; // 导入状态
-  onImportById?: (idRange: string) => void; // 按ID导入
+  onImportById?: (idRange: string) => Promise<void>; // 按ID导入
   isImportingById?: boolean; // 按ID导入状态
   onReorderIdeas: (ideas: CreativeIdea[]) => void;
   onToggleFavorite?: (id: number) => void;
@@ -1315,7 +1315,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
           {ideas.slice(0, 5).map(idea => renderIdeaItem(idea))}
           {ideas.length > 5 && (
             <button 
-              onClick={() => setView('library')}
+              onClick={() => setView('local-library')}
               className="w-full py-1.5 text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
             >
               查看全部 {ideas.length} 个...
@@ -1606,7 +1606,7 @@ const Canvas: React.FC<CanvasProps> = ({
             creativeIdeas={creativeIdeas}
             onFileDrop={onFileDrop}
             onCreateCreativeIdea={onCreateCreativeIdea}
-            isActive={view !== 'canvas'}
+            isActive={(view as string) !== 'canvas'}
             onAddToCanvas={onAddToCanvas}
           />
           
@@ -2760,7 +2760,7 @@ const App: React.FC = () => {
       return { x: 0, y: 0 };
     }, [desktopItems]);
   
-    const handleAddToDesktop = useCallback((item: DesktopImageItem) => {
+    const handleAddToDesktop = useCallback((item: DesktopItem) => {
       // 添加图片到桌面 - 使用函数式更新确保使用最新状态
       setDesktopItems(prevItems => {
         // 在最新状态上查找空闲位置
@@ -3503,7 +3503,8 @@ const App: React.FC = () => {
         // 其次从 base64 数据恢复（兼容旧版本和贞贞 API）
         else if (historyItem.inputImages && historyItem.inputImages.length > 0) {
           try {
-            const restoredFiles = historyItem.inputImages.map((img) => {
+            // 旧版本兼容：inputImages 可能是对象数组 {type, data, name}
+            const restoredFiles = historyItem.inputImages.map((img: any) => {
               const base64Data = `data:${img.type};base64,${img.data}`;
               const blob = dataURLtoBlob(base64Data);
               return new File([blob], img.name, { type: img.type });

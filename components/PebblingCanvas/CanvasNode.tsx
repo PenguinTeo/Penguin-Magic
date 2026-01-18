@@ -2274,7 +2274,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         {/* Type Badge - Only show on hover or selected */}
         {(isSelected) && (
              <div className="absolute bottom-2 right-2 z-20 px-2 py-0.5 bg-white/10 rounded text-[9px] font-bold text-white/60 uppercase pointer-events-none">
-                {node.type === 'idea' ? 'Idea' : 'Text'}
+                {(node.type as string) === 'idea' ? 'Idea' : 'Text'}
             </div>
         )}
 

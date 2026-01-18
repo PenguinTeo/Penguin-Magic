@@ -235,7 +235,7 @@ export interface GenerationHistory {
   // 输入图片本地路径（用于重新生成）
   inputImagePaths?: string[];
   // 输入图片数据（兼容旧版本）
-  inputImages?: string[]; // 多图输入数据
+  inputImages?: Array<{ data: string; name: string; type: string }> | string[]; // 多图输入数据（新版对象数组 / 旧版字符串数组）
   inputImageData?: string; // 单图输入数据 (base64)
   inputImageName?: string; // 输入图片名称
   inputImageType?: string; // 输入图片类型
