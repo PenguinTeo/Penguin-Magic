@@ -3695,6 +3695,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           const savedPath = result.data.url;
           console.log('[ExtractFrame] 保存成功:', savedPath);
 
+          // 🔧 同步到桌面
+          if (onImageGenerated) {
+              const frameLabel = position === 'first' ? '首帧' : position === 'last' ? '尾帧' : `${position}s帧`;
+              onImageGenerated(savedPath, `视频${frameLabel}`, currentCanvasId || undefined, canvasName);
+          }
+
           // 创建新的图片节点
           const sourceNode = nodes.find(n => n.id === nodeId);
           const newNodeX = (sourceNode?.x || 0) + (sourceNode?.width || 300) + 50;
@@ -3804,6 +3810,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               throw new Error(result.error || '保存帧失败');
           }
           const savedPath = result.data.url;
+          
+          // 🔧 同步到桌面
+          if (onImageGenerated) {
+              onImageGenerated(savedPath, `帧 ${time.toFixed(1)}s`, currentCanvasId || undefined, canvasName);
+          }
           
           // 创建图片节点
           const newNodeX = node.x + node.width + 50;

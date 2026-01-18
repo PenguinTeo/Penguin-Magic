@@ -736,43 +736,54 @@ export const Desktop: React.FC<DesktopProps> = ({
     alert(`已创建 ${stackCount} 个叠放，包含 ${imageCount} 张图片`);
   }, [items, history, creativeIdeas, onItemsChange]);
 
-  // 一键刷新布局：重新排列所有框外图标，确保不重叠且在可视区域内
+  // 一键刷新布局：重新排列当前视图中的所有图标，确保不重叠且在可视区域内
   const handleReorganizeLayout = useCallback(() => {
-    if (openFolderId || openStackId) {
-      alert('请先返回主桌面再执行刷新布局');
-      return;
-    }
-    
     // 获取当前可用的最大列数
     const effectiveMaxX = maxX > 0 ? maxX : 0;
     const effectiveMaxY = maxY > 0 ? maxY : 0;
-    const maxCols = Math.max(1, Math.floor((effectiveMaxX / gridSize) + 1));
-    
-    // 获取需要重新排列的项目（不在文件夹/叠放内的项目）
-    const topLevelItems = items.filter(item => {
-      const isInFolder = items.some(
-        other => other.type === 'folder' && (other as DesktopFolderItem).itemIds.includes(item.id)
-      );
-      const isInStack = items.some(
-        other => other.type === 'stack' && (other as DesktopStackItem).itemIds.includes(item.id)
-      );
-      return !isInFolder && !isInStack;
-    });
-    
-    // 按类型分组：文件夹和叠放优先，然后是图片
-    const folders = topLevelItems.filter(i => i.type === 'folder');
-    const stacks = topLevelItems.filter(i => i.type === 'stack');
-    const images = topLevelItems.filter(i => i.type === 'image');
-    const sortedItems = [...folders, ...stacks, ...images];
     
     // 使用 Set 跟踪已占用位置
     const occupiedPositions = new Set<string>();
     
+    // 根据当前视图确定要重新排列的项目
+    let itemsToRelayout: DesktopItem[] = [];
+    
+    if (openFolderId) {
+      // 🔧 在文件夹内：重新排列文件夹内的项目
+      const folder = items.find(i => i.id === openFolderId) as DesktopFolderItem | undefined;
+      if (folder) {
+        itemsToRelayout = items.filter(item => folder.itemIds.includes(item.id));
+      }
+    } else if (openStackId) {
+      // 🔧 在叠放内：重新排列叠放内的项目
+      const stack = items.find(i => i.id === openStackId) as DesktopStackItem | undefined;
+      if (stack) {
+        itemsToRelayout = items.filter(item => stack.itemIds.includes(item.id));
+      }
+    } else {
+      // 🔧 在主桌面：重新排列不在任何文件夹/叠放内的项目
+      itemsToRelayout = items.filter(item => {
+        const isInFolder = items.some(
+          other => other.type === 'folder' && (other as DesktopFolderItem).itemIds.includes(item.id)
+        );
+        const isInStack = items.some(
+          other => other.type === 'stack' && (other as DesktopStackItem).itemIds.includes(item.id)
+        );
+        return !isInFolder && !isInStack;
+      });
+      
+      // 按类型分组：文件夹和叠放优先，然后是图片
+      const folders = itemsToRelayout.filter(i => i.type === 'folder');
+      const stacks = itemsToRelayout.filter(i => i.type === 'stack');
+      const images = itemsToRelayout.filter(i => i.type === 'image');
+      itemsToRelayout = [...folders, ...stacks, ...images];
+    }
+    
     // 为每个项目分配新位置
+    const itemIdsToRelayout = new Set(itemsToRelayout.map(i => i.id));
     const updatedItems = items.map(item => {
       // 检查是否需要重新布局
-      const needsRelayout = sortedItems.some(si => si.id === item.id);
-      if (!needsRelayout) return item;
+      if (!itemIdsToRelayout.has(item.id)) return item;
       
       // 找到下一个空闲位置
       let foundPos: DesktopPosition | null = null;
@@ -2357,6 +2368,55 @@ export const Desktop: React.FC<DesktopProps> = ({
                 <FolderIcon className="w-4 h-4 text-blue-500" />
                 <span>新建文件夹</span>
               </button>
+              {/* 🔄 刷新全部文件夹 - 清理无效引用 */}
+              <button
+                onClick={() => {
+                  const allItemIds = new Set(items.map(i => i.id));
+                  let updatedCount = 0;
+                  
+                  const updatedItems = items.map(item => {
+                    if (item.type === 'folder') {
+                      const folder = item as DesktopFolderItem;
+                      const validItemIds = folder.itemIds.filter(id => allItemIds.has(id));
+                      if (validItemIds.length !== folder.itemIds.length) {
+                        updatedCount++;
+                        return {
+                          ...folder,
+                          itemIds: validItemIds,
+                          updatedAt: Date.now(),
+                        };
+                      }
+                    }
+                    if (item.type === 'stack') {
+                      const stack = item as DesktopStackItem;
+                      const validItemIds = stack.itemIds.filter(id => allItemIds.has(id));
+                      if (validItemIds.length !== stack.itemIds.length) {
+                        updatedCount++;
+                        return {
+                          ...stack,
+                          itemIds: validItemIds,
+                          name: `叠放 (${validItemIds.length})`,
+                          updatedAt: Date.now(),
+                        };
+                      }
+                    }
+                    return item;
+                  });
+                  
+                  if (updatedCount > 0) {
+                    onItemsChange(updatedItems);
+                    console.log('[Desktop] 已刷新', updatedCount, '个文件夹/叠放');
+                  } else {
+                    console.log('[Desktop] 所有文件夹状态正常');
+                  }
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-2 text-left text-[12px] hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
+                style={{ color: theme.colors.textPrimary }}
+              >
+                <RefreshIcon className="w-4 h-4 text-emerald-400" />
+                <span>刷新全部</span>
+              </button>
               {/* 选中多个图片时可以叠放 */}
               {selectedIds.length >= 2 && selectedIds.every(id => items.find(i => i.id === id)?.type === 'image') && (
                 <button
@@ -2451,6 +2511,36 @@ export const Desktop: React.FC<DesktopProps> = ({
                   >
                     <FolderOpenIcon className="w-4 h-4 text-blue-500" />
                     <span>打开</span>
+                  </button>
+                  {/* 🔄 刷新文件夹 - 检查文件夹内项目状态 */}
+                  <button
+                    onClick={() => {
+                      const folder = items.find(i => i.id === contextMenu.itemId) as DesktopFolderItem;
+                      if (folder) {
+                        // 检查文件夹内的项目是否仍然存在
+                        const allItemIds = new Set(items.map(i => i.id));
+                        const validItemIds = folder.itemIds.filter(id => allItemIds.has(id));
+                        
+                        // 如果有项目被移除，更新文件夹
+                        if (validItemIds.length !== folder.itemIds.length) {
+                          const updatedFolder: DesktopFolderItem = {
+                            ...folder,
+                            itemIds: validItemIds,
+                            updatedAt: Date.now(),
+                          };
+                          onItemsChange(items.map(i => i.id === folder.id ? updatedFolder : i));
+                          console.log('[Desktop] 文件夹已刷新:', folder.name, '移除了', folder.itemIds.length - validItemIds.length, '个无效项目');
+                        } else {
+                          console.log('[Desktop] 文件夹无需刷新:', folder.name);
+                        }
+                      }
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-2 text-left text-[12px] hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
+                    style={{ color: theme.colors.textPrimary }}
+                  >
+                    <RefreshIcon className="w-4 h-4 text-emerald-400" />
+                    <span>刷新</span>
                   </button>
                   <div className="h-px my-1" style={{ background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }} />
                   {/* 文件夹导出选项 */}
