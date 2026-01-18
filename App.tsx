@@ -139,6 +139,8 @@ interface CanvasProps {
   pendingCanvasImage?: { imageUrl: string; imageName?: string } | null;
   onClearPendingCanvasImage?: () => void;
   onAddToCanvas?: (imageUrl: string, imageName?: string) => void;
+  // 画布保存函数引用
+  canvasSaveRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 }
 
 // IndexedDB 相关操作已迁移到 services/db/ 目录
@@ -1480,6 +1482,7 @@ const Canvas: React.FC<CanvasProps> = ({
   pendingCanvasImage,
   onClearPendingCanvasImage,
   onAddToCanvas,
+  canvasSaveRef,
 }) => {
   const { theme, themeName } = useTheme();
   const isDark = themeName !== 'light';
@@ -1571,6 +1574,7 @@ const Canvas: React.FC<CanvasProps> = ({
             isActive={view === 'canvas'}
             pendingImageToAdd={pendingCanvasImage}
             onPendingImageAdded={onClearPendingCanvasImage}
+            saveRef={canvasSaveRef}
           />
         </div>
       ) : null}
@@ -1721,7 +1725,23 @@ const App: React.FC = () => {
     return [...localCreativeIdeas].sort((a, b) => (b.order || 0) - (a.order || 0));
   }, [localCreativeIdeas]);
   
-  const [view, setView] = useState<'editor' | 'local-library' | 'canvas'>('editor'); // 默认桌面模式
+  const [view, setViewInternal] = useState<'editor' | 'local-library' | 'canvas'>('editor'); // 默认桌面模式
+  
+  // 画布保存函数引用（用于切换TAB和关闭时自动保存）
+  const canvasSaveRef = useRef<(() => Promise<void>) | null>(null);
+  
+  // 包装 setView，在离开画布时自动保存
+  const setView = useCallback(async (newView: 'editor' | 'local-library' | 'canvas') => {
+    // 如果从画布切换到其他视图，先保存画布
+    if (view === 'canvas' && newView !== 'canvas' && canvasSaveRef.current) {
+      try {
+        await canvasSaveRef.current();
+      } catch (e) {
+        console.warn('切换TAB时保存画布失败:', e);
+      }
+    }
+    setViewInternal(newView);
+  }, [view]);
   const [isAddIdeaModalOpen, setAddIdeaModalOpen] = useState(false);
   const [editingIdea, setEditingIdea] = useState<CreativeIdea | null>(null);
   const [presetImageForNewIdea, setPresetImageForNewIdea] = useState<string | null>(null); // 从桌面图片创建创意库时的预设图片
@@ -1866,6 +1886,21 @@ const App: React.FC = () => {
     
     return () => clearInterval(interval);
   }, []);
+  
+  // 关闭窗口/程序时自动保存画布
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // 如果当前在画布视图且有保存函数，尝试同步保存
+      if (view === 'canvas' && canvasSaveRef.current) {
+        // 注意：beforeunload 不支持异步操作，但我们可以尝试触发
+        // Electron 会等待一小段时间再关闭，这通常足够完成保存
+        canvasSaveRef.current();
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [view]);
   
   // 从 Node.js 后端加载数据（纯本地文件，不用浏览器缓存）
   const loadDataFromLocal = async () => {
@@ -3573,6 +3608,7 @@ const App: React.FC = () => {
           pendingCanvasImage={pendingCanvasImage}
           onClearPendingCanvasImage={handleClearPendingCanvasImage}
           onAddToCanvas={handleAddToCanvas}
+          canvasSaveRef={canvasSaveRef}
         />
         {view === 'editor' && (
              <div className="absolute left-1/2 -translate-x-1/2 z-30 transition-all duration-300 bottom-6 flex items-center gap-3">

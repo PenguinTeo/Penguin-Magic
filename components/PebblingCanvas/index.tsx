@@ -200,6 +200,7 @@ interface PebblingCanvasProps {
   isActive?: boolean; // 画布是否处于活动状态（用于快捷键作用域控制）
   pendingImageToAdd?: { imageUrl: string; imageName?: string } | null; // 待添加的图片（从桌面添加）
   onPendingImageAdded?: () => void; // 图片添加完成后的回调
+  saveRef?: React.MutableRefObject<(() => Promise<void>) | null>; // 暴露保存函数给父组件
 }
 
 const PebblingCanvas: React.FC<PebblingCanvasProps> = ({ 
@@ -208,7 +209,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   creativeIdeas = [], 
   isActive = true,
   pendingImageToAdd,
-  onPendingImageAdded
+  onPendingImageAdded,
+  saveRef
 }) => {
   // --- 画布管理状态 ---
   const [currentCanvasId, setCurrentCanvasId] = useState<string | null>(null);
@@ -899,6 +901,13 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
     setHasUnsavedChanges(false);
     console.log('[手动保存] 保存完成');
   }, [saveCurrentCanvas]);
+
+  // 暴露保存函数给父组件
+  useEffect(() => {
+    if (saveRef) {
+      saveRef.current = handleManualSave;
+    }
+  }, [saveRef, handleManualSave]);
 
   const handleResetView = () => {
     setCanvasOffset({ x: 0, y: 0 });
