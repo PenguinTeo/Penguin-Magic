@@ -267,7 +267,6 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             style={{
               backgroundColor: isDark ? '#000000' : theme.colors.bgTertiary,
               boxShadow: isDark ? '0 10px 15px -3px rgba(0,0,0,0.5)' : '0 4px 6px -1px rgba(0,0,0,0.1)',
-              ringColor: theme.colors.border
             }}
           >
             <img 
@@ -724,7 +723,6 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
                   className="w-6 h-6 rounded-lg flex items-center justify-center ring-1"
                   style={{
                     backgroundColor: activeBPTemplate ? 'rgba(238,209,109,0.2)' : 'rgba(59,130,246,0.2)',
-                    ringColor: activeBPTemplate ? 'rgba(238,209,109,0.2)' : 'rgba(59,130,246,0.2)',
                   }}
                 >
                   {activeBPTemplate ? (

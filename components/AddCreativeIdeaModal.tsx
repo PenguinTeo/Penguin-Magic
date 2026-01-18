@@ -34,7 +34,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
   const [author, setAuthor] = useState(''); // 作者字段
   const [category, setCategory] = useState<CreativeCategoryType | ''>(''); // 分类字段
   const [prompt, setPrompt] = useState('');
-  const [ideaType, setIdeaType] = useState<'standard' | 'bp'>('standard');
+  const [ideaType, setIdeaType] = useState<'standard' | 'bp' | 'smartPlus'>('standard');
   const [smartPlusConfig, setSmartPlusConfig] = useState<SmartPlusConfig>(() => JSON.parse(JSON.stringify(defaultSmartPlusConfig)));
   const [bpFields, setBpFields] = useState<BPField[]>([]);
   const [cost, setCost] = useState<number>(0);

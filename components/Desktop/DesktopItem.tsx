@@ -310,7 +310,6 @@ export const DesktopItemComponent = memo<DesktopItemProps>(({
               : `${(item as DesktopFolderItem).color || theme.colors.accent}20`
             : 'rgba(0,0,0,0.4)',
           borderColor: isSelected ? theme.colors.primary : isDropTarget ? '#22c55e' : 'transparent',
-          ringColor: isSelected ? theme.colors.primary : 'transparent',
         }}
       >
         {item.type === 'image' ? (

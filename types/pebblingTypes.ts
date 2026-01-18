@@ -28,6 +28,16 @@ export interface NodeData {
   resizeWidth?: number;
   resizeHeight?: number;
   
+  // MultiAngle Node Specifics
+  nodeMode?: '3d' | 'resize'; // 节点模式：3D旋转或调整尺寸
+  angleRotate?: number; // 水平旋转角度
+  angleVertical?: number; // 垂直旋转角度
+  angleZoom?: number; // 缩放级别
+  angleDetailMode?: boolean; // 是否精细模式
+  anglePrompt?: string; // 3D生成提示词
+  inputImageUrl?: string; // 输入图片URL
+  previewImage?: string; // 预览图片
+  
   // Video Node Specifics
   videoService?: 'sora' | 'veo';
   videoModel?: string;

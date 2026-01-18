@@ -234,6 +234,11 @@ export interface GenerationHistory {
   isThirdParty: boolean; // 是否使用第三方API
   // 输入图片本地路径（用于重新生成）
   inputImagePaths?: string[];
+  // 输入图片数据（兼容旧版本）
+  inputImages?: string[]; // 多图输入数据
+  inputImageData?: string; // 单图输入数据 (base64)
+  inputImageName?: string; // 输入图片名称
+  inputImageType?: string; // 输入图片类型
   // 创意库相关信息（用于重新生成时恢复）
   creativeTemplateId?: number; // 使用的创意库模板 ID
   creativeTemplateType?: 'smart' | 'smartPlus' | 'bp' | 'none'; // 创意库类型

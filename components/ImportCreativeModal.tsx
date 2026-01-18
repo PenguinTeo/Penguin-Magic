@@ -73,7 +73,6 @@ export const ImportCreativeModal: React.FC<ImportCreativeModalProps> = ({
               className="w-8 h-8 rounded-xl flex items-center justify-center ring-1"
               style={{
                 backgroundColor: isLight ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.15)',
-                ringColor: theme.colors.border
               }}
             >
               <CloudDownload className="w-4 h-4" />

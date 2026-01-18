@@ -149,6 +149,7 @@ interface ThemeContextValue {
   themeName: ThemeName;
   setTheme: (name: ThemeName) => void;
   allThemes: Theme[];
+  isDark: boolean; // 快捷判断是否为深色主题
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -211,6 +212,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     themeName,
     setTheme,
     allThemes: Object.values(themes),
+    isDark: themeName === 'dark',
   };
 
   return (

@@ -679,7 +679,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     const handleRunLoadImage = () => {
       // 触发完整节点执行流程，让 resolveInputs 获取上游图片
       if (onExecute) {
-        onExecute();
+        onExecute(node.id);
       }
     };
 
@@ -732,7 +732,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             height={Math.max(140, node.height - 100)}
             onRun={handleRunLoadImage}
             isRunning={isRunning}
-            onExecute={onExecute}
+            onExecute={() => onExecute(node.id)}
           />
         </Suspense>
         
