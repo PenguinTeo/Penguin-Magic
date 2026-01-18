@@ -24,7 +24,8 @@ import {
   Type as RenameIcon, 
   Library as LibraryIcon, 
   LayoutGrid as LayersIcon,
-  PlusSquare as AddToCanvasIcon
+  PlusSquare as AddToCanvasIcon,
+  Video as VideoIcon
 } from 'lucide-react';
 // JSZip 导出逻辑已迁移到 services/export/desktopExporter.ts
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
@@ -72,6 +73,12 @@ const PADDING = 24; // 桌面内边距
 
 // 生成唯一ID
 const generateId = () => Math.random().toString(36).substring(2, 15);
+
+// 🔧 检测是否为视频URL
+const isVideoUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.includes('.mp4') || url.includes('.webm') || url.startsWith('data:video');
+};
 
 // 剪贴板状态类型
 interface ClipboardState {
@@ -1725,6 +1732,14 @@ export const Desktop: React.FC<DesktopProps> = ({
                     <p className="text-[9px] text-yellow-300 text-center font-medium line-clamp-2 px-1">图片已丢失</p>
                     <p className="mt-1 text-[8px] text-gray-500">可删除此项</p>
                   </div>
+                ) : isVideoUrl((item as DesktopImageItem).imageUrl) ? (
+                  // 🔧 视频文件：显示视频图标
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/60 to-gray-900">
+                    <div className="w-12 h-12 rounded-full bg-purple-500/30 flex items-center justify-center mb-1">
+                      <VideoIcon className="w-6 h-6 text-purple-300" />
+                    </div>
+                    <span className="text-[9px] text-purple-200 font-medium">视频</span>
+                  </div>
                 ) : (
                   // 正常状态：显示图片
                   <img
@@ -1733,15 +1748,8 @@ export const Desktop: React.FC<DesktopProps> = ({
                     className="w-full h-full object-cover"
                     draggable={false}
                     onError={(e) => {
-                      // 缩略图加载失败，回退到原图
-                      const target = e.target as HTMLImageElement;
-                      const originalUrl = normalizeImageUrl((item as DesktopImageItem).imageUrl);
-                      if (target.src !== originalUrl) {
-                        target.src = originalUrl;
-                      } else {
-                        // 原图也失败，显示占位图
-                        target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
-                      }
+                      // 🔧 直接显示占位图，避免循环回退
+                      (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
                     }}
                   />
                 )
@@ -1755,18 +1763,35 @@ export const Desktop: React.FC<DesktopProps> = ({
                       .map(id => items.find(i => i.id === id) as DesktopImageItem)
                       .filter(Boolean);
                     
-                    return stackImages.map((img, idx) => (
+                    return stackImages.map((img, idx) => {
+                      // 🔧 视频文件：显示视频图标而不是加载图片
+                      if (isVideoUrl(img.imageUrl)) {
+                        return (
+                          <div
+                            key={img.id}
+                            className="absolute rounded-lg bg-purple-900/60 flex items-center justify-center"
+                            style={{
+                              width: '70%',
+                              height: '70%',
+                              left: `${8 + idx * 6}%`,
+                              top: `${8 + idx * 6}%`,
+                              transform: `rotate(${(idx - 1.5) * 5}deg)`,
+                              zIndex: idx,
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                            }}
+                          >
+                            <VideoIcon className="w-4 h-4 text-purple-300" />
+                          </div>
+                        );
+                      }
+                      return (
                       <img
                         key={img.id}
                         src={getThumbnailUrl(img.imageUrl)}
                         alt={img.name}
                         onError={(e) => {
-                          // 缩略图加载失败，回退到原图
-                          const target = e.target as HTMLImageElement;
-                          const originalUrl = normalizeImageUrl(img.imageUrl);
-                          if (target.src !== originalUrl) {
-                            target.src = originalUrl;
-                          }
+                          // 🔧 直接显示占位图，避免循环回退
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
                         }}
                         className="absolute rounded-lg object-cover"
                         style={{
@@ -1780,7 +1805,8 @@ export const Desktop: React.FC<DesktopProps> = ({
                         }}
                         draggable={false}
                       />
-                    ));
+                    );
+                    });
                   })()}
                   {/* 叠放数量标记 */}
                   <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded-full z-10">
@@ -1967,6 +1993,42 @@ export const Desktop: React.FC<DesktopProps> = ({
                     <p>提示：可以删除此项或尝试重新生成</p>
                   </div>
                 </div>
+              ) : isVideoUrl(selectedImageItem.imageUrl) ? (
+                /* 🔧 视频预览 */
+                <>
+                  <div className="relative p-4">
+                    <video
+                      src={`http://localhost:8765${selectedImageItem.imageUrl}`}
+                      controls
+                      autoPlay
+                      muted
+                      loop
+                      className="rounded-lg"
+                      style={{
+                        maxWidth: PREVIEW_WIDTH - 32,
+                        maxHeight: 300,
+                        width: 'auto',
+                        height: 'auto',
+                      }}
+                    />
+                  </div>
+                  {/* 底部操作按钮 */}
+                  <div className="px-4 pb-4 flex items-center justify-center gap-2">
+                    <a
+                      href={`http://localhost:8765${selectedImageItem.imageUrl}`}
+                      download
+                      className="flex items-center gap-1.5 px-3 py-2 font-medium rounded-lg text-xs transition-colors hover:opacity-90"
+                      style={{ 
+                        backgroundColor: isLight ? '#2563eb' : '#004097', 
+                        color: '#ffffff' 
+                      }}
+                      title="下载视频"
+                    >
+                      <DownloadIcon className="w-4 h-4" />
+                      <span>下载</span>
+                    </a>
+                  </div>
+                </>
               ) : (
                 /* 正常图片预览 */
                 <>

@@ -256,4 +256,35 @@ router.post('/generate-thumbnails', async (req, res) => {
   }
 });
 
+// 🔧 保存缩略图到thumbnails目录（用于视频首帧缩略图）
+router.post('/save-thumbnail', async (req, res) => {
+  const { imageData, filename } = req.body;
+  
+  if (!imageData) {
+    return res.status(400).json({ success: false, error: '缺少图片数据' });
+  }
+  
+  try {
+    // 确保缩略图目录存在
+    const fs = require('fs');
+    if (!fs.existsSync(config.THUMBNAILS_DIR)) {
+      fs.mkdirSync(config.THUMBNAILS_DIR, { recursive: true });
+    }
+    
+    // 保存到缩略图目录
+    const result = FileHandler.saveImage(imageData, config.THUMBNAILS_DIR, filename);
+    
+    if (result.success && result.data) {
+      // 返回正确的URL路径
+      result.data.url = `/files/thumbnails/${result.data.filename}`;
+      console.log(`[Thumbnail] 视频缩略图已保存: ${result.data.filename}`);
+    }
+    
+    res.json(result);
+  } catch (error) {
+    console.error('[Thumbnail] 保存失败:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 module.exports = router;

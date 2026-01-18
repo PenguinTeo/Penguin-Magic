@@ -4,9 +4,9 @@
  */
 
 import React, { memo, useState } from 'react';
-import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem } from '../../types';
+import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem, DesktopVideoItem } from '../../types';
 import { normalizeImageUrl, getThumbnailUrl } from '../../utils/image';
-import { Folder as FolderIcon, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Folder as FolderIcon, AlertCircle, AlertTriangle, Video as VideoIcon } from 'lucide-react';
 
 // 默认占位图
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0NDQ0NDQiIHN0cm9rZS13aWR0aD0iMSI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjwvc3ZnPg==';
@@ -14,10 +14,24 @@ const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d
 /**
  * 缩略图组件
  * 优先加载缩略图，失败时回退到原图
+ * 🔧 跳过视频URL，避免无效请求
  */
 const ThumbnailImage = memo<{ imageUrl: string; alt: string }>(({ imageUrl, alt }) => {
   const [useThumbnail, setUseThumbnail] = useState(true);
   const [hasError, setHasError] = useState(false);
+  
+  // 🔧 如果是视频URL，直接显示占位图
+  if (imageUrl && (imageUrl.includes('.mp4') || imageUrl.includes('.webm'))) {
+    return (
+      <img
+        src={PLACEHOLDER_IMAGE}
+        alt={alt}
+        className="w-full h-full object-cover"
+        draggable={false}
+        loading="lazy"
+      />
+    );
+  }
   
   const thumbnailUrl = getThumbnailUrl(imageUrl);
   const originalUrl = normalizeImageUrl(imageUrl);
@@ -134,6 +148,14 @@ interface DesktopItemProps {
 }
 
 /**
+ * 检测是否为视频URL
+ */
+const isVideoUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.includes('.mp4') || url.includes('.webm') || url.startsWith('data:video');
+};
+
+/**
  * 渲染图片内容 - 根据状态显示不同内容
  */
 const renderImageContent = (imageItem: DesktopImageItem, itemName: string) => {
@@ -149,8 +171,62 @@ const renderImageContent = (imageItem: DesktopImageItem, itemName: string) => {
   if (!imageItem.imageUrl && !imageItem.historyId) {
     return <MissingDataOverlay />;
   }
+  // 🔧 如果是视频URL（兼容旧数据），显示视频图标而不是尝试加载图片
+  if (isVideoUrl(imageItem.imageUrl)) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/60 to-gray-900">
+        <div className="w-12 h-12 rounded-full bg-purple-500/30 flex items-center justify-center mb-1">
+          <VideoIcon className="w-6 h-6 text-purple-300" />
+        </div>
+        <span className="text-[9px] text-purple-200 font-medium">视频</span>
+      </div>
+    );
+  }
   // 正常显示图片
   return <ThumbnailImage imageUrl={imageItem.imageUrl} alt={itemName} />;
+};
+
+/**
+ * 渲染视频内容 - 显示首帧缩略图或视频图标
+ */
+const renderVideoContent = (videoItem: DesktopVideoItem, itemName: string) => {
+  // 加载中状态
+  if (videoItem.isLoading) {
+    return <LoadingOverlay />;
+  }
+  // 错误状态
+  if (videoItem.loadingError) {
+    return <ErrorOverlay error={videoItem.loadingError} />;
+  }
+  // 数据丢失状态
+  if (!videoItem.videoUrl) {
+    return <MissingDataOverlay />;
+  }
+  // 🔧 如果有缩略图，显示缩略图
+  if (videoItem.thumbnailUrl) {
+    return (
+      <div className="w-full h-full relative">
+        <ThumbnailImage imageUrl={videoItem.thumbnailUrl} alt={itemName} />
+        {/* 视频标识 */}
+        <div className="absolute bottom-1 right-1 bg-black/60 rounded px-1 py-0.5 flex items-center gap-0.5">
+          <VideoIcon className="w-3 h-3 text-white" />
+          <span className="text-[8px] text-white">VIDEO</span>
+        </div>
+      </div>
+    );
+  }
+  // 显示视频图标和标签
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/60 to-gray-900">
+      <div className="w-12 h-12 rounded-full bg-purple-500/30 flex items-center justify-center mb-1">
+        <VideoIcon className="w-6 h-6 text-purple-300" />
+      </div>
+      <span className="text-[9px] text-purple-200 font-medium">视频</span>
+      {videoItem.duration && (
+        <span className="text-[8px] text-gray-400 mt-0.5">{Math.round(videoItem.duration)}s</span>
+      )}
+    </div>
+  );
 };
 
 /**
@@ -214,6 +290,8 @@ export const DesktopItemComponent = memo<DesktopItemProps>(({
       >
         {item.type === 'image' ? (
           renderImageContent(item as DesktopImageItem, item.name)
+        ) : item.type === 'video' ? (
+          renderVideoContent(item as DesktopVideoItem, item.name)
         ) : item.type === 'stack' ? (
           <StackPreview stack={item as DesktopStackItem} allItems={allItems} />
         ) : (
@@ -299,6 +377,27 @@ const StackPreview = memo<{ stack: DesktopStackItem; allItems: DesktopItem[] }>(
   return (
     <div className="w-full h-full relative">
       {stackImages.map((img, idx) => {
+        // 🔧 跳过视频文件，不尝试当图片加载
+        if (isVideoUrl(img.imageUrl)) {
+          return (
+            <div
+              key={img.id}
+              className="absolute rounded-lg bg-purple-900/60 flex items-center justify-center"
+              style={{
+                width: '70%',
+                height: '70%',
+                left: `${8 + idx * 6}%`,
+                top: `${8 + idx * 6}%`,
+                transform: `rotate(${(idx - 1.5) * 5}deg)`,
+                zIndex: idx,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              }}
+            >
+              <VideoIcon className="w-4 h-4 text-purple-300" />
+            </div>
+          );
+        }
+        
         const thumbnailUrl = getThumbnailUrl(img.imageUrl);
         const originalUrl = normalizeImageUrl(img.imageUrl);
         const shouldUseThumbnail = img.imageUrl?.startsWith('/files/');
@@ -321,9 +420,8 @@ const StackPreview = memo<{ stack: DesktopStackItem; allItems: DesktopItem[] }>(
             draggable={false}
             loading="lazy"
             onError={(e) => {
-              if (shouldUseThumbnail && (e.target as HTMLImageElement).src === thumbnailUrl) {
-                (e.target as HTMLImageElement).src = originalUrl;
-              }
+              // 🔧 直接显示占位图，避免循环回退
+              (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
             }}
           />
         );

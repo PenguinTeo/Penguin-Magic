@@ -2,6 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { XCircle as XCircleIcon, ZoomIn as ZoomInIcon, ZoomOut as ZoomOutIcon, RotateCcw as ResetZoomIcon, Download as DownloadIcon } from 'lucide-react';
 import { normalizeImageUrl } from '../utils/image';
 
+// 🔧 检测是否为视频URL
+const isVideoUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.includes('.mp4') || url.includes('.webm') || url.startsWith('data:video');
+};
+
 
 interface ImagePreviewModalProps {
   imageUrl: string;
@@ -126,7 +132,22 @@ export const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({ imageUrl, 
         onClick={(e) => e.stopPropagation()}
         onWheel={handleWheel}
       >
-        {imageError ? (
+        {isVideoUrl(imageUrl) ? (
+          /* 🔧 视频预览 */
+          <video
+            src={imageUrl.startsWith('/files/') ? `http://localhost:8765${imageUrl}` : normalizeImageUrl(imageUrl)}
+            controls
+            autoPlay
+            loop
+            className="block rounded-lg shadow-2xl"
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              width: 'auto',
+              height: 'auto',
+            }}
+          />
+        ) : imageError ? (
           <div className="flex flex-col items-center justify-center p-8 bg-gray-800/50 rounded-lg">
             <p className="text-gray-400 mb-2">图片加载失败</p>
             <p className="text-xs text-gray-500">第三方图片可能已过期或无法访问</p>

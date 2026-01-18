@@ -1223,17 +1223,26 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
     }
   }, [pendingImageToAdd]);
   
-  // 处理待添加的图片（在画布初始化完成后调用）
+  // 处理待添加的图片/视频（在画布初始化完成后调用）
   const processPendingImage = useCallback(() => {
     const pending = pendingImageRef.current;
     if (!pending) return;
     
-    console.log('[Canvas] 处理待添加的图片:', pending.imageName);
+    console.log('[Canvas] 处理待添加的内容:', pending.imageName);
     
-    // 添加图片节点
-    addNode('image', pending.imageUrl, undefined, pending.imageName);
+    // 🔧 检测是视频还是图片
+    const isVideo = pending.imageUrl.includes('.mp4') || pending.imageUrl.includes('.webm') || pending.imageUrl.startsWith('data:video');
     
-    // 通知父组件图片已添加
+    if (isVideo) {
+      // 添加视频节点
+      console.log('[Canvas] 添加视频节点');
+      addNode('video-output', pending.imageUrl, undefined, pending.imageName || '视频');
+    } else {
+      // 添加图片节点
+      addNode('image', pending.imageUrl, undefined, pending.imageName);
+    }
+    
+    // 通知父组件内容已添加
     onPendingImageAdded?.();
     pendingImageRef.current = null;
   }, [onPendingImageAdded]);
@@ -1302,6 +1311,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           
           // 保存画布
           saveCurrentCanvas();
+          
+          // 🔧 同步视频到桌面（复用图片回调，桌面会显示为视频图标）
+          if (onImageGenerated) {
+              onImageGenerated(localVideoUrl, '视频生成结果', currentCanvasId || undefined, canvasName);
+          }
           
           console.log('[Video节点] 视频处理完成');
       } catch (downloadErr) {
@@ -1891,6 +1905,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           status: 'completed',
                           data: { imageMetadata: metadata }
                       });
+                      
+                      // 🔧 同步到桌面
+                      if (onImageGenerated) {
+                          const toolPrompt = sourceNode.type === 'remove-bg' ? '抠图结果' : '放大结果';
+                          onImageGenerated(result, toolPrompt, currentCanvasId || undefined, canvasName);
+                      }
                   } else {
                       updateNode(nodeId, { status: 'error' });
                   }
@@ -1910,6 +1930,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       
       // 标记源节点为完成
       updateNode(sourceNodeId, { status: 'completed' });
+      
+      // 🔧 保存画布
+      saveCurrentCanvas();
       
       console.log(`[工具批量] 全部完成`);
   };
@@ -2459,6 +2482,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                data: { imageMetadata: metadata }
                            });
                            updateNode(nodeId, { status: 'completed' });
+                           
+                           // 🔧 保存画布
+                           saveCurrentCanvas();
+                           
+                           // 🔧 同步到桌面
+                           if (onImageGenerated) {
+                               onImageGenerated(result, combinedPrompt || 'Magic结果', currentCanvasId || undefined, canvasName);
+                           }
                        } else {
                            updateNode(outputNodeId, { status: 'error' });
                            updateNode(nodeId, { status: 'error' });
@@ -2887,6 +2918,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   const resized = await resizeImageClient(src, mode, w, h);
                   if (!signal.aborted) {
                       updateNode(nodeId, { content: resized, status: 'completed' });
+                      
+                      // 🔧 保存画布
+                      saveCurrentCanvas();
+                      
+                      // 🔧 同步到桌面
+                      if (resized && onImageGenerated) {
+                          onImageGenerated(resized, 'Resize结果', currentCanvasId || undefined, canvasName);
+                      }
                   }
               }
           }
@@ -2948,6 +2987,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                     
                           // 5. 标记工具节点完成
                           updateNode(nodeId, { status: 'completed' });
+                          
+                          // 🔧 保存画布
+                          saveCurrentCanvas();
+                          
+                          // 🔧 同步到桌面
+                          if (onImageGenerated) {
+                              onImageGenerated(result, '抠图结果', currentCanvasId || undefined, canvasName);
+                          }
                       } else {
                           // API失败,更新输出节点为error
                           updateNode(outputNodeId, { status: 'error' });
@@ -3025,6 +3072,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                     
                           // 5. 标记工具节点完成
                           updateNode(nodeId, { status: 'completed' });
+                          
+                          // 🔧 保存画布
+                          saveCurrentCanvas();
+                          
+                          // 🔧 同步到桌面
+                          if (onImageGenerated) {
+                              onImageGenerated(result, '放大结果', currentCanvasId || undefined, canvasName);
+                          }
                       } else {
                           console.error(`[Upscale] API返回失败,result为空`);
                           // API失败,更新输出节点为error

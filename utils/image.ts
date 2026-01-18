@@ -85,11 +85,17 @@ export const getImageMimeType = (url: string): string => {
  * 获取缩略图URL
  * 将原图URL转换为缩略图URL
  * 支持的路径格式: /files/output/xxx.png, /files/input/xxx.jpg, /files/creative_images/xxx.png
+ * 🔧 视频文件直接返回原始路径，不尝试获取缩略图
  * @param originalUrl - 原图URL
- * @returns 缩略图URL，如枟不支持则返回原图URL
+ * @returns 缩略图URL，如果不支持则返回原图URL
  */
 export const getThumbnailUrl = (originalUrl: string | undefined | null): string => {
   if (!originalUrl) return '';
+  
+  // 🔧 视频文件直接返回，不尝试获取缩略图
+  if (originalUrl.includes('.mp4') || originalUrl.includes('.webm')) {
+    return originalUrl;
+  }
   
   // 只处理本地文件路径
   if (!originalUrl.startsWith('/files/')) {

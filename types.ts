@@ -252,7 +252,7 @@ export interface PriceConfig {
 // ========== 桌面系统类型 ==========
 
 // 桌面项目类型
-export type DesktopItemType = 'image' | 'folder' | 'stack';
+export type DesktopItemType = 'image' | 'folder' | 'stack' | 'video';
 
 // 桌面项目位置
 export interface DesktopPosition {
@@ -300,8 +300,19 @@ export interface DesktopStackItem extends BaseDesktopItem {
   isExpanded?: boolean; // 是否展开
 }
 
+// 视频项目
+export interface DesktopVideoItem extends BaseDesktopItem {
+  type: 'video';
+  videoUrl: string;
+  thumbnailUrl?: string;
+  prompt?: string;
+  duration?: number; // 视频时长（秒）
+  isLoading?: boolean;
+  loadingError?: string;
+}
+
 // 联合类型
-export type DesktopItem = DesktopImageItem | DesktopFolderItem | DesktopStackItem;
+export type DesktopItem = DesktopImageItem | DesktopFolderItem | DesktopStackItem | DesktopVideoItem;
 
 // 桌面状态
 export interface DesktopState {

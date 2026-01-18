@@ -82,3 +82,12 @@ export const downloadRemoteToOutput = async (imageUrl: string, filename?: string
 }> => {
   return post('/files/download-remote', { imageUrl, filename });
 };
+
+// 🔧 保存缩略图到thumbnails目录
+export const saveThumbnail = async (imageData: string, filename?: string): Promise<{ 
+  success: boolean; 
+  data?: { filename: string; path: string; url: string }; 
+  error?: string 
+}> => {
+  return post('/files/save-thumbnail', { imageData, filename });
+};

@@ -5,7 +5,7 @@ import { normalizeImageUrl } from './utils/image';
 import { GeneratedImageDisplay } from './components/GeneratedImageDisplay';
 import { editImageWithGemini, generateCreativePromptFromImage, initializeAiClient, processBPTemplate, setThirdPartyConfig, optimizePrompt } from './services/geminiService';
 import CreativeExtractor, { extractCreatives } from './services/creativeExtractor';
-import { ApiStatus, GeneratedContent, CreativeIdea, SmartPlusConfig, ThirdPartyApiConfig, GenerationHistory, DesktopItem, DesktopImageItem, DesktopFolderItem, CreativeCategoryType } from './types';
+import { ApiStatus, GeneratedContent, CreativeIdea, SmartPlusConfig, ThirdPartyApiConfig, GenerationHistory, DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopVideoItem, CreativeCategoryType } from './types';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
 import { AddCreativeIdeaModal } from './components/AddCreativeIdeaModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -17,7 +17,7 @@ import { HistoryStrip } from './components/HistoryStrip';
 import * as creativeIdeasApi from './services/api/creativeIdeas';
 import * as historyApi from './services/api/history';
 import * as desktopApi from './services/api/desktop';
-import { saveToOutput, saveToInput, downloadRemoteToOutput } from './services/api/files';
+import { saveToOutput, saveToInput, downloadRemoteToOutput, saveVideoToOutput, saveThumbnail } from './services/api/files';
 import { downloadImage } from './services/export';
 import { ThemeProvider, useTheme, SnowfallEffect } from './contexts/ThemeContext';
 import { Desktop, createDesktopItemFromHistory, TOP_OFFSET } from './components/Desktop';
@@ -1564,20 +1564,26 @@ const Canvas: React.FC<CanvasProps> = ({
             isImportingById={isImportingById}
           />
         </div>
-      ) : view === 'canvas' ? (
-        /* 画布全屏显示 - 覆盖整个区域，标签栏浮在上方 */
-        <div className="absolute inset-0 z-50 overflow-hidden">
-          <PebblingCanvas 
-            onImageGenerated={onCanvasImageGenerated} 
-            onCanvasCreated={onCanvasCreated}
-            creativeIdeas={creativeIdeas}
-            isActive={view === 'canvas'}
-            pendingImageToAdd={pendingCanvasImage}
-            onPendingImageAdded={onClearPendingCanvasImage}
-            saveRef={canvasSaveRef}
-          />
-        </div>
       ) : null}
+      
+      {/* 🔧 画布组件 - 始终挂载，使用 CSS 控制显示/隐藏，保证生成任务在切换 TAB 时不丢失 */}
+      <div 
+        className="absolute inset-0 z-50 overflow-hidden"
+        style={{ 
+          display: view === 'canvas' ? 'block' : 'none',
+          pointerEvents: view === 'canvas' ? 'auto' : 'none'
+        }}
+      >
+        <PebblingCanvas 
+          onImageGenerated={onCanvasImageGenerated} 
+          onCanvasCreated={onCanvasCreated}
+          creativeIdeas={creativeIdeas}
+          isActive={view === 'canvas'}
+          pendingImageToAdd={pendingCanvasImage}
+          onPendingImageAdded={onClearPendingCanvasImage}
+          saveRef={canvasSaveRef}
+        />
+      </div>
       
       {/* 桌面模式 - 非画布模式时显示 */}
       {view !== 'canvas' && (
@@ -2834,49 +2840,149 @@ const App: React.FC = () => {
       console.log('[Canvas] 创建画布文件夹:', canvasName, '->', folderId);
     }, [canvasToFolderMap, handleAddToDesktop]);
 
-    // 画布生成图片同步到桌面（添加到对应画布文件夹）
+    // 🔧 提取视频首帧作为缩略图
+    const extractVideoThumbnail = async (videoUrl: string): Promise<string | null> => {
+      return new Promise((resolve) => {
+        try {
+          const video = document.createElement('video');
+          video.crossOrigin = 'anonymous';
+          video.muted = true;
+          
+          let fullUrl = videoUrl;
+          if (videoUrl.startsWith('/files/')) {
+            fullUrl = `http://localhost:8765${videoUrl}`;
+          }
+          
+          video.onloadeddata = () => {
+            // 跳到首帧
+            video.currentTime = 0;
+          };
+          
+          video.onseeked = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(video, 0, 0);
+                const thumbnail = canvas.toDataURL('image/jpeg', 0.8);
+                console.log('[VideoThumbnail] 首帧提取成功');
+                resolve(thumbnail);
+              } else {
+                resolve(null);
+              }
+            } catch (e) {
+              console.error('[VideoThumbnail] 提取失败:', e);
+              resolve(null);
+            }
+          };
+          
+          video.onerror = () => {
+            console.error('[VideoThumbnail] 视频加载失败');
+            resolve(null);
+          };
+          
+          // 设置超时
+          setTimeout(() => resolve(null), 5000);
+          
+          video.src = fullUrl;
+          video.load();
+        } catch (e) {
+          console.error('[VideoThumbnail] 初始化失败:', e);
+          resolve(null);
+        }
+      });
+    };
+
+    // 画布生成图片/视频同步到桌面（添加到对应画布文件夹）
     const handleCanvasImageGenerated = useCallback(async (imageUrl: string, prompt: string, canvasId?: string, canvasName?: string) => {
-      // 先将base64图片保存到本地文件
-      let finalImageUrl = imageUrl;
+      // 🔧 判断是图片还是视频
+      const isVideo = imageUrl.includes('.mp4') || imageUrl.includes('.webm') || imageUrl.startsWith('data:video');
+      
+      // 先将base64图片/视频保存到本地文件
+      let finalUrl = imageUrl;
       if (imageUrl.startsWith('data:')) {
         try {
-          const result = await saveToOutput(imageUrl, `canvas_${Date.now()}.png`);
-          if (result.success && result.data?.url) {
-            finalImageUrl = result.data.url; // 使用本地文件URL
-            console.log('[Canvas] 图片已保存到:', finalImageUrl);
+          if (isVideo) {
+            const result = await saveVideoToOutput(imageUrl, `canvas_video_${Date.now()}.mp4`);
+            if (result.success && result.data?.url) {
+              finalUrl = result.data.url;
+              console.log('[Canvas] 视频已保存到:', finalUrl);
+            }
+          } else {
+            const result = await saveToOutput(imageUrl, `canvas_${Date.now()}.png`);
+            if (result.success && result.data?.url) {
+              finalUrl = result.data.url;
+              console.log('[Canvas] 图片已保存到:', finalUrl);
+            }
           }
         } catch (e) {
-          console.error('[Canvas] 保存图片失败:', e);
+          console.error('[Canvas] 保存失败:', e);
         }
       }
       
-      // 创建新的桌面图片项
+      // 创建新的桌面项目
       const now = Date.now();
-      const newImageItem: DesktopImageItem = {
-        id: `canvas-img-${now}-${Math.random().toString(36).substring(2, 8)}`,
-        type: 'image',
-        name: `画布(${prompt.slice(0, 10)}...)`,
-        position: { x: 0, y: 0 }, // 位置将由handleAddToDesktop自动计算
-        imageUrl: finalImageUrl,
-        prompt: prompt,
-        createdAt: now,
-        updatedAt: now,
-      };
+      let newItem: DesktopItem;
+      
+      if (isVideo) {
+        // 🔧 提取视频首帧作为缩略图
+        let thumbnailUrl: string | undefined;
+        try {
+          const thumbnailData = await extractVideoThumbnail(finalUrl);
+          if (thumbnailData) {
+            // 保存缩略图到 thumbnails 目录
+            const thumbResult = await saveThumbnail(thumbnailData, `video_thumb_${now}.jpg`);
+            if (thumbResult.success && thumbResult.data?.url) {
+              thumbnailUrl = thumbResult.data.url;
+              console.log('[Canvas] 视频缩略图已生成:', thumbnailUrl);
+            }
+          }
+        } catch (e) {
+          console.warn('[Canvas] 生成视频缩略图失败:', e);
+        }
+        
+        // 创建视频项目
+        newItem = {
+          id: `canvas-video-${now}-${Math.random().toString(36).substring(2, 8)}`,
+          type: 'video',
+          name: `画布(视频...)`,
+          position: { x: 0, y: 0 },
+          videoUrl: finalUrl,
+          thumbnailUrl: thumbnailUrl,
+          prompt: prompt,
+          createdAt: now,
+          updatedAt: now,
+        } as DesktopVideoItem;
+      } else {
+        // 创建图片项目
+        newItem = {
+          id: `canvas-img-${now}-${Math.random().toString(36).substring(2, 8)}`,
+          type: 'image',
+          name: `画布(${prompt.slice(0, 10)}...)`,
+          position: { x: 0, y: 0 },
+          imageUrl: finalUrl,
+          prompt: prompt,
+          createdAt: now,
+          updatedAt: now,
+        } as DesktopImageItem;
+      }
       
       // 如果有画布ID，尝试添加到对应文件夹
       const folderId = canvasId ? canvasToFolderMap[canvasId] : undefined;
       
       if (folderId) {
-        // 添加图片到桌面
-        handleAddToDesktop(newImageItem);
+        // 添加项目到桌面
+        handleAddToDesktop(newItem as DesktopImageItem);
         
-        // 将图片添加到画布文件夹
+        // 将项目添加到画布文件夹
         setDesktopItems(prev => {
           const folder = prev.find(item => item.id === folderId) as DesktopFolderItem | undefined;
           if (folder) {
             const updatedFolder: DesktopFolderItem = {
               ...folder,
-              itemIds: [...folder.itemIds, newImageItem.id],
+              itemIds: [...folder.itemIds, newItem.id],
               updatedAt: now,
             };
             const newItems = prev.map(item => item.id === folderId ? updatedFolder : item);
@@ -2885,11 +2991,11 @@ const App: React.FC = () => {
           }
           return prev;
         });
-        console.log('[Canvas] 图片已添加到画布文件夹:', canvasName, newImageItem.name);
+        console.log('[Canvas] 项目已添加到画布文件夹:', canvasName, newItem.name);
       } else {
         // 无对应文件夹，直接添加到桌面
-        handleAddToDesktop(newImageItem);
-        console.log('[Canvas] 图片已同步到桌面:', newImageItem.name);
+        handleAddToDesktop(newItem as DesktopImageItem);
+        console.log('[Canvas] 项目已同步到桌面:', newItem.name);
       }
     }, [handleAddToDesktop, canvasToFolderMap, safeDesktopSave]);
 
