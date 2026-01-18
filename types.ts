@@ -150,6 +150,46 @@ export interface RHInputField {
   defaultValue?: string;        // 默认值
 }
 
+// RunningHub API 配置状态
+export interface RHApiConfig {
+  configured: boolean;
+  baseUrl: string;
+  apiKeyPreview: string | null;
+}
+
+// RunningHub AI 应用节点信息（从MAPI返回）
+export interface RHAIAppNodeInfoItem {
+  nodeId: string;
+  nodeName: string;
+  fieldName: string;
+  fieldValue: string;
+  fieldData?: string;
+  fieldType: 'IMAGE' | 'STRING' | 'LIST' | 'AUDIO' | 'VIDEO';
+  description: string;
+  descriptionEn?: string;
+}
+
+// RunningHub AI 应用信息
+export interface RHAIAppInfo {
+  webappName: string;
+  nodeInfoList: RHAIAppNodeInfoItem[];
+  covers: Array<{
+    id: string;
+    url: string;
+    thumbnailUri: string;
+    imageWidth?: string;
+    imageHeight?: string;
+  }>;
+  tags?: Array<{ id: string; name: string; nameEn?: string }>;
+  statisticsInfo?: {
+    likeCount: string;
+    downloadCount: string;
+    useCount: string;
+    pv: string;
+    collectCount: string;
+  };
+}
+
 export interface PromptPreset {
   id: number;
   title: string;

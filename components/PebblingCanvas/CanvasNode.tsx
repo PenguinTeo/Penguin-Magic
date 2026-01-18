@@ -30,7 +30,7 @@ interface CanvasNodeProps {
   onStop: (id: string) => void;
   onDownload: (id: string) => void;
   onStartConnection: (nodeId: string, portType: 'in' | 'out', position: { x: number, y: number }) => void;
-  onEndConnection: (nodeId: string) => void;
+  onEndConnection: (nodeId: string, portKey?: string) => void; // portKey: rh-config 参数端口标识
   onDragStart: (e: React.MouseEvent, id: string) => void;
   scale: number;
   effectiveColor?: string;
@@ -39,6 +39,7 @@ interface CanvasNodeProps {
   onCreateFrameExtractor?: (sourceVideoNodeId: string) => void; // 创建帧提取器节点
   onExtractFrameFromExtractor?: (nodeId: string, time: number) => void; // 从帧提取器提取帧
   hasDownstream?: boolean; // 是否有下游连接
+  incomingConnections?: Array<{ fromNode: string; toPortKey?: string }>; // 连入当前节点的连接
 }
 
 const CanvasNodeItem: React.FC<CanvasNodeProps> = ({ 
@@ -59,7 +60,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   onExtractFrame,
   onCreateFrameExtractor,
   onExtractFrameFromExtractor,
-  hasDownstream = false
+  hasDownstream = false,
+  incomingConnections = []
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState(node.content);
@@ -85,6 +87,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   const [customFrameTime, setCustomFrameTime] = useState<string>(''); // 任意帧提取时间（秒）
 
   const [isResizing, setIsResizing] = useState(false);
+  const [openSelectKey, setOpenSelectKey] = useState<string | null>(null); // 自定义下拉框状态
+  const [rhBatchCount, setRhBatchCount] = useState(1); // rh-config 节点批次数量
   const nodeRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -493,34 +497,58 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             <div className="flex-1 p-3 flex flex-col justify-center gap-3">
                  <div className="space-y-1">
                      <label className="text-[9px] font-bold text-zinc-500 uppercase px-1">Resize Mode</label>
-                     <div className="relative group/select">
-                        <select 
-                            value={resizeMode}
-                            onChange={(e) => {
-                                const newVal = e.target.value as any;
-                                setResizeMode(newVal);
-                                // IMPORTANT: Pass newVal directly to avoid closure staleness
-                                onUpdate(node.id, { 
-                                    data: { 
-                                        ...node.data, 
-                                        resizeMode: newVal,
-                                        resizeWidth,
-                                        resizeHeight
-                                    }
-                                });
+                     <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
+                        <button
+                            className={inputBaseClass + " flex items-center justify-between gap-1 cursor-pointer hover:border-blue-500/30"}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenSelectKey(openSelectKey === 'resize-mode' ? null : 'resize-mode');
                             }}
-                            className={inputBaseClass + " appearance-none pr-8 cursor-pointer hover:border-blue-500/30"}
-                            onMouseDown={(e) => e.stopPropagation()}
                         >
-                            <option value="longest">Longest Side</option>
-                            <option value="shortest">Shortest Side</option>
-                            <option value="width">Fixed Width</option>
-                            <option value="height">Fixed Height</option>
-                            <option value="exact">Exact (Stretch)</option>
-                        </select>
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500 group-hover/select:text-white transition-colors">
-                            <ChevronDown size={14} />
-                        </div>
+                            <span className="truncate">
+                                {resizeMode === 'longest' ? 'Longest Side' :
+                                 resizeMode === 'shortest' ? 'Shortest Side' :
+                                 resizeMode === 'width' ? 'Fixed Width' :
+                                 resizeMode === 'height' ? 'Fixed Height' : 'Exact (Stretch)'}
+                            </span>
+                            <ChevronDown className={`w-3 h-3 text-zinc-400 transition-transform ${openSelectKey === 'resize-mode' ? 'rotate-180' : ''}`} />
+                        </button>
+                        {openSelectKey === 'resize-mode' && (
+                            <div className="absolute z-50 w-full mt-1 bg-[#1a1a1e] border border-white/20 rounded-lg shadow-xl overflow-hidden">
+                                {[
+                                    { value: 'longest', label: 'Longest Side' },
+                                    { value: 'shortest', label: 'Shortest Side' },
+                                    { value: 'width', label: 'Fixed Width' },
+                                    { value: 'height', label: 'Fixed Height' },
+                                    { value: 'exact', label: 'Exact (Stretch)' }
+                                ].map((opt) => (
+                                    <div
+                                        key={opt.value}
+                                        className={`px-2 py-1.5 text-[10px] cursor-pointer transition-colors ${
+                                            resizeMode === opt.value 
+                                                ? 'bg-blue-500/20 text-blue-300' 
+                                                : 'text-zinc-300 hover:bg-white/10'
+                                        }`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const newVal = opt.value as any;
+                                            setResizeMode(newVal);
+                                            onUpdate(node.id, { 
+                                                data: { 
+                                                    ...node.data, 
+                                                    resizeMode: newVal,
+                                                    resizeWidth,
+                                                    resizeHeight
+                                                }
+                                            });
+                                            setOpenSelectKey(null);
+                                        }}
+                                    >
+                                        {opt.label}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                      </div>
                  </div>
                  
@@ -926,6 +954,469 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     if (node.type === 'llm') return renderLLMNode();
     if (node.type === 'resize') return renderMultiAngleNode();
 
+    // RunningHub节点 - 调用RunningHub AI应用
+    if (node.type === 'runninghub') {
+        const webappId = node.data?.webappId || '';
+        const appInfo = node.data?.appInfo;
+        const nodeInputs = node.data?.nodeInputs || {};
+        const outputUrl = node.data?.outputUrl;
+        const outputType = node.data?.outputType;
+        const errorMsg = node.data?.error;
+        
+        // 检查是否有输出图片
+        const hasOutput = outputUrl && (outputType === 'image' || outputUrl.includes('.png') || outputUrl.includes('.jpg'));
+        
+        const handleWebappIdChange = (value: string) => {
+            onUpdate(node.id, { data: { ...node.data, webappId: value } });
+        };
+        
+        const handleNodeInputChange = (key: string, value: string) => {
+            onUpdate(node.id, { data: { ...node.data, nodeInputs: { ...nodeInputs, [key]: value } } });
+        };
+        
+        return (
+            <div className="w-full h-full bg-[#0a1a14] flex flex-col border border-emerald-500/30 rounded-xl overflow-hidden relative shadow-lg">
+                {/* 头部 */}
+                <div className="h-8 border-b border-emerald-500/20 flex items-center justify-between px-3 bg-emerald-500/10 shrink-0">
+                    <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center">
+                            <span className="text-white font-black text-[10px]">R</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-200 truncate max-w-[200px]">
+                            {appInfo?.title || 'RunningHub'}
+                        </span>
+                    </div>
+                    <span className="text-[8px] text-emerald-300/60 bg-emerald-500/20 px-1.5 py-0.5 rounded">RH</span>
+                </div>
+                
+                {hasOutput ? (
+                    // 有输出：显示结果图片
+                    <div className="flex-1 relative bg-black">
+                        <img 
+                            src={outputUrl} 
+                            alt="Result" 
+                            className="w-full h-full object-contain" 
+                            draggable={false}
+                        />
+                    </div>
+                ) : (
+                    // 无输出：显示配置界面
+                    <div className="flex-1 p-3 flex flex-col gap-2 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
+                        {/* WebApp ID 输入 */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-emerald-400/80 uppercase tracking-wider font-medium">AI 应用 ID</label>
+                            <input
+                                type="text"
+                                className="w-full bg-black/40 border border-emerald-500/20 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none focus:border-emerald-500/50 placeholder-zinc-600"
+                                placeholder="输入 webappId"
+                                value={webappId}
+                                onChange={(e) => handleWebappIdChange(e.target.value)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            />
+                        </div>
+                        
+                        {/* 应用信息加载提示 */}
+                        {webappId && !appInfo && (
+                            <div className="text-center py-4">
+                                <div className="text-[10px] text-zinc-500">输入应用ID后点击执行加载应用信息</div>
+                            </div>
+                        )}
+                        
+                        {/* 应用参数输入 */}
+                        {appInfo?.nodeInfoList && appInfo.nodeInfoList.length > 0 && (
+                            <div className="space-y-2">
+                                <label className="text-[10px] text-emerald-400/80 uppercase tracking-wider font-medium">应用参数</label>
+                                {appInfo.nodeInfoList.map((info: any, idx: number) => {
+                                    const key = `${info.nodeId}_${info.fieldName}`;
+                                    return (
+                                        <div key={key} className="space-y-1">
+                                            <label className="text-[9px] text-zinc-500">{info.fieldName}</label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-emerald-500/30 placeholder-zinc-600"
+                                                placeholder={info.fieldValue || '输入值'}
+                                                value={nodeInputs[key] || ''}
+                                                onChange={(e) => handleNodeInputChange(key, e.target.value)}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        
+                        {/* 错误显示 */}
+                        {errorMsg && (
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-[10px] text-red-300">
+                                {errorMsg}
+                            </div>
+                        )}
+                    </div>
+                )}
+                
+                {/* 底部状态 */}
+                <div className="h-6 bg-black/30 border-t border-emerald-500/10 px-3 flex items-center justify-between text-[10px] text-zinc-500">
+                    <span>{hasOutput ? '✅ 已生成' : (appInfo ? `参数: ${appInfo.nodeInfoList?.length || 0}` : '待配置')}</span>
+                    <span className="text-emerald-400/60">{webappId ? webappId.slice(0, 8) + '...' : ''}</span>
+                </div>
+                
+                {isRunning && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-30">
+                        <div className="w-8 h-8 border-2 border-emerald-400/50 border-t-emerald-400 rounded-full animate-spin"></div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+    
+    // RunningHub Config 节点 - 配置参数的节点（每个参数可拉线连接）
+    if (node.type === 'rh-config') {
+        const webappId = node.data?.webappId || '';
+        const appInfo = node.data?.appInfo;
+        const nodeInputs = node.data?.nodeInputs || {};
+        const coverUrl = node.data?.coverUrl;
+        const errorMsg = node.data?.error;
+        const appName = (appInfo as any)?.webappName || appInfo?.title || '配置应用';
+        
+        const handleNodeInputChange = (key: string, value: string) => {
+            onUpdate(node.id, { data: { ...node.data, nodeInputs: { ...nodeInputs, [key]: value } } });
+        };
+        
+        // 处理文件上传
+        const handleFileUpload = async (key: string, fieldType: string) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = fieldType === 'IMAGE' ? 'image/*' : (fieldType === 'VIDEO' ? 'video/*' : '*/*');
+            input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                
+                // 读取文件为 base64
+                const reader = new FileReader();
+                reader.onload = async (ev) => {
+                    if (ev.target?.result) {
+                        try {
+                            // 上传图片到服务器
+                            const { uploadImage } = await import('../../services/api/runninghub');
+                            const result = await uploadImage(ev.target.result as string);
+                            if (result.success && result.data?.fileKey) {
+                                handleNodeInputChange(key, result.data.fileKey);
+                            } else {
+                                console.error('上传失败:', result.error);
+                            }
+                        } catch (err) {
+                            console.error('上传异常:', err);
+                        }
+                    }
+                };
+                reader.readAsDataURL(file);
+            };
+            input.click();
+        };
+        
+        return (
+            <div className="w-full h-full bg-[#0a1a14] flex flex-col border border-emerald-500/30 rounded-xl overflow-hidden relative shadow-lg">
+                {/* 头部 - 带批次选择、RUN、取消按钮 */}
+                <div className="h-10 border-b border-emerald-500/20 flex items-center justify-between px-3 bg-emerald-500/10 shrink-0">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="w-6 h-6 rounded bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white font-black text-xs">R</span>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-bold text-emerald-200 truncate max-w-[120px]">
+                                {appName}
+                            </span>
+                            <span className="text-[8px] text-emerald-400/60 truncate">
+                                ID: {webappId.slice(0, 10)}...
+                            </span>
+                        </div>
+                    </div>
+                    {/* 批次 + RUN + 取消按钮 */}
+                    <div className="flex items-center gap-1.5">
+                        {/* 批次选择器 */}
+                        <div className="flex items-center bg-black/30 rounded-lg border border-emerald-500/20" onMouseDown={(e) => e.stopPropagation()}>
+                            <button
+                                className="w-6 h-6 flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded-l-lg transition-colors"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRhBatchCount(Math.max(1, rhBatchCount - 1));
+                                }}
+                            >
+                                <span className="text-sm font-bold">-</span>
+                            </button>
+                            <span className="w-6 text-center text-[10px] font-bold text-emerald-200">{rhBatchCount}</span>
+                            <button
+                                className="w-6 h-6 flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded-r-lg transition-colors"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRhBatchCount(Math.min(10, rhBatchCount + 1));
+                                }}
+                            >
+                                <span className="text-sm font-bold">+</span>
+                            </button>
+                        </div>
+                        {/* RUN 按钮 */}
+                        <button
+                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${
+                                isRunning 
+                                    ? 'bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30' 
+                                    : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-lg shadow-emerald-500/30'
+                            }`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (isRunning) {
+                                    onStop(node.id);
+                                } else {
+                                    onExecute(node.id, rhBatchCount);
+                                }
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            {isRunning ? (
+                                <>
+                                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                                    </svg>
+                                    STOP
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                    RUN
+                                </>
+                            )}
+                        </button>
+                        {/* 取消/关闭按钮 */}
+                        <button
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-zinc-700/50 hover:bg-red-500/30 text-zinc-400 hover:text-red-300 transition-colors"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(node.id);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            title="删除节点"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                {/* 封面图 */}
+                {coverUrl && (
+                    <div className="w-full h-28 bg-black relative shrink-0">
+                        <img 
+                            src={coverUrl} 
+                            alt="Cover" 
+                            className="w-full h-full object-cover opacity-80" 
+                            draggable={false}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0a1a14]"></div>
+                    </div>
+                )}
+                
+                {/* 参数配置区 - 每个参数有连接点 */}
+                <div className="flex-1 p-2 flex flex-col gap-1.5 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
+                    <div className="text-[9px] text-emerald-400/80 uppercase tracking-wider font-medium px-1">
+                        应用参数 <span className="text-zinc-500">({appInfo?.nodeInfoList?.length || 0})</span>
+                    </div>
+                    
+                    {appInfo?.nodeInfoList && appInfo.nodeInfoList.length > 0 ? (
+                        appInfo.nodeInfoList.map((info: any, idx: number) => {
+                            const key = `${info.nodeId}_${info.fieldName}`;
+                            const fieldType = info.fieldType?.toUpperCase() || 'STRING';
+                            const isFileType = ['IMAGE', 'VIDEO', 'AUDIO'].includes(fieldType);
+                            
+                            return (
+                                <div key={key} className="relative bg-black/30 rounded-lg p-2 pl-6">
+                                    {/* 左侧连接点 - 支持拉线输入 */}
+                                    <div 
+                                        className="absolute left-1 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-emerald-500/30 border-2 border-emerald-500 cursor-crosshair hover:bg-emerald-500 hover:scale-125 transition-all z-10"
+                                        data-port-type="in"
+                                        data-port-key={key}
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            onStartConnection(node.id, 'in', { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+                                        }}
+                                        onMouseUp={(e) => {
+                                            e.stopPropagation();
+                                            // 传入 portKey 用于标识连接到哪个参数
+                                            onEndConnection(node.id, key);
+                                        }}
+                                        title={`连接到: ${info.description || info.fieldName}`}
+                                    />
+                                    
+                                    {/* 参数标题和类型 */}
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-[9px] text-zinc-400 truncate max-w-[200px]">
+                                            {info.description || info.fieldName}
+                                        </label>
+                                        <span className="text-[7px] text-emerald-500/60 bg-emerald-500/10 px-1 py-0.5 rounded">
+                                            {fieldType}
+                                        </span>
+                                    </div>
+                                    
+                                    {/* 输入控件 - 根据类型选择不同的UI */}
+                                    {(() => {
+                                        // 检查该参数是否有连线
+                                        const hasConnection = incomingConnections.some(c => c.toPortKey === key);
+                                        
+                                        // 如果有连接，显示“已连接”状态
+                                        if (hasConnection) {
+                                            return (
+                                                <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded px-2 py-1">
+                                                    <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                                    </svg>
+                                                    <span className="text-[10px] text-emerald-300 font-medium">已连接</span>
+                                                    {nodeInputs[key] && (
+                                                        <span className="text-[9px] text-emerald-400/60 truncate max-w-[120px]">
+                                                            {nodeInputs[key].length > 20 ? nodeInputs[key].slice(0, 20) + '...' : nodeInputs[key]}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+                                        
+                                        // LIST 类型使用下拉框
+                                        const isListType = fieldType === 'LIST' || fieldType === 'COMBO';
+                                        
+                                        // 解析下拉选项（只对 LIST 类型）
+                                        let options: string[] = [];
+                                        let defaultValue = info.fieldValue || '';
+                                        
+                                        if (isListType && info.fieldData) {
+                                            try {
+                                                const parsed = JSON.parse(info.fieldData);
+                                                if (Array.isArray(parsed)) {
+                                                    // 检查是否是 [[options], {default}] 格式
+                                                    if (parsed.length === 2 && Array.isArray(parsed[0]) && typeof parsed[1] === 'object') {
+                                                        options = parsed[0].map((v: any) => String(v));
+                                                        if (parsed[1].default) defaultValue = String(parsed[1].default);
+                                                    } else {
+                                                        // 简单数组格式 ["opt1", "opt2"]
+                                                        options = parsed.map((v: any) => String(v));
+                                                    }
+                                                }
+                                            } catch {
+                                                // JSON 解析失败，使用逗号分隔
+                                                options = info.fieldData.split(',').map((s: string) => s.trim());
+                                            }
+                                        }
+                                        
+                                        // IMAGE/VIDEO/AUDIO 类型 - 文件输入框
+                                        if (isFileType) {
+                                            return (
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        type="text"
+                                                        className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-200 outline-none focus:border-emerald-500/30 placeholder-zinc-600"
+                                                        placeholder="输入Key或拉线连接"
+                                                        value={nodeInputs[key] || ''}
+                                                        onChange={(e) => handleNodeInputChange(key, e.target.value)}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                    />
+                                                    <button
+                                                        className="px-1.5 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded text-[9px] text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+                                                        onClick={() => handleFileUpload(key, fieldType)}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        title="上传文件"
+                                                    >
+                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            );
+                                        }
+                                        
+                                        // LIST 类型 - 自定义下拉框
+                                        if (isListType && options.length > 0) {
+                                            const currentValue = nodeInputs[key] || defaultValue || options[0] || '';
+                                            return (
+                                                <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-200 outline-none hover:border-emerald-500/30 flex items-center justify-between gap-1"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setOpenSelectKey(openSelectKey === key ? null : key);
+                                                        }}
+                                                    >
+                                                        <span className="truncate">{currentValue || '选择...'}</span>
+                                                        <ChevronDown className={`w-3 h-3 text-emerald-400 transition-transform ${openSelectKey === key ? 'rotate-180' : ''}`} />
+                                                    </button>
+                                                    {openSelectKey === key && (
+                                                        <div className="absolute z-50 w-full mt-1 bg-[#0a1a14] border border-emerald-500/30 rounded-lg shadow-xl max-h-48 overflow-y-auto scrollbar-hide">
+                                                            {options.map((opt: string, optIdx: number) => (
+                                                                <div
+                                                                    key={optIdx}
+                                                                    className={`px-2 py-1.5 text-[10px] cursor-pointer transition-colors ${
+                                                                        currentValue === opt 
+                                                                            ? 'bg-emerald-500/20 text-emerald-300' 
+                                                                            : 'text-zinc-300 hover:bg-emerald-500/10 hover:text-emerald-200'
+                                                                    }`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleNodeInputChange(key, opt);
+                                                                        setOpenSelectKey(null);
+                                                                    }}
+                                                                >
+                                                                    {opt}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+                                        
+                                        // STRING 类型和其他 - 文本输入框（支持直接编辑和连线输入）
+                                        return (
+                                            <input
+                                                type="text"
+                                                className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-200 outline-none focus:border-emerald-500/30 placeholder-zinc-600"
+                                                placeholder={info.fieldValue || '输入文本或拉线连接...'}
+                                                value={nodeInputs[key] || ''}
+                                                onChange={(e) => handleNodeInputChange(key, e.target.value)}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                            />
+                                        );
+                                    })()}
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className="text-center py-4">
+                            <div className="text-[10px] text-zinc-500">无可配置参数</div>
+                        </div>
+                    )}
+                    
+                    {/* 错误显示 */}
+                    {errorMsg && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1.5 text-[9px] text-red-300">
+                            {errorMsg}
+                        </div>
+                    )}
+                </div>
+                
+                {/* 底部状态 */}
+                <div className="h-6 bg-black/30 border-t border-emerald-500/10 px-2 flex items-center justify-between text-[9px] text-zinc-500">
+                    <span>→ 输出图片</span>
+                </div>
+                
+                {isRunning && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center z-30">
+                        <div className="w-8 h-8 border-2 border-emerald-400/50 border-t-emerald-400 rounded-full animate-spin mb-2"></div>
+                        <span className="text-[10px] text-emerald-300">正在执行...</span>
+                    </div>
+                )}
+            </div>
+        );
+    }
     // Idea节点 - 类似BP的简化版本，包含提示词和设置
     if (node.type === 'idea') {
         const settings = node.data?.settings || {};
@@ -2354,7 +2845,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
              )}
 
              {/* Execute Button with Batch Count */}
-             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp'].includes(node.type) && (
+             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub'].includes(node.type) && (
                  <div className="flex items-center gap-0.5">
                    {/* 批量数量选择器 - 对图片生成类型节点显示 */}
                    {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video'].includes(node.type) && !isRunning && (

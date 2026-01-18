@@ -3,13 +3,40 @@ import { ThirdPartyApiConfig, getApiConfig, saveApiConfig, checkBalance } from '
 import { SoraConfig, getSoraConfig, saveSoraConfig } from '../../services/soraService';
 import { Icons } from './Icons';
 
+// RunningHub 配置
+interface RHConfig {
+  apiKey: string;
+}
+
+const getRHConfig = (): RHConfig => {
+  const stored = localStorage.getItem('runninghub_config');
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      return { apiKey: '' };
+    }
+  }
+  return { apiKey: '' };
+};
+
+const saveRHConfig = (config: RHConfig) => {
+  localStorage.setItem('runninghub_config', JSON.stringify(config));
+  // 同时保存到后端
+  fetch('/api/runninghub/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey: config.apiKey })
+  }).catch(console.error);
+};
+
 interface ApiSettingsProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
 const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'gemini' | 'sora'>('gemini');
+  const [activeTab, setActiveTab] = useState<'gemini' | 'sora' | 'runninghub'>('gemini');
   
   const [config, setConfig] = useState<ThirdPartyApiConfig>({
     enabled: true,
@@ -24,8 +51,13 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
     baseUrl: 'https://api.openai.com'
   });
   
+  const [rhConfig, setRhConfig] = useState<RHConfig>({
+    apiKey: ''
+  });
+  
   const [showApiKey, setShowApiKey] = useState(false);
   const [showSoraKey, setShowSoraKey] = useState(false);
+  const [showRHKey, setShowRHKey] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
@@ -36,6 +68,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
       setConfig(savedConfig);
       const savedSoraConfig = getSoraConfig();
       setSoraConfig(savedSoraConfig);
+      const savedRHConfig = getRHConfig();
+      setRhConfig(savedRHConfig);
       setSaveStatus('idle');
       setBalance(null);
     }
@@ -45,6 +79,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
     try {
       saveApiConfig(config);
       saveSoraConfig(soraConfig);
+      saveRHConfig(rhConfig);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (e) {
@@ -115,6 +150,12 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
           >
             Sora 视频
           </button>
+          <button 
+            onClick={() => setActiveTab('runninghub')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'runninghub' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-white/50 hover:text-white/70'}`}
+          >
+            RunningHub
+          </button>
         </div>
 
         <div className="p-4 space-y-4">
@@ -182,7 +223,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
                 </button>
               </div>
             </>
-          ) : (
+          ) : activeTab === 'sora' ? (
             /* Sora 配置 */
             <>
               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 mb-2">
@@ -213,6 +254,31 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
                 />
                 <p className="mt-1 text-xs text-white/40">支持第三方代理地址，如 T8star 等</p>
+              </div>
+            </>
+          ) : (
+            /* RunningHub 配置 */
+            <>
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 mb-2">
+                <p className="text-xs text-emerald-300">ℹ️ RunningHub 提供 AI 应用调用服务，请在官网获取 API Key</p>
+              </div>
+              <div>
+                <label className="block text-sm text-white/70 mb-2">RunningHub API Key</label>
+                <div className="relative">
+                  <input
+                    type={showRHKey ? 'text' : 'password'}
+                    value={rhConfig.apiKey}
+                    onChange={(e) => setRhConfig({ ...rhConfig, apiKey: e.target.value })}
+                    placeholder="输入你的 RunningHub API Key"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 pr-12"
+                  />
+                  <button onClick={() => setShowRHKey(!showRHKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 text-xs">
+                    {showRHKey ? '隐藏' : '显示'}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-white/40">
+                  获取 API Key: <a href="https://www.runninghub.cn" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">runninghub.cn</a>
+                </p>
               </div>
             </>
           )}

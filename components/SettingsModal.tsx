@@ -3,6 +3,7 @@ import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
 import { SoraConfig, getSoraConfig, saveSoraConfig } from '../services/soraService';
 import { VeoConfig, getVeoConfig, saveVeoConfig } from '../services/veoService';
+import { getRunningHubConfig, saveRunningHubConfig } from '../services/api/runninghub';
 import { Eye as EyeIcon, EyeOff as EyeOffIcon, Check, X, RefreshCw, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Folder as FolderIcon, ExternalLink as ExternalLinkIcon } from 'lucide-react';
 
 // 应用版本号 - 从vite构建时注入，来源于package.json
@@ -91,6 +92,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     baseUrl: 'https://ai.t8star.cn'
   });
 
+  const [runningHubConfig, setRunningHubConfig] = useState({
+    apiKey: '',
+    baseUrl: 'https://api.runninghub.fun'
+  });
+
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'up-to-date' | 'error'>('idle');
   const isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
 
@@ -98,6 +104,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [storagePath, setStoragePath] = useState<string>('');
   const [isCustomPath, setIsCustomPath] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
+  
+  // RunningHub 相关状态
+  const [showRunningHubKey, setShowRunningHubKey] = useState(false);
 
   useEffect(() => {
     setLocalThirdPartyUrl(thirdPartyConfig.baseUrl || 'https://ai.t8star.cn');
@@ -114,6 +123,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSoraConfig({ ...savedSoraConfig, baseUrl: savedSoraConfig.baseUrl || 'https://ai.t8star.cn' });
       const savedVeoConfig = getVeoConfig();
       setVeoConfig({ ...savedVeoConfig, baseUrl: savedVeoConfig.baseUrl || 'https://ai.t8star.cn' });
+      
+      // 获取 RunningHub 配置
+      const fetchRunningHubConfig = async () => {
+        try {
+          const result = await getRunningHubConfig();
+          if (result.success && result.data) {
+            setRunningHubConfig({
+              apiKey: result.data.configured ? 'dummy_key_for_display' : '', // 不显示真实密钥
+              baseUrl: result.data.baseUrl || 'https://api.runninghub.fun'
+            });
+          } else {
+            setRunningHubConfig({
+              apiKey: '',
+              baseUrl: 'https://api.runninghub.fun'
+            });
+          }
+        } catch (error) {
+          console.error('获取 RunningHub 配置失败:', error);
+          setRunningHubConfig({
+            apiKey: '',
+            baseUrl: 'https://api.runninghub.fun'
+          });
+        }
+      };
+      
+      fetchRunningHubConfig();
       setUpdateStatus('idle');
       
       // 获取存储路径
@@ -161,6 +196,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSaveVeoConfig = () => {
     saveVeoConfig(veoConfig);
     setSaveSuccessMessage('Veo3.1 视频 API 已保存');
+    setTimeout(() => setSaveSuccessMessage(null), 2000);
+  };
+
+  const handleSaveRunningHubConfig = async () => {
+    try {
+      const result = await saveRunningHubConfig(runningHubConfig.apiKey);
+      if (result.success) {
+        setSaveSuccessMessage('RunningHub API 已保存');
+        // 重置输入框以避免显示真实的密钥
+        setRunningHubConfig(prev => ({
+          ...prev,
+          apiKey: ''
+        }));
+      } else {
+        setSaveSuccessMessage(result.error || '保存失败');
+      }
+    } catch (error) {
+      console.error('保存 RunningHub 配置失败:', error);
+      setSaveSuccessMessage('保存失败');
+    }
     setTimeout(() => setSaveSuccessMessage(null), 2000);
   };
 
@@ -531,12 +586,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
               <button className="btn btn-primary w-full" onClick={handleSaveVeoConfig}>
-                保存 Veo3.1 配置
-              </button>
-            </div>
+              保存 Veo3.1 配置
+            </button>
           </div>
+        </div>
 
-          {/* THEME */}
+        {/* RUNNINGHUB API */}
+        <div>
+          <div className="section-title">RUNNINGHUB API</div>
+          
+          {/* RunningHub */}
+          <div className="config-card">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="option-icon" style={{ background: `linear-gradient(135deg, #10b981, #059669)` }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>RunningHub AI应用</h4>
+                <p className="text-xs" style={{ color: styles.textSecondary }}>配置RunningHub API Key以使用AI应用</p>
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">API 地址</label>
+              <input
+                type="text"
+                className="form-input"
+                value={runningHubConfig.baseUrl}
+                onChange={(e) => setRunningHubConfig({ ...runningHubConfig, baseUrl: e.target.value })}
+                placeholder="https://api.runninghub.fun"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">RunningHub API Key</label>
+              <div className="input-with-btn">
+                <input
+                  type={showRunningHubKey ? 'text' : 'password'}
+                  className="form-input"
+                  value={runningHubConfig.apiKey}
+                  onChange={(e) => setRunningHubConfig({ ...runningHubConfig, apiKey: e.target.value })}
+                  placeholder="输入你的 RunningHub API Key"
+                />
+                <button className="input-btn" onClick={() => setShowRunningHubKey(!showRunningHubKey)}>
+                  {showRunningHubKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <button className="btn btn-primary w-full" onClick={handleSaveRunningHubConfig}>
+              保存 RunningHub 配置
+            </button>
+          </div>
+        </div>
+
+        {/* THEME */}
           <div>
             <div className="section-title">THEME</div>
             <div className="grid grid-cols-2 gap-3">

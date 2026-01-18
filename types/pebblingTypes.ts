@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -79,6 +79,31 @@ export interface NodeData {
     imageUrl?: string; // 缩略图
   };
   bpInputs?: Record<string, string>; // 用户填写的BP输入值
+  
+  // RunningHub Node Specifics
+  webappId?: string; // RunningHub AI应用ID
+  appInfo?: {
+    title?: string;
+    webappName?: string;
+    nodeInfoList?: Array<{
+      nodeId: string;
+      nodeName?: string;
+      fieldName: string;
+      fieldValue?: string;
+      fieldData?: string;
+      fieldType?: string;
+      description?: string;
+    }>;
+    covers?: Array<{
+      url?: string;
+      thumbnailUri?: string;
+    }>;
+  };
+  nodeInputs?: Record<string, string>; // 用户填写的应用参数
+  outputUrl?: string; // RunningHub输出文件URL
+  outputType?: string; // 输出文件类型
+  coverUrl?: string; // 应用封面URL
+  error?: string; // 错误信息
 }
 
 export interface CanvasNode {
@@ -99,6 +124,7 @@ export interface Connection {
   id: string;
   fromNode: string;
   toNode: string;
+  toPortKey?: string; // rh-config 节点的参数端口标识
 }
 
 export interface Vec2 {
@@ -147,6 +173,10 @@ export const ARCTIC_COLORS = {
   // BP蓝 - BP节点（智能体模式）
   bpBlue: 'rgb(96, 165, 250)',
   bpBlueLight: 'rgb(147, 197, 253)',
+  
+  // RunningHub深绿 - RunningHub节点
+  rhGreen: 'rgb(16, 185, 129)',
+  rhGreenLight: 'rgb(52, 211, 153)',
 } as const;
 
 // 节点类型颜色映射
@@ -173,6 +203,10 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
     
     case 'bp':
       return { primary: ARCTIC_COLORS.bpBlue, light: ARCTIC_COLORS.bpBlueLight };
+    
+    case 'runninghub':
+    case 'rh-config':
+      return { primary: ARCTIC_COLORS.rhGreen, light: ARCTIC_COLORS.rhGreenLight };
     
     default:
       return { primary: ARCTIC_COLORS.arcticGray, light: ARCTIC_COLORS.arcticGrayLight };

@@ -15,6 +15,7 @@ const settingsRouter = require('./routes/settings');
 const desktopRouter = require('./routes/desktop');
 const imageOpsRouter = require('./routes/imageOps');
 const canvasRouter = require('./routes/canvas');
+const runninghubRouter = require('./routes/runninghub');
 
 const app = express();
 
@@ -102,6 +103,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/desktop', desktopRouter);
 app.use('/api/image-ops', imageOpsRouter);
 app.use('/api/canvas', canvasRouter);
+app.use('/api/runninghub', runninghubRouter);
 
 // 服务状态检查
 app.get('/api/status', (req, res) => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Key as KeyIcon, CheckCircle2 as CheckCircleIcon, ExternalLink as ExternalLinkIcon, Wallet as WalletIcon } from 'lucide-react';
+import { Key as KeyIcon, CheckCircle2 as CheckCircleIcon, ExternalLink as ExternalLinkIcon, Wallet as WalletIcon, Zap as ZapIcon } from 'lucide-react';
 import { ThirdPartyApiConfig } from '../types';
+import { getRunningHubConfig, saveRunningHubConfig } from '../services/api/runninghub';
 
 interface ApiKeyManagerProps {
   apiKey: string;
@@ -25,6 +26,12 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
   const [isTpKeySet, setIsTpKeySet] = useState(false);
   const [balanceInfo, setBalanceInfo] = useState<string | null>(null);
   const [isCheckingBalance, setIsCheckingBalance] = useState(false);
+  
+  // RunningHub 配置
+  const [rhApiKey, setRhApiKey] = useState('');
+  const [isRhKeySet, setIsRhKeySet] = useState(false);
+  const [rhKeyPreview, setRhKeyPreview] = useState<string | null>(null);
+  const [isRhSaving, setIsRhSaving] = useState(false);
 
   useEffect(() => {
     setIsKeySet(!!apiKey);
@@ -35,6 +42,42 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     setTpChatModel(thirdPartyConfig.chatModel || 'gemini-2.5-pro');
     setIsTpKeySet(!!thirdPartyConfig.apiKey);
   }, [thirdPartyConfig]);
+  
+  // 加载 RunningHub 配置状态
+  useEffect(() => {
+    loadRhConfig();
+  }, []);
+  
+  const loadRhConfig = async () => {
+    try {
+      const result = await getRunningHubConfig();
+      if (result.success && result.data) {
+        setIsRhKeySet(result.data.configured);
+        setRhKeyPreview(result.data.apiKeyPreview);
+      }
+    } catch (e) {
+      console.error('加载 RunningHub 配置失败:', e);
+    }
+  };
+  
+  const handleRhSave = async () => {
+    if (!rhApiKey.trim()) return;
+    setIsRhSaving(true);
+    try {
+      const result = await saveRunningHubConfig(rhApiKey.trim());
+      if (result.success) {
+        setIsRhKeySet(true);
+        setRhKeyPreview(result.data?.apiKeyPreview || null);
+        setRhApiKey('');
+      } else {
+        alert(result.error || '保存失败');
+      }
+    } catch (e) {
+      alert('保存失败');
+    } finally {
+      setIsRhSaving(false);
+    }
+  };
   
   const handleSave = () => {
     if (!keyInput.trim()) return;
@@ -285,6 +328,67 @@ export const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
           </div>
         </>
       )}
+      
+      {/* RunningHub API Key 配置 */}
+      <div className="mt-4 pt-4 border-t border-gray-700">
+        <div className="flex items-center justify-between mb-3">
+          <label className="text-sm font-medium text-gray-400 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+            RunningHub API
+          </label>
+          {isRhKeySet && (
+            <div className="flex items-center gap-1 text-xs text-purple-400 bg-purple-900/30 px-2 py-0.5 rounded-full">
+              <CheckCircleIcon className="w-3.5 h-3.5" />
+              <span>已配置</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex flex-col gap-3 p-3 bg-purple-500/10 rounded-lg border border-purple-500/20">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-purple-400">RunningHub 配置</span>
+            {rhKeyPreview && (
+              <span className="text-[10px] text-gray-500 font-mono">{rhKeyPreview}</span>
+            )}
+          </div>
+          
+          {/* API Key */}
+          <div>
+            <label className="text-[10px] text-gray-500 mb-1 block">API Key</label>
+            <input
+              type="password"
+              value={rhApiKey}
+              onChange={(e) => setRhApiKey(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleRhSave()}
+              placeholder={isRhKeySet ? "输入新 Key 更新" : "输入 RunningHub API Key"}
+              className="w-full p-2 bg-gray-900/80 border border-gray-600 rounded-md text-xs focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-colors duration-200"
+            />
+          </div>
+          
+          <button
+            onClick={handleRhSave}
+            disabled={!rhApiKey.trim() || isRhSaving}
+            className="w-full py-2 bg-purple-600 text-white font-semibold rounded-lg text-xs shadow-md hover:bg-purple-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1"
+          >
+            <ZapIcon className="w-3 h-3" />
+            {isRhSaving ? '保存中...' : '保存配置'}
+          </button>
+          
+          <p className="text-[10px] text-gray-500 leading-relaxed">
+            RunningHub 用于调用 AI 应用和 ComfyUI 工作流，配置后可使用创意库中的 RunningHub 应用。
+          </p>
+          
+          {/* 获取API链接 */}
+          <a 
+            href="https://www.runninghub.cn" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-[11px] text-center text-purple-400 hover:text-purple-300 underline underline-offset-2 transition-colors"
+          >
+            👉 点击这里获取 RunningHub API Key
+          </a>
+        </div>
+      </div>
     </div>
   );
 };

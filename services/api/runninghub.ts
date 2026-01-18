@@ -53,6 +53,32 @@ export const getRunningHubConfig = async (): Promise<{
 };
 
 /**
+ * 保存 RunningHub API Key
+ */
+export const saveRunningHubConfig = async (apiKey: string): Promise<{
+    success: boolean;
+    data?: {
+        configured: boolean;
+        apiKeyPreview: string;
+    };
+    error?: string;
+}> => {
+    return post('/runninghub/config', { apiKey });
+};
+
+/**
+ * 获取 AI 应用信息
+ * 包括 nodeInfoList、应用名称、封面等
+ */
+export const getAIAppInfo = async (webappId: string): Promise<{
+    success: boolean;
+    data?: RHAIAppInfo;
+    error?: string;
+}> => {
+    return post('/runninghub/ai-app/info', { webappId });
+};
+
+/**
  * 创建任务
  */
 export const createRunningHubTask = async (
@@ -126,6 +152,23 @@ export const uploadToRunningHub = async (
 };
 
 /**
+ * 上传图片到 RunningHub（base64）
+ * 返回 fileKey 用于作为 fieldValue
+ */
+export const uploadImage = async (
+    base64Data: string
+): Promise<{
+    success: boolean;
+    data?: {
+        fileKey: string;
+        fileName?: string;
+    };
+    error?: string;
+}> => {
+    return post('/runninghub/upload-image', { image: base64Data });
+};
+
+/**
  * 一站式生成：创建任务并等待结果
  */
 export const generateWithRunningHub = async (
@@ -180,8 +223,46 @@ export interface RHAIAppNodeInfo {
     description?: string;
 }
 
+// AI 应用节点信息（详细）
+export interface RHAIAppNodeInfoItem {
+    nodeId: string;
+    nodeName: string;
+    fieldName: string;
+    fieldValue: string;
+    fieldData?: string;
+    fieldType: string; // 'IMAGE' | 'STRING' | 'LIST' | 'AUDIO' | 'VIDEO'
+    description: string;
+    descriptionEn?: string;
+}
+
+// AI 应用封面
+export interface RHAIAppCover {
+    id: string;
+    url: string;
+    thumbnailUri: string;
+    imageWidth?: string;
+    imageHeight?: string;
+}
+
+// AI 应用信息
+export interface RHAIAppInfo {
+    webappName: string;
+    nodeInfoList: RHAIAppNodeInfoItem[];
+    covers: RHAIAppCover[];
+    tags?: Array<{ id: string; name: string; nameEn?: string }>;
+    statisticsInfo?: {
+        likeCount: string;
+        downloadCount: string;
+        useCount: string;
+        pv: string;
+        collectCount: string;
+    };
+    curl?: string;
+}
+
 /**
  * 运行 AI 应用并等待结果
+ * 调用一站式 /generate 接口，自动轮询等待结果
  */
 export const runAIApp = async (
     webappId: string,
@@ -197,9 +278,12 @@ export const runAIApp = async (
     error?: string;
     failedReason?: any;
 }> => {
-    return post('/runninghub/ai-app/run', {
+    // 使用一站式 /generate 接口，包含发起任务和轮询等待结果
+    return post('/runninghub/generate', {
         webappId,
         nodeInfoList,
-        cost
+        cost,
+        maxAttempts: 120,  // 最多等待 10 分钟 (120 * 5s)
+        interval: 5000     // 每 5 秒查询一次
     });
 };

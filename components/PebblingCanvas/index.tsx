@@ -10,6 +10,7 @@ import PresetCreationModal from './PresetCreationModal';
 import PresetInstantiationModal from './PresetInstantiationModal';
 import CanvasNameBadge from './CanvasNameBadge';
 import { editImageWithGemini, chatWithThirdPartyApi, getThirdPartyConfig, ImageEditConfig } from '../../services/geminiService';
+import { runAIApp, getAIAppInfo } from '../../services/api/runninghub';
 import * as canvasApi from '../../services/api/canvas';
 import { downloadRemoteToOutput } from '../../services/api/files';
 import { Icons } from './Icons';
@@ -3243,6 +3244,198 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   }
               }
           }
+          else if (node.type === 'runninghub') {
+              // RunningHub 节点：点击 RUN 后获取应用信息并创建配置节点
+              const webappId = node.data?.webappId;
+              
+              console.log('[RunningHub] 节点执行:', { webappId });
+              
+              if (!webappId) {
+                  // 无应用 ID，报错
+                  updateNode(nodeId, { status: 'error', data: { ...node.data, error: '请先输入应用 ID' } });
+                  console.error('[RunningHub] 无应用 ID');
+              } else {
+                  // 获取应用信息
+                  try {
+                      console.log('[RunningHub] 获取应用信息...');
+                      const appInfoResult = await getAIAppInfo(webappId);
+                      
+                      if (!appInfoResult.success || !appInfoResult.data) {
+                          throw new Error(appInfoResult.error || '获取应用信息失败');
+                      }
+                      
+                      const appInfo = appInfoResult.data;
+                      const appName = appInfo.webappName || webappId;
+                      console.log('[RunningHub] 获取应用信息成功:', appName);
+                      
+                      // 更新当前节点的 appInfo
+                      updateNode(nodeId, {
+                          status: 'completed',
+                          data: {
+                              ...node.data,
+                              appInfo,
+                              error: undefined
+                          }
+                      });
+                      
+                      // 创建配置节点 (rh-config)
+                      const configNodeId = uuid();
+                      const configNode: CanvasNode = {
+                          id: configNodeId,
+                          type: 'rh-config',
+                          title: appName,
+                          content: '',
+                          x: node.x + node.width + 100,
+                          y: node.y,
+                          width: 320,
+                          height: Math.max(300, 150 + (appInfo.nodeInfoList?.length || 0) * 60),
+                          data: {
+                              webappId,
+                              appInfo,
+                              nodeInputs: {},
+                              coverUrl: appInfo.covers?.[0]?.url || appInfo.covers?.[0]?.thumbnailUri
+                          },
+                          status: 'idle'
+                      };
+                      
+                      // 初始化默认输入值
+                      const defaultInputs: Record<string, string> = {};
+                      appInfo.nodeInfoList?.forEach((info: any) => {
+                          const key = `${info.nodeId}_${info.fieldName}`;
+                          defaultInputs[key] = info.fieldValue || '';
+                      });
+                      configNode.data!.nodeInputs = defaultInputs;
+                      
+                      // 创建连接
+                      const newConnection = {
+                          id: uuid(),
+                          fromNode: nodeId,
+                          toNode: configNodeId
+                      };
+                      
+                      // 添加节点和连接 - 同时更新 ref 和 state
+                      nodesRef.current = [...nodesRef.current, configNode];
+                      connectionsRef.current = [...connectionsRef.current, newConnection];
+                      setNodes(prev => [...prev, configNode]);
+                      setConnections(prev => [...prev, newConnection]);
+                      setHasUnsavedChanges(true);
+                      
+                      console.log('[RunningHub] 已创建配置节点:', configNodeId.slice(0, 8));
+                      
+                      // 保存画布
+                      saveCurrentCanvas();
+                  } catch (err: any) {
+                      console.error('[RunningHub] 获取应用信息失败:', err);
+                      updateNode(nodeId, {
+                          status: 'error',
+                          data: { ...node.data, error: err.message || '获取应用信息失败' }
+                      });
+                  }
+              }
+          }
+          else if (node.type === 'rh-config') {
+              // RunningHub 配置节点：执行 AI 应用并创建输出节点
+              const webappId = node.data?.webappId;
+              const appInfo = node.data?.appInfo;
+              const nodeInputs = node.data?.nodeInputs || {};
+              
+              console.log('[RH-Config] 节点执行:', { webappId, hasAppInfo: !!appInfo });
+              
+              if (!webappId || !appInfo) {
+                  updateNode(nodeId, { status: 'error', data: { ...node.data, error: '缺少应用配置' } });
+                  return;
+              }
+              
+              try {
+                  const appName = (appInfo as any).webappName || appInfo.title || webappId;
+                  console.log('[RH-Config] 开始执行 AI 应用:', appName);
+                  
+                  // 立即创建输出节点（显示 loading）
+                  const outputNodeId = uuid();
+                  const outputNode: CanvasNode = {
+                      id: outputNodeId,
+                      type: 'image',
+                      content: '',
+                      x: node.x + node.width + 100,
+                      y: node.y,
+                      width: 300,
+                      height: 300,
+                      data: {},
+                      status: 'running'
+                  };
+                  
+                  const newConnection = {
+                      id: uuid(),
+                      fromNode: nodeId,
+                      toNode: outputNodeId
+                  };
+                  
+                  nodesRef.current = [...nodesRef.current, outputNode];
+                  connectionsRef.current = [...connectionsRef.current, newConnection];
+                  setNodes(prev => [...prev, outputNode]);
+                  setConnections(prev => [...prev, newConnection]);
+                  setHasUnsavedChanges(true);
+                  console.log('[RH-Config] 已创建输出节点:', outputNodeId.slice(0, 8));
+                  
+                  // 构建 nodeInfoList
+                  const nodeInfoList = appInfo.nodeInfoList?.map((info: any) => {
+                      const key = `${info.nodeId}_${info.fieldName}`;
+                      return {
+                          nodeId: info.nodeId,
+                          fieldName: info.fieldName,
+                          fieldValue: nodeInputs[key] || info.fieldValue || ''
+                      };
+                  }) || [];
+                  
+                  console.log('[RH-Config] nodeInfoList:', nodeInfoList);
+                  
+                  // 调用 API
+                  const result = await runAIApp(webappId, nodeInfoList);
+                  
+                  if (signal.aborted) return;
+                  
+                  if (result.success && result.data?.outputs?.length) {
+                      const output = result.data.outputs[0];
+                      const outputUrl = output.fileUrl;
+                      const outputType = output.fileType === 'video' ? 'video' : 'image';
+                      
+                      console.log('[RH-Config] 执行成功:', { outputUrl, outputType });
+                      
+                      // 更新输出节点
+                      const metadata = await extractImageMetadata(outputUrl);
+                      updateNode(outputNodeId, {
+                          content: outputUrl,
+                          data: { imageMetadata: metadata },
+                          status: 'completed'
+                      });
+                      
+                      // 更新配置节点状态
+                      updateNode(nodeId, { status: 'completed' });
+                      
+                      // 保存画布
+                      saveCurrentCanvas();
+                      
+                      // 同步到桌面
+                      if (outputType === 'image' && onImageGenerated) {
+                          onImageGenerated(outputUrl, `RunningHub: ${appName}`, currentCanvasId || undefined, canvasName);
+                      }
+                  } else {
+                      const errorMsg = result.error || '执行失败';
+                      console.error('[RH-Config] 执行失败:', errorMsg);
+                      updateNode(outputNodeId, { status: 'error' });
+                      updateNode(nodeId, {
+                          status: 'error',
+                          data: { ...node.data, error: errorMsg }
+                      });
+                  }
+              } catch (err: any) {
+                  console.error('[RH-Config] 执行异常:', err);
+                  updateNode(nodeId, {
+                      status: 'error',
+                      data: { ...node.data, error: err.message || '执行异常' }
+                  });
+              }
+          }
 
       } catch (e) {
           if ((e as Error).name !== 'AbortError') {
@@ -3587,16 +3780,111 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
      }
   };
 
-  const handleEndConnection = (targetNodeId: string) => {
+  const handleEndConnection = async (targetNodeId: string, portKey?: string) => {
       if (linkingState.active && linkingState.fromNode && linkingState.fromNode !== targetNodeId) {
-          const exists = connections.some(c => c.fromNode === linkingState.fromNode && c.toNode === targetNodeId);
+          const sourceNodeId = linkingState.fromNode;
+          const targetNode = nodes.find(n => n.id === targetNodeId);
+          const sourceNode = nodes.find(n => n.id === sourceNodeId);
+          
+          // 检查是否连接到 rh-config 节点的参数端口
+          if (targetNode?.type === 'rh-config' && portKey && sourceNode) {
+              console.log('[Connection] 连接到 rh-config 参数:', { portKey, sourceType: sourceNode.type });
+              
+              // 检查源节点是否有图片内容
+              const hasImageContent = sourceNode.content && (
+                  sourceNode.content.startsWith('data:image') ||
+                  sourceNode.content.startsWith('http') ||
+                  sourceNode.content.startsWith('/files/')
+              );
+              
+              // 检查源节点是否是文字节点
+              const isTextNode = sourceNode.type === 'text' || sourceNode.type === 'idea' || sourceNode.type === 'llm';
+              
+              if (hasImageContent) {
+                  try {
+                      console.log('[Connection] 开始上传图片到 RunningHub...');
+                      
+                      // 动态导入 uploadImage
+                      const { uploadImage } = await import('../../services/api/runninghub');
+                      
+                      // 如果是本地文件路径，需要先转换为 base64
+                      let imageData = sourceNode.content;
+                      if (imageData.startsWith('/files/') || imageData.startsWith('http')) {
+                          // 加载图片并转换为 base64
+                          const img = new Image();
+                          img.crossOrigin = 'anonymous';
+                          const loadPromise = new Promise<string>((resolve, reject) => {
+                              img.onload = () => {
+                                  const canvas = document.createElement('canvas');
+                                  canvas.width = img.naturalWidth;
+                                  canvas.height = img.naturalHeight;
+                                  const ctx = canvas.getContext('2d');
+                                  ctx?.drawImage(img, 0, 0);
+                                  resolve(canvas.toDataURL('image/png'));
+                              };
+                              img.onerror = () => reject(new Error('图片加载失败'));
+                          });
+                          
+                          let imgSrc = imageData;
+                          if (imageData.startsWith('/files/')) {
+                              imgSrc = `http://localhost:8765${imageData}`;
+                          }
+                          img.src = imgSrc;
+                          imageData = await loadPromise;
+                      }
+                      
+                      // 上传到 RunningHub
+                      const result = await uploadImage(imageData);
+                      
+                      if (result.success && result.data?.fileKey) {
+                          console.log('[Connection] 上传成功, fileKey:', result.data.fileKey);
+                          
+                          // 更新 rh-config 节点的参数值
+                          const nodeInputs = targetNode.data?.nodeInputs || {};
+                          updateNode(targetNodeId, {
+                              data: {
+                                  ...targetNode.data,
+                                  nodeInputs: {
+                                      ...nodeInputs,
+                                      [portKey]: result.data.fileKey
+                                  }
+                              }
+                          });
+                      } else {
+                          console.error('[Connection] 上传失败:', result.error);
+                      }
+                  } catch (err) {
+                      console.error('[Connection] 上传异常:', err);
+                  }
+              } else if (isTextNode && sourceNode.content) {
+                  // 文字节点连接到 STRING 参数 - 直接填入文本内容
+                  console.log('[Connection] 文字节点连接, 填入内容:', sourceNode.content.substring(0, 50));
+                  
+                  const nodeInputs = targetNode.data?.nodeInputs || {};
+                  updateNode(targetNodeId, {
+                      data: {
+                          ...targetNode.data,
+                          nodeInputs: {
+                              ...nodeInputs,
+                              [portKey]: sourceNode.content
+                          }
+                      }
+                  });
+              }
+          }
+          
+          // 创建连接
+          const exists = connections.some(c => c.fromNode === sourceNodeId && c.toNode === targetNodeId && c.toPortKey === portKey);
           if (!exists) {
-              setConnections(prev => [...prev, {
+              const newConnection = {
                   id: uuid(),
-                  fromNode: linkingState.fromNode!,
-                  toNode: targetNodeId
-              }]);
-              setHasUnsavedChanges(true); // 标记未保存
+                  fromNode: sourceNodeId,
+                  toNode: targetNodeId,
+                  toPortKey: portKey // 保存目标端口 key
+              };
+              connectionsRef.current = [...connectionsRef.current, newConnection];
+              setConnections(prev => [...prev, newConnection]);
+              setHasUnsavedChanges(true);
           }
       }
   };
@@ -4102,8 +4390,31 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
                     const startX = from.x + from.width;
                     const startY = from.y + from.height / 2;
-                    const endX = to.x;
-                    const endY = to.y + to.height / 2;
+                    
+                    // 计算终点位置 - 如果有 toPortKey，需要计算参数端口的 Y 位置
+                    let endX = to.x;
+                    let endY = to.y + to.height / 2;
+                    
+                    if (conn.toPortKey && to.type === 'rh-config' && to.data?.appInfo?.nodeInfoList) {
+                        // 计算参数端口的 Y 位置
+                        // rh-config 节点布局: 标题栏(32px) + 封面图(112px) + 参数标题(24px) + 参数项
+                        const headerHeight = 32; // 标题栏
+                        const coverHeight = to.data.coverUrl ? 112 : 0; // 封面图
+                        const paramTitleHeight = 24; // "应用参数" 标题
+                        const paramItemHeight = 60; // 每个参数项的高度
+                        const paramPadding = 8; // 上下边距
+                        
+                        // 找到参数在列表中的索引
+                        const portIndex = to.data.appInfo.nodeInfoList.findIndex((info: any) => 
+                            `${info.nodeId}_${info.fieldName}` === conn.toPortKey
+                        );
+                        
+                        if (portIndex >= 0) {
+                            // 计算参数端口的 Y 位置（参数项中心）
+                            endY = to.y + headerHeight + coverHeight + paramTitleHeight + paramPadding + 
+                                   (portIndex * paramItemHeight) + (paramItemHeight / 2);
+                        }
+                    }
                     
                     const isSelected = selectedConnectionId === conn.id;
                     
@@ -4265,6 +4576,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     scale={scale}
                     effectiveColor={node.type === 'relay' ? 'stroke-' + resolveEffectiveType(node.id).replace('text', 'emerald').replace('image', 'blue').replace('llm', 'purple') + '-400' : undefined}
                     hasDownstream={connections.some(c => c.fromNode === node.id)}
+                    incomingConnections={connections.filter(c => c.toNode === node.id).map(c => ({ fromNode: c.fromNode, toPortKey: c.toPortKey }))}
                     onSelect={(id, multi) => {
                         const newSet = new Set(multi ? selectedNodeIds : []);
                         newSet.add(id);

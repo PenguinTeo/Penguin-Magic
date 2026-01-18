@@ -158,6 +158,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <DraggableButton type="idea" icon={<Icons.Magic />} label="Idea Gen" onDragStart={onDragStart} onClick={() => onAdd('idea')} />
                 <DraggableButton type="relay" icon={<Icons.Relay />} label="Relay" onDragStart={onDragStart} onClick={() => onAdd('relay')} />
                 <DraggableButton type="edit" icon={<BananaIcon />} label="Magic" onDragStart={onDragStart} onClick={() => onAdd('edit')} />
+                <DraggableButton 
+                    type="runninghub" 
+                    icon={<span className="text-[10px] font-black">R</span>} 
+                    label="RunningHub" 
+                    onDragStart={onDragStart} 
+                    onClick={() => onAdd('runninghub')} 
+                />
             </div>
 
         </div>

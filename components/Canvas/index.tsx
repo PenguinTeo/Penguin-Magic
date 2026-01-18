@@ -34,9 +34,10 @@ import PromptNode from './nodes/PromptNode';
 import TextNode from './nodes/TextNode';
 import SaveImageNode from './nodes/SaveImageNode';
 import MultiAngleNode from './nodes/MultiAngleNode';
+import RHNode from './nodes/RHNode';
 
 // 节点类型定义
-export type CanvasNodeType = 'creative' | 'image' | 'prompt' | 'text' | 'saveImage' | 'multiAngle';
+export type CanvasNodeType = 'creative' | 'image' | 'prompt' | 'text' | 'saveImage' | 'multiAngle' | 'runninghub';
 
 export interface CanvasNodeData {
   [key: string]: unknown; // 索引签名，满足 Record<string, unknown> 约束
@@ -65,6 +66,7 @@ const nodeTypes: NodeTypes = {
   text: TextNode,
   saveImage: SaveImageNode,
   multiAngle: MultiAngleNode,
+  runninghub: RHNode,
 };
 
 // 自定义可删除边组件
@@ -426,6 +428,105 @@ export const Canvas: React.FC<CanvasProps> = ({
     setNodes((nds) => [...nds, newNode]);
   }, [setNodes, handleDeleteNode, handleEditNode]);
 
+  // 添加 RunningHub 节点
+  const addRHNode = useCallback(() => {
+    const nodeId = `runninghub-${Date.now()}`;
+    const newNode: Node<CanvasNodeData> = {
+      id: nodeId,
+      type: 'runninghub',
+      position: { x: 350 + Math.random() * 100, y: 150 + Math.random() * 100 },
+      data: {
+        label: 'RunningHub',
+        type: 'runninghub',
+        onDelete: handleDeleteNode,
+        onEdit: handleEditNode,
+        // onExecute 由 useEffect 绑定
+      },
+    };
+    setNodes((nds) => [...nds, newNode]);
+  }, [setNodes, handleDeleteNode, handleEditNode]);
+
+  // 执行 RunningHub 节点
+  const handleExecuteRHNode = useCallback(async (nodeId: string) => {
+    const rhNode = nodes.find(n => n.id === nodeId);
+    if (!rhNode || rhNode.type !== 'runninghub') return;
+    
+    const nodeData = rhNode.data as any;
+    if (!nodeData.webappId || !nodeData.appInfo) {
+      setNodes(nds => nds.map(n => 
+        n.id === nodeId 
+          ? { ...n, data: { ...n.data, error: '请先配置 AI 应用 ID' } }
+          : n
+      ));
+      return;
+    }
+    
+    // 设置执行中状态
+    setNodes(nds => nds.map(n => 
+      n.id === nodeId 
+        ? { ...n, data: { ...n.data, isExecuting: true, error: undefined } }
+        : n
+    ));
+    
+    try {
+      // 构建 nodeInfoList
+      const nodeInfoList = nodeData.appInfo.nodeInfoList.map((info: any) => {
+        const key = `${info.nodeId}_${info.fieldName}`;
+        return {
+          nodeId: info.nodeId,
+          fieldName: info.fieldName,
+          fieldValue: nodeData.nodeInputs?.[key] || info.fieldValue || '',
+        };
+      });
+      
+      // 检查是否有输入连接（图片输入）
+      const incomingEdges = edges.filter(e => e.target === nodeId);
+      for (const edge of incomingEdges) {
+        const sourceNode = nodes.find(n => n.id === edge.source);
+        if (!sourceNode) continue;
+        
+        // 如果上游是图片节点或 saveImage 节点，可以获取图片并上传
+        // TODO: 实现图片输入连接
+      }
+      
+      // 调用 RunningHub API
+      const { runAIApp } = await import('../../services/api/runninghub');
+      const result = await runAIApp(nodeData.webappId, nodeInfoList);
+      
+      if (result.success && result.data?.outputs?.[0]) {
+        const output = result.data.outputs[0];
+        setNodes(nds => nds.map(n => 
+          n.id === nodeId 
+            ? { 
+                ...n, 
+                data: { 
+                  ...n.data, 
+                  isExecuting: false, 
+                  error: undefined,
+                  outputUrl: output.fileUrl,
+                  outputType: output.fileType
+                } 
+              }
+            : n
+        ));
+        
+        // 保存到桌面
+        if (onSaveImage && output.fileUrl) {
+          onSaveImage(output.fileUrl, `RH-${Date.now()}`);
+        }
+      } else {
+        throw new Error(result.error || '生成失败');
+      }
+    } catch (error: any) {
+      console.error('[RH Node] 执行失败:', error);
+      setNodes(nds => nds.map(n => 
+        n.id === nodeId 
+          ? { ...n, data: { ...n.data, isExecuting: false, error: error?.message || '执行失败' } }
+          : n
+      ));
+    }
+  }, [nodes, edges, setNodes, onSaveImage]);
+
   // 执行单个保存图片节点
   const handleExecuteSingleNode = useCallback(async (nodeId: string) => {
     if (!onGenerateFromFlow || isExecuting) {
@@ -535,7 +636,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   }, [nodes, edges, onGenerateFromFlow, onSaveImage, isExecuting]);
 
-  // 确保 saveImage 节点都有执行回调（用于恢复的节点）
+  // 确保 saveImage 和 runninghub 节点都有执行回调（用于恢复的节点）
   useEffect(() => {
     let needUpdate = false;
     const updatedNodes = nodes.map(n => {
@@ -549,12 +650,22 @@ export const Canvas: React.FC<CanvasProps> = ({
           }
         };
       }
+      if (n.type === 'runninghub' && !(n.data as any).onExecute) {
+        needUpdate = true;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            onExecute: () => handleExecuteRHNode(n.id),
+          }
+        };
+      }
       return n;
     });
     if (needUpdate) {
       setNodes(updatedNodes);
     }
-  }, [nodes, handleExecuteSingleNode, setNodes]);
+  }, [nodes, handleExecuteSingleNode, handleExecuteRHNode, setNodes]);
 
   // 执行工作流
   const handleExecuteFlow = useCallback(async () => {
@@ -878,6 +989,16 @@ export const Canvas: React.FC<CanvasProps> = ({
               <span>保存图片</span>
             </button>
 
+            <button
+              onClick={addRHNode}
+              className="w-full px-4 py-2.5 text-sm font-medium rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-3"
+            >
+              <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center">
+                <span className="text-white font-black text-[10px]">R</span>
+              </div>
+              <span>RunningHub</span>
+            </button>
+
             <div className="h-px bg-white/10 my-2" />
 
             {/* 进度显示 */}
@@ -991,6 +1112,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               case 'text': return '#eab308';
               case 'saveImage': return theme.colors.primary;
               case 'multiAngle': return '#a855f7';
+              case 'runninghub': return '#10b981';
               default: return '#6b7280';
             }
           }}
