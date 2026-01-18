@@ -232,6 +232,57 @@ router.post('/download-remote-video', async (req, res) => {
 });
 
 // 批量生成缩略图（用于历史数据迁移）
+// 🔧 单独重建某个图片的缩略图
+router.post('/rebuild-thumbnail', async (req, res) => {
+  const { imageUrl } = req.body;
+  
+  if (!imageUrl || !imageUrl.startsWith('/files/')) {
+    return res.status(400).json({ success: false, error: '无效的图片URL' });
+  }
+
+  try {
+    // 解析路径: /files/output/filename.png
+    const parts = imageUrl.split('/');
+    if (parts.length < 4) {
+      return res.status(400).json({ success: false, error: '无效的图片路径格式' });
+    }
+
+    const dirName = parts[2]; // output, input, creative_images
+    const filename = parts[3];
+    
+    // 确定源目录
+    let sourceDir;
+    if (dirName === 'output') sourceDir = config.OUTPUT_DIR;
+    else if (dirName === 'input') sourceDir = config.INPUT_DIR;
+    else if (dirName === 'creative_images' || dirName === 'creative') sourceDir = config.CREATIVE_IMAGES_DIR;
+    else {
+      return res.status(400).json({ success: false, error: '不支持的目录' });
+    }
+
+    const sourcePath = path.join(sourceDir, filename);
+    
+    // 检查原图是否存在
+    const fs = require('fs');
+    if (!fs.existsSync(sourcePath)) {
+      return res.json({ success: false, error: '原图不存在' });
+    }
+
+    // 生成缩略图
+    const normalizedDirName = dirName === 'creative' ? 'creative_images' : dirName;
+    const result = await ThumbnailGenerator.generate(sourcePath, normalizedDirName);
+    
+    if (result.success) {
+      console.log(`[Thumbnail] 重建缩略图成功: ${filename}`);
+      res.json({ success: true, thumbnailUrl: result.thumbnailUrl });
+    } else {
+      res.json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    console.error('[Thumbnail] 重建失败:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.post('/generate-thumbnails', async (req, res) => {
   try {
     console.log('[Thumbnail] 开始批量生成缩略图...');

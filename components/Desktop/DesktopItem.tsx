@@ -3,21 +3,26 @@
  * 使用 React.memo 优化，减少不必要的重新渲染
  */
 
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useCallback } from 'react';
 import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem, DesktopVideoItem } from '../../types';
 import { normalizeImageUrl, getThumbnailUrl } from '../../utils/image';
 import { Folder as FolderIcon, AlertCircle, AlertTriangle, Video as VideoIcon } from 'lucide-react';
+import { rebuildThumbnail } from '../../services/api/files';
 
 // 默认占位图
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0NDQ0NDQiIHN0cm9rZS13aWR0aD0iMSI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjwvc3ZnPg==';
 
+// 🔧 缩略图重建记录（避免重复请求）
+const rebuildingThumbnails = new Set<string>();
+const failedThumbnails = new Set<string>();
+
 /**
  * 缩略图组件
- * 优先加载缩略图，失败时回退到原图
+ * 优先加载缩略图，失败时自动重建
  * 🔧 跳过视频URL，避免无效请求
  */
 const ThumbnailImage = memo<{ imageUrl: string; alt: string }>(({ imageUrl, alt }) => {
-  const [useThumbnail, setUseThumbnail] = useState(true);
+  const [src, setSrc] = useState(() => getThumbnailUrl(imageUrl));
   const [hasError, setHasError] = useState(false);
   
   // 🔧 如果是视频URL，直接显示占位图
@@ -33,21 +38,41 @@ const ThumbnailImage = memo<{ imageUrl: string; alt: string }>(({ imageUrl, alt 
     );
   }
   
-  const thumbnailUrl = getThumbnailUrl(imageUrl);
-  const originalUrl = normalizeImageUrl(imageUrl);
-  const shouldUseThumbnail = useThumbnail && imageUrl?.startsWith('/files/');
-  
-  const handleError = () => {
-    if (shouldUseThumbnail && useThumbnail) {
-      setUseThumbnail(false);
+  const handleError = useCallback(async () => {
+    if (hasError || failedThumbnails.has(imageUrl)) {
+      setSrc(PLACEHOLDER_IMAGE);
+      return;
+    }
+    if (rebuildingThumbnails.has(imageUrl)) return;
+    
+    // 🔧 尝试重建缩略图
+    if (imageUrl.startsWith('/files/')) {
+      rebuildingThumbnails.add(imageUrl);
+      try {
+        const result = await rebuildThumbnail(imageUrl);
+        if (result.success && result.thumbnailUrl) {
+          setSrc(result.thumbnailUrl + '?t=' + Date.now());
+        } else {
+          failedThumbnails.add(imageUrl);
+          setHasError(true);
+          setSrc(PLACEHOLDER_IMAGE);
+        }
+      } catch {
+        failedThumbnails.add(imageUrl);
+        setHasError(true);
+        setSrc(PLACEHOLDER_IMAGE);
+      } finally {
+        rebuildingThumbnails.delete(imageUrl);
+      }
     } else {
       setHasError(true);
+      setSrc(PLACEHOLDER_IMAGE);
     }
-  };
+  }, [imageUrl, hasError]);
   
   return (
     <img
-      src={hasError ? PLACEHOLDER_IMAGE : (shouldUseThumbnail ? thumbnailUrl : originalUrl)}
+      src={src}
       alt={alt}
       className="w-full h-full object-cover"
       draggable={false}
@@ -419,9 +444,35 @@ const StackPreview = memo<{ stack: DesktopStackItem; allItems: DesktopItem[] }>(
             }}
             draggable={false}
             loading="lazy"
-            onError={(e) => {
-              // 🔧 直接显示占位图，避免循环回退
-              (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
+            onError={async (e) => {
+              const target = e.target as HTMLImageElement;
+              const imageUrl = img.imageUrl;
+              
+              if (failedThumbnails.has(imageUrl)) {
+                target.src = PLACEHOLDER_IMAGE;
+                return;
+              }
+              if (rebuildingThumbnails.has(imageUrl)) return;
+              
+              if (imageUrl.startsWith('/files/')) {
+                rebuildingThumbnails.add(imageUrl);
+                try {
+                  const result = await rebuildThumbnail(imageUrl);
+                  if (result.success && result.thumbnailUrl) {
+                    target.src = result.thumbnailUrl + '?t=' + Date.now();
+                  } else {
+                    failedThumbnails.add(imageUrl);
+                    target.src = PLACEHOLDER_IMAGE;
+                  }
+                } catch {
+                  failedThumbnails.add(imageUrl);
+                  target.src = PLACEHOLDER_IMAGE;
+                } finally {
+                  rebuildingThumbnails.delete(imageUrl);
+                }
+              } else {
+                target.src = PLACEHOLDER_IMAGE;
+              }
             }}
           />
         );

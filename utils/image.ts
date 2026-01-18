@@ -81,24 +81,32 @@ export const getImageMimeType = (url: string): string => {
   }
 };
 
+// 🔧 视频文件返回占位图，不尝试加载
+const VIDEO_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM4YjVjZjYiIHN0cm9rZS13aWR0aD0iMSI+PHBvbHlnb24gcG9pbnRzPSIyMyA3IDEyIDEyIDIzIDE3IDIzIDciLz48cmVjdCB4PSIxIiB5PSI1IiB3aWR0aD0iMTUiIGhlaWdodD0iMTQiIHJ4PSIyIiByeT0iMiIvPjwvc3ZnPg==';
+
 /**
  * 获取缩略图URL
  * 将原图URL转换为缩略图URL
  * 支持的路径格式: /files/output/xxx.png, /files/input/xxx.jpg, /files/creative_images/xxx.png
- * 🔧 视频文件直接返回原始路径，不尝试获取缩略图
+ * 🔧 视频文件返回占位图，不尝试加载
  * @param originalUrl - 原图URL
  * @returns 缩略图URL，如果不支持则返回原图URL
  */
 export const getThumbnailUrl = (originalUrl: string | undefined | null): string => {
   if (!originalUrl) return '';
   
-  // 🔧 视频文件直接返回，不尝试获取缩略图
+  // 🔧 视频文件返回占位图，不要尝试加载
   if (originalUrl.includes('.mp4') || originalUrl.includes('.webm')) {
-    return originalUrl;
+    return VIDEO_PLACEHOLDER;
   }
   
   // 只处理本地文件路径
   if (!originalUrl.startsWith('/files/')) {
+    return originalUrl;
+  }
+  
+  // 🔧 已经是缩略图目录，直接返回
+  if (originalUrl.startsWith('/files/thumbnails/')) {
     return originalUrl;
   }
   

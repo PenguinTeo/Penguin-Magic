@@ -1,9 +1,15 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { GenerationHistory, DesktopImageItem, DesktopPosition } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
-import { Clock as ClockIcon } from 'lucide-react';
+import { Clock as ClockIcon, Video as VideoIcon } from 'lucide-react';
 import { createDesktopItemFromHistory } from './Desktop';
 import { normalizeImageUrl } from '../utils/image';
+
+// 🔧 检测是否为视频URL
+const isVideoUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.includes('.mp4') || url.includes('.webm') || url.startsWith('data:video');
+};
 
 interface HistoryDockProps {
   history: GenerationHistory[];
@@ -93,11 +99,17 @@ export const HistoryDock: React.FC<HistoryDockProps> = ({
           }}
         >
           <div className="w-20 h-20 rounded-xl overflow-hidden shadow-2xl border-2 border-blue-500 opacity-80">
-            <img
-              src={normalizeImageUrl(dragItem.imageUrl)}
-              alt=""
-              className="w-full h-full object-cover"
-            />
+            {isVideoUrl(dragItem.imageUrl) ? (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/60 to-gray-900">
+                <VideoIcon className="w-8 h-8 text-purple-300" />
+              </div>
+            ) : (
+              <img
+                src={normalizeImageUrl(dragItem.imageUrl)}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            )}
           </div>
           <p className="text-xs text-center text-white mt-1 bg-black/60 rounded px-2 py-0.5">
             拖到桌面
@@ -158,6 +170,12 @@ export const HistoryDock: React.FC<HistoryDockProps> = ({
                     borderColor: 'transparent',
                   }}
                 >
+                {/* 🔧 视频显示图标，图片正常加载 */}
+                {isVideoUrl(item.imageUrl) ? (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/60 to-gray-900">
+                    <VideoIcon className="w-6 h-6 text-purple-300" />
+                  </div>
+                ) : (
                   <img
                     src={normalizeImageUrl(item.imageUrl)}
                     alt={formatTime(item.timestamp)}
@@ -167,6 +185,7 @@ export const HistoryDock: React.FC<HistoryDockProps> = ({
                       (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
                     }}
                   />
+                )}
                 </div>
 
                 {/* 模型指示器 */}

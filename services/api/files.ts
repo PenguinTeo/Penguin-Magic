@@ -91,3 +91,12 @@ export const saveThumbnail = async (imageData: string, filename?: string): Promi
 }> => {
   return post('/files/save-thumbnail', { imageData, filename });
 };
+
+// 🔧 重建单个图片的缩略图
+export const rebuildThumbnail = async (imageUrl: string): Promise<{ 
+  success: boolean; 
+  thumbnailUrl?: string; 
+  error?: string 
+}> => {
+  return post('/files/rebuild-thumbnail', { imageUrl });
+};

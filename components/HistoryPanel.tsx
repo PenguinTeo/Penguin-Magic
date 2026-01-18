@@ -1,7 +1,13 @@
 import React from 'react';
 import { GenerationHistory } from '../types';
-import { Clock as ClockIcon, Trash2 as TrashIcon } from 'lucide-react';
+import { Clock as ClockIcon, Trash2 as TrashIcon, Video as VideoIcon } from 'lucide-react';
 import { normalizeImageUrl } from '../utils/image';
+
+// 🔧 检测是否为视频URL
+const isVideoUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.includes('.mp4') || url.includes('.webm') || url.startsWith('data:video');
+};
 
 interface HistoryPanelProps {
   history: GenerationHistory[];
@@ -60,15 +66,21 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
             className="group relative aspect-square rounded-lg overflow-hidden cursor-pointer border border-white/10 hover:border-blue-500/50 transition-all"
             onClick={() => onSelect(item)}
           >
-            <img
-              src={normalizeImageUrl(item.imageUrl)}
-              alt={`生成于 ${formatTime(item.timestamp)}`}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                // 图片加载失败时显示占位符
-                (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
-              }}
-            />
+            {/* 🔧 视频显示图标，图片正常加载 */}
+            {isVideoUrl(item.imageUrl) ? (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/60 to-gray-900">
+                <VideoIcon className="w-6 h-6 text-purple-300" />
+              </div>
+            ) : (
+              <img
+                src={normalizeImageUrl(item.imageUrl)}
+                alt={`生成于 ${formatTime(item.timestamp)}`}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                }}
+              />
+            )}
             
             {/* 悬停遮罩 */}
             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">

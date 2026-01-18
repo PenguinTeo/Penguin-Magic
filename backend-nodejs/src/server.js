@@ -23,8 +23,27 @@ app.use(cors()); // CORS支持
 app.use(express.json({ limit: '50mb' })); // 解析JSON请求体，支持大图片
 app.use(express.urlencoded({ extended: true, limit: '50mb' })); // 解析URL编码请求体
 
-// 自定义日志中间件
+// 自定义日志中间件（🔧 过滤视频文件请求，避免日志刷屏）
+const loggedPaths = new Map(); // 用于去重
 app.use((req, res, next) => {
+  // 🔧 跳过视频文件的日志记录
+  if (req.path.includes('.mp4') || req.path.includes('.webm')) {
+    return next();
+  }
+  // 🔧 缩略图和图片只记录一次
+  if (req.path.startsWith('/files/')) {
+    const now = Date.now();
+    const lastLogged = loggedPaths.get(req.path) || 0;
+    if (now - lastLogged < 5000) { // 5秒内同一路径不重复记录
+      return next();
+    }
+    loggedPaths.set(req.path, now);
+    // 清理过旧记录
+    if (loggedPaths.size > 100) {
+      const entries = Array.from(loggedPaths.entries());
+      entries.slice(0, 50).forEach(([key]) => loggedPaths.delete(key));
+    }
+  }
   const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
   console.log(`[${timestamp}] ${req.method} ${req.path}`);
   next();

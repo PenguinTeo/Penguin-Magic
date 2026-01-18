@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem, DesktopPosition, GenerationHistory } from '../types';
+import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem, DesktopVideoItem, DesktopPosition, GenerationHistory } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 import { 
   Trash2 as TrashIcon, 
@@ -31,6 +31,11 @@ import {
 import { exportAsZip, batchDownloadImages, downloadSingleImage } from '../services/export';
 import { normalizeImageUrl, getThumbnailUrl, parseErrorMessage, extractErrorCode } from '../utils/image';
 import { mergeImages } from '../services/api/imageOps';
+import { rebuildThumbnail, saveVideoToOutput, saveThumbnail } from '../services/api/files';
+
+// 🔧 缩略图重建记录（避免重复请求）
+const rebuildingThumbnails = new Set<string>();
+const failedThumbnails = new Set<string>();
 
 interface DesktopProps {
   items: DesktopItem[];
@@ -530,6 +535,9 @@ export const Desktop: React.FC<DesktopProps> = ({
   const handleItemDoubleClick = (item: DesktopItem) => {
     if (item.type === 'image') {
       onImageDoubleClick(item as DesktopImageItem);
+    } else if (item.type === 'video') {
+      // 🔧 视频双击打开预览（通过 onImagePreview 处理）
+      onImagePreview?.({ ...item, imageUrl: (item as DesktopVideoItem).videoUrl } as unknown as DesktopImageItem);
     } else if (item.type === 'stack') {
       // 叠放双击打开，类似文件夹
       onStackDoubleClick?.(item as DesktopStackItem);
@@ -1124,12 +1132,24 @@ export const Desktop: React.FC<DesktopProps> = ({
 
   const dragOffset = getDragOffset();
 
-  // 获取当前选中的单个图片项目（只有按空格键时才显示预览）
+  // 获取当前选中的单个图片/视频项目（只有按空格键时才显示预览）
   const selectedImageItem = (() => {
     if (!showPreview || selectedIds.length !== 1 || isDragging || isSelecting) return null;
     const item = currentItems.find(i => i.id === selectedIds[0]);
-    if (item?.type !== 'image') return null;
-    return item as DesktopImageItem;
+    // 🔧 支持 image 和 video 类型
+    if (item?.type === 'image') {
+      return item as DesktopImageItem;
+    }
+    if (item?.type === 'video') {
+      // 将视频项目转换为图片项目格式（用于预览浮层显示）
+      const videoItem = item as DesktopVideoItem;
+      return {
+        ...videoItem,
+        imageUrl: videoItem.videoUrl,
+        type: 'image',
+      } as unknown as DesktopImageItem;
+    }
+    return null;
   })();
 
   // 下载图片
@@ -1280,8 +1300,13 @@ export const Desktop: React.FC<DesktopProps> = ({
       } else if (entry.isFile) {
         // 单个文件 -> 直接添加到桌面
         const file = await getFileFromEntry(entry as FileSystemFileEntry);
-        if (file && file.type.startsWith('image/')) {
-          await addImageToDesktop(file);
+        if (file) {
+          if (file.type.startsWith('image/')) {
+            await addImageToDesktop(file);
+          } else if (file.type.startsWith('video/')) {
+            // 🔧 支持视频文件拖入
+            await addVideoToDesktop(file);
+          }
         }
       }
     }
@@ -1392,6 +1417,100 @@ export const Desktop: React.FC<DesktopProps> = ({
     };
     
     onItemsChange([...items, newImage]);
+  };
+
+  // 🔧 添加视频到桌面（从外部拖入）
+  const addVideoToDesktop = async (file: File) => {
+    try {
+      // 1. 读取视频文件为 base64
+      const videoDataUrl = await fileToDataUrl(file);
+      
+      // 2. 保存视频到 output 目录
+      const saveResult = await saveVideoToOutput(videoDataUrl, file.name);
+      if (!saveResult.success || !saveResult.data) {
+        console.error('保存视频失败:', saveResult.error);
+        return;
+      }
+      
+      const videoUrl = saveResult.data.url;
+      const videoFilename = saveResult.data.filename;
+      
+      // 3. 提取视频首帧作为缩略图
+      const thumbnailDataUrl = await extractVideoFirstFrame(videoDataUrl);
+      
+      // 4. 保存缩略图
+      let thumbnailUrl = '';
+      if (thumbnailDataUrl) {
+        const thumbFilename = `video_thumb_${videoFilename.replace(/\.[^/.]+$/, '')}.jpg`;
+        const thumbResult = await saveThumbnail(thumbnailDataUrl, thumbFilename);
+        if (thumbResult.success && thumbResult.data) {
+          thumbnailUrl = thumbResult.data.url;
+        }
+      }
+      
+      // 5. 创建视频项目
+      const videoId = generateId();
+      const position = findNextFreePosition();
+      const now = Date.now();
+      
+      const newVideo: DesktopVideoItem = {
+        id: videoId,
+        type: 'video',
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        videoUrl,
+        thumbnailUrl: thumbnailUrl || undefined,
+        position,
+        createdAt: now,
+        updatedAt: now,
+      };
+      
+      onItemsChange([...items, newVideo]);
+    } catch (error) {
+      console.error('添加视频失败:', error);
+    }
+  };
+
+  // 🔧 提取视频首帧
+  const extractVideoFirstFrame = (videoDataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.preload = 'metadata';
+      
+      video.onloadeddata = () => {
+        // 跳转到第一帧
+        video.currentTime = 0;
+      };
+      
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            resolve(dataUrl);
+          } else {
+            resolve('');
+          }
+        } catch (e) {
+          console.error('提取视频帧失败:', e);
+          resolve('');
+        }
+      };
+      
+      video.onerror = () => {
+        console.error('视频加载失败');
+        resolve('');
+      };
+      
+      // 设置超时
+      setTimeout(() => resolve(''), 10000);
+      
+      video.src = videoDataUrl;
+    });
   };
   
   // File转DataURL
@@ -1677,7 +1796,6 @@ export const Desktop: React.FC<DesktopProps> = ({
                     : `${(item as DesktopFolderItem).color || theme.colors.accent}20`
                   : 'rgba(0,0,0,0.4)',
                 borderColor: isSelected ? theme.colors.primary : isDropTarget ? '#22c55e' : 'transparent',
-                ringColor: isSelected ? theme.colors.primary : 'transparent',
               }}
             >
               {item.type === 'image' ? (
@@ -1747,12 +1865,74 @@ export const Desktop: React.FC<DesktopProps> = ({
                     alt={item.name}
                     className="w-full h-full object-cover"
                     draggable={false}
-                    onError={(e) => {
-                      // 🔧 直接显示占位图，避免循环回退
-                      (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                    onError={async (e) => {
+                      const target = e.target as HTMLImageElement;
+                      const imageUrl = (item as DesktopImageItem).imageUrl;
+                      
+                      // 🔧 已知失败的缩略图，直接显示占位图
+                      if (failedThumbnails.has(imageUrl)) {
+                        target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                        return;
+                      }
+                      
+                      // 🔧 跳过已在重建中的
+                      if (rebuildingThumbnails.has(imageUrl)) {
+                        return;
+                      }
+                      
+                      // 🔧 尝试重建缩略图
+                      if (imageUrl.startsWith('/files/')) {
+                        rebuildingThumbnails.add(imageUrl);
+                        try {
+                          const result = await rebuildThumbnail(imageUrl);
+                          if (result.success && result.thumbnailUrl) {
+                            // 重建成功，刷新图片
+                            target.src = result.thumbnailUrl + '?t=' + Date.now();
+                          } else {
+                            // 重建失败（原图不存在）
+                            failedThumbnails.add(imageUrl);
+                            target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                          }
+                        } catch {
+                          failedThumbnails.add(imageUrl);
+                          target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                        } finally {
+                          rebuildingThumbnails.delete(imageUrl);
+                        }
+                      } else {
+                        // 非本地文件，直接显示占位图
+                        target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                      }
                     }}
                   />
                 )
+              ) : item.type === 'video' ? (
+                // 🔧 视频项目：显示缩略图或视频图标
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/60 to-gray-900">
+                  {(item as DesktopVideoItem).thumbnailUrl ? (
+                    <img
+                      src={getThumbnailUrl((item as DesktopVideoItem).thumbnailUrl!)}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                      draggable={false}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-full bg-purple-500/30 flex items-center justify-center mb-1">
+                        <VideoIcon className="w-6 h-6 text-purple-300" />
+                      </div>
+                      <span className="text-[9px] text-purple-200 font-medium">视频</span>
+                    </>
+                  )}
+                  {/* 视频标识 */}
+                  <div className="absolute bottom-1 right-1 bg-black/60 rounded px-1 py-0.5 flex items-center gap-0.5">
+                    <VideoIcon className="w-3 h-3 text-white" />
+                    <span className="text-[8px] text-white">VIDEO</span>
+                  </div>
+                </div>
               ) : item.type === 'stack' ? (
                 // Mac风格叠放效果
                 <div className="w-full h-full relative">
@@ -1789,9 +1969,35 @@ export const Desktop: React.FC<DesktopProps> = ({
                         key={img.id}
                         src={getThumbnailUrl(img.imageUrl)}
                         alt={img.name}
-                        onError={(e) => {
-                          // 🔧 直接显示占位图，避免循环回退
-                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                        onError={async (e) => {
+                          const target = e.target as HTMLImageElement;
+                          const imageUrl = img.imageUrl;
+                          
+                          if (failedThumbnails.has(imageUrl)) {
+                            target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                            return;
+                          }
+                          if (rebuildingThumbnails.has(imageUrl)) return;
+                          
+                          if (imageUrl.startsWith('/files/')) {
+                            rebuildingThumbnails.add(imageUrl);
+                            try {
+                              const result = await rebuildThumbnail(imageUrl);
+                              if (result.success && result.thumbnailUrl) {
+                                target.src = result.thumbnailUrl + '?t=' + Date.now();
+                              } else {
+                                failedThumbnails.add(imageUrl);
+                                target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                              }
+                            } catch {
+                              failedThumbnails.add(imageUrl);
+                              target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                            } finally {
+                              rebuildingThumbnails.delete(imageUrl);
+                            }
+                          } else {
+                            target.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiLz48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSIvPjxwb2x5bGluZSBwb2ludHM9IjIxIDE1IDEwIDkgMyAxNSIvPjwvc3ZnPg==';
+                          }
                         }}
                         className="absolute rounded-lg object-cover"
                         style={{
@@ -2273,7 +2479,7 @@ export const Desktop: React.FC<DesktopProps> = ({
                 </>
               ) : (
                 <>
-                  {/* 图片特有选项 */}
+                  {/* 图片/视频特有选项 */}
                   <button
                     onClick={() => {
                       const item = items.find(i => i.id === contextMenu.itemId);
@@ -2286,70 +2492,74 @@ export const Desktop: React.FC<DesktopProps> = ({
                     <EyeIcon className="w-4 h-4 text-cyan-400" />
                     <span>预览</span>
                   </button>
-                  {/* 编辑 - 紫色 */}
-                  {onImageEditAgain && (
-                    <button
-                      onClick={() => {
-                        const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
-                        if (item) onImageEditAgain(item);
-                        setContextMenu(null);
-                      }}
-                      className="w-full px-3 py-2 text-left text-[12px] hover:bg-purple-500/10 transition-colors flex items-center gap-2"
-                      style={{ color: theme.colors.textPrimary }}
-                    >
-                      <EditIcon className="w-4 h-4 text-purple-400" />
-                      <span>编辑</span>
-                    </button>
-                  )}
-                  {/* 重新生成 - 绿色 */}
-                  {onImageRegenerate && (
-                    <button
-                      onClick={() => {
-                        const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
-                        if (item) onImageRegenerate(item);
-                        setContextMenu(null);
-                      }}
-                      className="w-full px-3 py-2 text-left text-[12px] hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
-                      style={{ color: theme.colors.textPrimary }}
-                    >
-                      <RefreshIcon className="w-4 h-4 text-emerald-400" />
-                      <span>重生成</span>
-                    </button>
-                  )}
-                  {/* 创建创意库 - 蓝色 */}
-                  {onCreateCreativeIdea && (
-                    <button
-                      onClick={() => {
-                        const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
-                        if (item && item.imageUrl) {
-                          // 传递图片URL和提示词
-                          onCreateCreativeIdea(item.imageUrl, item.prompt);
-                        }
-                        setContextMenu(null);
-                      }}
-                      className="w-full px-3 py-2 text-left text-[12px] hover:bg-blue-500/10 transition-colors flex items-center gap-2"
-                      style={{ color: theme.colors.textPrimary }}
-                    >
-                      <LibraryIcon className="w-4 h-4 text-blue-400" />
-                      <span>创建创意库</span>
-                    </button>
-                  )}
-                  {/* 添加到画布 - 青色 */}
-                  {onAddToCanvas && (
-                    <button
-                      onClick={() => {
-                        const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
-                        if (item && item.imageUrl) {
-                          onAddToCanvas(item.imageUrl, item.name);
-                        }
-                        setContextMenu(null);
-                      }}
-                      className="w-full px-3 py-2 text-left text-[12px] hover:bg-cyan-500/10 transition-colors flex items-center gap-2"
-                      style={{ color: theme.colors.textPrimary }}
-                    >
-                      <AddToCanvasIcon className="w-4 h-4 text-cyan-400" />
-                      <span>添加到画布</span>
-                    </button>
+                  {/* 🔧 以下选项只对图片有效 */}
+                  {items.find(i => i.id === contextMenu.itemId)?.type === 'image' && (
+                    <>
+                      {/* 编辑 - 紫色 */}
+                      {onImageEditAgain && (
+                        <button
+                          onClick={() => {
+                            const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
+                            if (item) onImageEditAgain(item);
+                            setContextMenu(null);
+                          }}
+                          className="w-full px-3 py-2 text-left text-[12px] hover:bg-purple-500/10 transition-colors flex items-center gap-2"
+                          style={{ color: theme.colors.textPrimary }}
+                        >
+                          <EditIcon className="w-4 h-4 text-purple-400" />
+                          <span>编辑</span>
+                        </button>
+                      )}
+                      {/* 重新生成 - 绿色 */}
+                      {onImageRegenerate && (
+                        <button
+                          onClick={() => {
+                            const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
+                            if (item) onImageRegenerate(item);
+                            setContextMenu(null);
+                          }}
+                          className="w-full px-3 py-2 text-left text-[12px] hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
+                          style={{ color: theme.colors.textPrimary }}
+                        >
+                          <RefreshIcon className="w-4 h-4 text-emerald-400" />
+                          <span>重生成</span>
+                        </button>
+                      )}
+                      {/* 创建创意库 - 蓝色 */}
+                      {onCreateCreativeIdea && (
+                        <button
+                          onClick={() => {
+                            const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
+                            if (item && item.imageUrl) {
+                              onCreateCreativeIdea(item.imageUrl, item.prompt);
+                            }
+                            setContextMenu(null);
+                          }}
+                          className="w-full px-3 py-2 text-left text-[12px] hover:bg-blue-500/10 transition-colors flex items-center gap-2"
+                          style={{ color: theme.colors.textPrimary }}
+                        >
+                          <LibraryIcon className="w-4 h-4 text-blue-400" />
+                          <span>创建创意库</span>
+                        </button>
+                      )}
+                      {/* 添加到画布 - 青色 */}
+                      {onAddToCanvas && (
+                        <button
+                          onClick={() => {
+                            const item = items.find(i => i.id === contextMenu.itemId) as DesktopImageItem;
+                            if (item && item.imageUrl) {
+                              onAddToCanvas(item.imageUrl, item.name);
+                            }
+                            setContextMenu(null);
+                          }}
+                          className="w-full px-3 py-2 text-left text-[12px] hover:bg-cyan-500/10 transition-colors flex items-center gap-2"
+                          style={{ color: theme.colors.textPrimary }}
+                        >
+                          <AddToCanvasIcon className="w-4 h-4 text-cyan-400" />
+                          <span>添加到画布</span>
+                        </button>
+                      )}
+                    </>
                   )}
                   <div className="h-px my-1" style={{ background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)' }} />
                 </>
