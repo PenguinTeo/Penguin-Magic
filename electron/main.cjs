@@ -362,7 +362,6 @@ function showUpdateAvailableDialog(version, notes) {
           display: flex;
           align-items: center;
           justify-content: center;
-          -webkit-app-region: drag;
         }
         .card {
           width: 340px;
@@ -407,10 +406,14 @@ function showUpdateAvailableDialog(version, notes) {
           color: rgba(255, 255, 255, 0.5);
         }
         .content {
-          padding: 20px 24px;
-          max-height: 150px;
+          padding: 16px 24px;
+          max-height: 180px;
           overflow-y: auto;
         }
+        .content::-webkit-scrollbar { width: 6px; }
+        .content::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 3px; }
+        .content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+        .content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
         .section-title {
           font-size: 10px;
           font-weight: 600;

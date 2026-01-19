@@ -1115,93 +1115,21 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         };
         
         return (
-            <div className="w-full h-full bg-[#0a1a14] flex flex-col border border-emerald-500/30 rounded-xl overflow-hidden relative shadow-lg">
-                {/* 头部 - 带批次选择、RUN、取消按钮 */}
-                <div className="h-10 border-b border-emerald-500/20 flex items-center justify-between px-3 bg-emerald-500/10 shrink-0">
+            <div className="w-full h-full bg-[#0a1a14] flex flex-col border border-emerald-500/30 rounded-xl relative shadow-lg">
+                {/* 头部 - 简化标题 */}
+                <div className="h-8 border-b border-emerald-500/20 flex items-center justify-between px-3 bg-emerald-500/10 shrink-0">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="w-6 h-6 rounded bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                            <span className="text-white font-black text-xs">R</span>
+                        <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                            <span className="text-white font-black text-[10px]">R</span>
                         </div>
                         <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-bold text-emerald-200 truncate max-w-[120px]">
+                            <span className="text-[10px] font-bold text-emerald-200 truncate max-w-[180px]">
                                 {appName}
                             </span>
-                            <span className="text-[8px] text-emerald-400/60 truncate">
-                                ID: {webappId.slice(0, 10)}...
+                            <span className="text-[7px] text-emerald-400/60 truncate">
+                                ID: {webappId.slice(0, 12)}...
                             </span>
                         </div>
-                    </div>
-                    {/* 批次 + RUN + 取消按钮 */}
-                    <div className="flex items-center gap-1.5">
-                        {/* 批次选择器 */}
-                        <div className="flex items-center bg-black/30 rounded-lg border border-emerald-500/20" onMouseDown={(e) => e.stopPropagation()}>
-                            <button
-                                className="w-6 h-6 flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded-l-lg transition-colors"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRhBatchCount(Math.max(1, rhBatchCount - 1));
-                                }}
-                            >
-                                <span className="text-sm font-bold">-</span>
-                            </button>
-                            <span className="w-6 text-center text-[10px] font-bold text-emerald-200">{rhBatchCount}</span>
-                            <button
-                                className="w-6 h-6 flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded-r-lg transition-colors"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setRhBatchCount(Math.min(10, rhBatchCount + 1));
-                                }}
-                            >
-                                <span className="text-sm font-bold">+</span>
-                            </button>
-                        </div>
-                        {/* RUN 按钮 */}
-                        <button
-                            className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all ${
-                                isRunning 
-                                    ? 'bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30' 
-                                    : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-lg shadow-emerald-500/30'
-                            }`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (isRunning) {
-                                    onStop(node.id);
-                                } else {
-                                    onExecute(node.id, rhBatchCount);
-                                }
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                        >
-                            {isRunning ? (
-                                <>
-                                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
-                                        <rect x="6" y="6" width="12" height="12" rx="2" />
-                                    </svg>
-                                    STOP
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M8 5v14l11-7z" />
-                                    </svg>
-                                    RUN
-                                </>
-                            )}
-                        </button>
-                        {/* 取消/关闭按钮 */}
-                        <button
-                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-zinc-700/50 hover:bg-red-500/30 text-zinc-400 hover:text-red-300 transition-colors"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete(node.id);
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                            title="删除节点"
-                        >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
                     </div>
                 </div>
                 
@@ -2845,10 +2773,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
              )}
 
              {/* Execute Button with Batch Count */}
-             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub'].includes(node.type) && (
+             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config'].includes(node.type) && (
                  <div className="flex items-center gap-0.5">
                    {/* 批量数量选择器 - 对图片生成类型节点显示 */}
-                   {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video'].includes(node.type) && !isRunning && (
+                   {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config'].includes(node.type) && !isRunning && (
                      <div className="flex items-center h-8 rounded-l-lg border border-r-0 border-white/10 bg-[#2c2c2e] overflow-hidden">
                        <button
                          onClick={(e) => { e.stopPropagation(); setBatchCount(Math.max(1, batchCount - 1)); }}
@@ -2880,7 +2808,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                       }}
                       disabled={!isRunning && node.status === 'running'}
                       className={`h-8 px-2.5 border border-white/10 shadow-lg transition-colors flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed
-                          ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
+                          ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
                           ${isRunning ? 'bg-red-500/20 text-red-300 border-red-500/50 hover:bg-red-500/30' : 'bg-[#2c2c2e] text-green-400 hover:bg-green-500/20 hover:text-green-300'}
                       `}
                    >
