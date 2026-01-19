@@ -23,6 +23,7 @@ const MultiAngle3D = lazy(() => import('./MultiAngle3D'));
 interface CanvasNodeProps {
   node: CanvasNode;
   isSelected: boolean;
+  isLightCanvas?: boolean; // 画布浅色主题
   onSelect: (id: string, multi: boolean) => void;
   onUpdate: (id: string, updates: Partial<CanvasNode>) => void;
   onDelete: (id: string) => void;
@@ -44,7 +45,8 @@ interface CanvasNodeProps {
 
 const CanvasNodeItem: React.FC<CanvasNodeProps> = ({ 
   node, 
-  isSelected, 
+  isSelected,
+  isLightCanvas = false,
   onSelect, 
   onUpdate,
   onDelete,
@@ -68,6 +70,21 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   const [localPrompt, setLocalPrompt] = useState(node.data?.prompt || '');
   const [localSystem, setLocalSystem] = useState(node.data?.systemInstruction || '');
   const [batchCount, setBatchCount] = useState(1); // 批量生成数量
+
+  // 主题颜色变量
+  const themeColors = {
+    nodeBg: isLightCanvas ? '#ffffff' : '#1c1c1e',
+    nodeBgAlt: isLightCanvas ? '#f5f5f7' : '#0a0a0f',
+    nodeBorder: isLightCanvas ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.2)',
+    textPrimary: isLightCanvas ? '#1d1d1f' : '#ffffff',
+    textSecondary: isLightCanvas ? '#6e6e73' : '#a1a1aa',
+    textMuted: isLightCanvas ? '#8e8e93' : '#71717a',
+    inputBg: isLightCanvas ? '#f5f5f7' : '#0a0a0f',
+    inputBorder: isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)',
+    headerBg: isLightCanvas ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)',
+    headerBorder: isLightCanvas ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)',
+    footerBg: isLightCanvas ? 'rgba(0,0,0,0.02)' : 'rgba(0,0,0,0.2)',
+  };
   
   // Resize Node Specific State
   const [resizeMode, setResizeMode] = useState<'longest' | 'shortest' | 'width' | 'height' | 'exact'>(node.data?.resizeMode || 'longest');
@@ -282,16 +299,31 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     return `${width / divisor}:${height / divisor}`;
   };
 
-  // Modern Input Style
-  const inputBaseClass = "w-full bg-[#0a0a0f] border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-white/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed placeholder-zinc-600";
+  // Modern Input Style - 根据主题调整
+  const inputBaseClass = isLightCanvas 
+    ? "w-full bg-gray-100 border border-gray-200 rounded-lg p-2 text-xs text-gray-800 outline-none focus:border-blue-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed placeholder-gray-400"
+    : "w-full bg-[#0a0a0f] border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-white/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed placeholder-zinc-600";
 
   // 黑白风格 - 所有节点统一使用灰白色
   const getTypeColor = (type: NodeType) => {
       return 'bg-white/80 border-white/60';
   };
 
-  const outputPortColor = 'bg-white/80 border-white/60';
-  const inputPortColor = 'bg-zinc-600 border-zinc-400 group-hover/port:bg-white';
+  // 连接点颜色 - 根据主题调整
+  const outputPortColor = isLightCanvas 
+    ? 'bg-gray-700 border-gray-500' 
+    : 'bg-white/80 border-white/60';
+  const inputPortColor = isLightCanvas 
+    ? 'bg-gray-400 border-gray-500 group-hover/port:bg-gray-700' 
+    : 'bg-zinc-600 border-zinc-400 group-hover/port:bg-white';
+
+  // 控件背景色 - 用于按钮组、输入框等
+  const controlBg = isLightCanvas ? 'bg-gray-100' : 'bg-black/40';
+  // 选中状态背景
+  const selectedBg = isLightCanvas ? 'bg-blue-100' : 'bg-blue-500/30';
+  const selectedText = isLightCanvas ? 'text-blue-700' : 'text-blue-200';
+  // 底部状态栏背景
+  const footerBarBg = isLightCanvas ? 'bg-gray-50' : 'bg-black/30';
 
   const isRelay = node.type === 'relay';
   const isRunning = node.status === 'running';
@@ -319,17 +351,30 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
       const hasOutput = node.data?.output && node.status === 'completed';
 
       return (
-        <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
+        <div 
+          className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg"
+          style={{ 
+            backgroundColor: themeColors.nodeBg, 
+            border: `1px solid ${themeColors.nodeBorder}` 
+          }}
+        >
             {/* Header */}
-            <div className="h-8 border-b border-white/10 flex items-center justify-between px-3 bg-white/5">
+            <div 
+              className="h-8 flex items-center justify-between px-3"
+              style={{ 
+                backgroundColor: themeColors.headerBg, 
+                borderBottom: `1px solid ${themeColors.headerBorder}` 
+              }}
+            >
                 <div className="flex items-center gap-2">
-                    <Icons.Sparkles size={14} className="text-white/70" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-white/90">{node.title || "LLM Logic"}</span>
+                    <Icons.Sparkles size={14} style={{ color: themeColors.textSecondary }} />
+                    <span className="text-xs font-bold uppercase tracking-wider" style={{ color: themeColors.textPrimary }}>{node.title || "LLM Logic"}</span>
                 </div>
                 {hasOutput && (
                     <button
                         onClick={handleCopyContent}
-                        className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+                        className="p-1 rounded hover:bg-black/5 transition-colors"
+                        style={{ color: themeColors.textMuted }}
                         title="复制输出内容"
                     >
                         <Icons.Copy size={12} />
@@ -343,7 +388,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             >
                 {/* System Prompt (Optional) */}
                 <div className="flex flex-col gap-1 min-h-[30%]">
-                    <label className="text-[9px] font-bold text-zinc-500 uppercase px-1">System Instruction (Optional)</label>
+                    <label className="text-[9px] font-bold uppercase px-1" style={{ color: themeColors.textMuted }}>System Instruction (Optional)</label>
                     <textarea 
                         className={inputBaseClass + " flex-1 resize-none font-mono"}
                         placeholder="Define behavior (e.g., 'You are a poet')..."
@@ -356,7 +401,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 
                 {/* User Prompt */}
                 <div className="flex flex-col gap-1 flex-1">
-                    <label className="text-[9px] font-bold text-zinc-500 uppercase px-1">User Prompt (Optional)</label>
+                    <label className="text-[9px] font-bold uppercase px-1" style={{ color: themeColors.textMuted }}>User Prompt (Optional)</label>
                     <textarea 
                         className={inputBaseClass + " flex-1 resize-none"}
                         placeholder="Additional instruction..."
@@ -369,12 +414,19 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             </div>
             
             {/* Badges */}
-            <div className="h-6 bg-black/20 border-t border-white/5 px-2 flex items-center justify-between text-[9px] text-zinc-500 font-mono">
-                <span className={`flex items-center gap-1 ${hasOutput ? 'text-emerald-400' : ''}`}>
+            <div 
+              className="h-6 px-2 flex items-center justify-between text-[9px] font-mono"
+              style={{ 
+                backgroundColor: themeColors.footerBg, 
+                borderTop: `1px solid ${themeColors.headerBorder}`,
+                color: themeColors.textMuted 
+              }}
+            >
+                <span className={`flex items-center gap-1 ${hasOutput ? 'text-emerald-500' : ''}`}>
                    {hasOutput ? 'COMPLETED' : 'INPUT: AUTO'}
                 </span>
                 <span className="flex items-center gap-1">
-                   OUT: <span className="text-zinc-300">TEXT</span>
+                   OUT: <span style={{ color: themeColors.textSecondary }}>TEXT</span>
                 </span>
             </div>
 
@@ -419,10 +471,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         };
         
         return (
-            <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
-                <div className="h-8 border-b border-white/10 flex items-center px-3 gap-2 bg-white/5 shrink-0">
-                    <Icons.Resize size={14} className="text-white/70" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-white/90">Resized</span>
+            <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${themeColors.nodeBorder}` }}>
+                <div className="h-8 flex items-center px-3 gap-2 shrink-0" style={{ borderBottom: `1px solid ${themeColors.headerBorder}`, backgroundColor: themeColors.headerBg }}>
+                    <Icons.Resize size={14} style={{ color: themeColors.textSecondary }} />
+                    <span className="text-xs font-bold uppercase tracking-wider" style={{ color: themeColors.textPrimary }}>Resized</span>
                 </div>
                 <div className="flex-1 relative overflow-hidden">
                     <img 
@@ -479,11 +531,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     }
 
     return (
-        <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
-            <div className="h-8 border-b border-white/10 flex items-center justify-between px-3 gap-2 bg-white/5 shrink-0">
+        <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${themeColors.nodeBorder}` }}>
+            <div className="h-8 flex items-center justify-between px-3 gap-2 shrink-0" style={{ borderBottom: `1px solid ${themeColors.headerBorder}`, backgroundColor: themeColors.headerBg }}>
                 <div className="flex items-center gap-2">
-                    <Icons.Resize size={14} className="text-white/70" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-white/90">Smart Resize</span>
+                    <Icons.Resize size={14} style={{ color: themeColors.textSecondary }} />
+                    <span className="text-xs font-bold uppercase tracking-wider" style={{ color: themeColors.textPrimary }}>Smart Resize</span>
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); switchTo3D(); }}
@@ -777,7 +829,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             <span>附加详细参数</span>
           </label>
           
-          <div className="rounded bg-black/40 border border-cyan-900/30 px-1.5 py-0.5">
+          <div className={`rounded ${controlBg} border border-cyan-900/30 px-1.5 py-0.5`}>
             <div className="text-[7px] text-cyan-300/80 leading-relaxed break-words font-mono truncate">
               {anglePrompt}
             </div>
@@ -790,8 +842,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   const renderContent = () => {
     if (node.type === 'relay') {
         return (
-            <div className="w-full h-full flex items-center justify-center bg-[#1c1c1e] rounded-full border border-white/20 shadow-lg">
-                <Icons.Relay size={16} className="text-white/60" />
+            <div className="w-full h-full flex items-center justify-center rounded-full shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${themeColors.nodeBorder}` }}>
+                <Icons.Relay size={16} style={{ color: themeColors.textSecondary }} />
             </div>
         );
     }
@@ -835,16 +887,16 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         const resolutions = ['1K', '2K', '4K'];
         
         return (
-            <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-blue-500/30 rounded-xl overflow-hidden relative shadow-lg">
+            <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.3)'}` }}>
                 {/* 头部 */}
-                <div className="h-8 border-b border-blue-500/20 flex items-center justify-between px-3 bg-blue-500/10 shrink-0">
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${isLightCanvas ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.2)'}`, backgroundColor: isLightCanvas ? 'rgba(59,130,246,0.08)' : 'rgba(59,130,246,0.1)' }}>
                     <div className="flex items-center gap-2">
-                        <Icons.Sparkles size={12} className="text-blue-300" />
-                        <span className="text-[10px] font-bold text-blue-200 truncate max-w-[200px]">
+                        <Icons.Sparkles size={12} style={{ color: isLightCanvas ? '#3b82f6' : '#93c5fd' }} />
+                        <span className="text-[10px] font-bold truncate max-w-[200px]" style={{ color: isLightCanvas ? '#2563eb' : '#bfdbfe' }}>
                             {bpTemplate?.title || 'BP 模板'}
                         </span>
                     </div>
-                    <span className="text-[8px] text-blue-300/60 bg-blue-500/20 px-1.5 py-0.5 rounded">BP</span>
+                    <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: isLightCanvas ? '#1d4ed8' : 'rgba(147,197,253,0.6)', backgroundColor: isLightCanvas ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.2)' }}>BP</span>
                 </div>
                 
                 {hasImage ? (
@@ -880,7 +932,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                         </label>
                                         <input
                                             type="text"
-                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none focus:border-blue-500/50 placeholder-zinc-600"
+                                            className={`w-full ${controlBg} border rounded-lg px-3 py-2 text-xs outline-none transition-colors ${isLightCanvas ? 'border-gray-200 text-gray-800 focus:border-blue-400 placeholder-gray-400' : 'border-white/10 text-zinc-200 focus:border-blue-500/50 placeholder-zinc-600'}`}
                                             placeholder={`输入 ${field.label}`}
                                             value={bpInputs[field.name] || ''}
                                             onChange={(e) => handleBpInputChange(field.name, e.target.value)}
@@ -894,11 +946,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         {/* 设置区 */}
                         <div className="px-3 pb-3 space-y-1.5">
                             {/* 比例第一行 */}
-                            <div className="flex bg-black/40 rounded-lg p-0.5">
+                            <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                                 {aspectRatios1.map(r => (
                                     <button
                                         key={r}
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${(settings.aspectRatio || 'AUTO') === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${(settings.aspectRatio || 'AUTO') === r ? `${selectedBg} ${selectedText}` : 'text-zinc-500 hover:text-zinc-300'}`}
                                         onClick={() => handleSettingChange('aspectRatio', r)}
                                         onMouseDown={(e) => e.stopPropagation()}
                                     >
@@ -907,11 +959,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 ))}
                             </div>
                             {/* 比例第二行 */}
-                            <div className="flex bg-black/40 rounded-lg p-0.5">
+                            <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                                 {aspectRatios2.map(r => (
                                     <button
                                         key={r}
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${settings.aspectRatio === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${settings.aspectRatio === r ? `${selectedBg} ${selectedText}` : 'text-zinc-500 hover:text-zinc-300'}`}
                                         onClick={() => handleSettingChange('aspectRatio', r)}
                                         onMouseDown={(e) => e.stopPropagation()}
                                     >
@@ -920,11 +972,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 ))}
                             </div>
                             {/* 分辨率 */}
-                            <div className="flex bg-black/40 rounded-lg p-0.5">
+                            <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                                 {resolutions.map(r => (
                                     <button
                                         key={r}
-                                        className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${settings.resolution === r ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${settings.resolution === r ? `${selectedBg} ${selectedText}` : 'text-zinc-500 hover:text-zinc-300'}`}
                                         onClick={() => handleSettingChange('resolution', r)}
                                         onMouseDown={(e) => e.stopPropagation()}
                                     >
@@ -937,7 +989,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 )}
                 
                 {/* 底部状态 */}
-                <div className="h-6 bg-black/30 border-t border-white/5 px-3 flex items-center justify-between text-[10px] text-zinc-500">
+                <div className={`h-6 ${footerBarBg} border-t px-3 flex items-center justify-between text-[10px]`} style={{ borderColor: themeColors.headerBorder, color: themeColors.textMuted }}>
                     <span>{hasImage ? '✅ 已生成' : `输入: ${Object.values(bpInputs).filter(v => v).length}/${inputFields.length}`}</span>
                     <span>{settings.aspectRatio || '1:1'} · {settings.resolution || '2K'}</span>
                 </div>
@@ -975,18 +1027,18 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         };
         
         return (
-            <div className="w-full h-full bg-[#0a1a14] flex flex-col border border-emerald-500/30 rounded-xl overflow-hidden relative shadow-lg">
+            <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
                 {/* 头部 */}
-                <div className="h-8 border-b border-emerald-500/20 flex items-center justify-between px-3 bg-emerald-500/10 shrink-0">
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.2)'}`, backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.1)' }}>
                     <div className="flex items-center gap-2">
                         <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center">
                             <span className="text-white font-black text-[10px]">R</span>
                         </div>
-                        <span className="text-[10px] font-bold text-emerald-200 truncate max-w-[200px]">
+                        <span className="text-[10px] font-bold truncate max-w-[200px]" style={{ color: isLightCanvas ? '#059669' : '#a7f3d0' }}>
                             {appInfo?.title || 'RunningHub'}
                         </span>
                     </div>
-                    <span className="text-[8px] text-emerald-300/60 bg-emerald-500/20 px-1.5 py-0.5 rounded">RH</span>
+                    <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: isLightCanvas ? '#047857' : 'rgba(110,231,183,0.6)', backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)' }}>RH</span>
                 </div>
                 
                 {hasOutput ? (
@@ -1004,10 +1056,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     <div className="flex-1 p-3 flex flex-col gap-2 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
                         {/* WebApp ID 输入 */}
                         <div className="space-y-1">
-                            <label className="text-[10px] text-emerald-400/80 uppercase tracking-wider font-medium">AI 应用 ID</label>
+                            <label className="text-[10px] uppercase tracking-wider font-medium" style={{ color: isLightCanvas ? '#059669' : 'rgba(52,211,153,0.8)' }}>AI 应用 ID</label>
                             <input
                                 type="text"
-                                className="w-full bg-black/40 border border-emerald-500/20 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none focus:border-emerald-500/50 placeholder-zinc-600"
+                                className="w-full rounded-lg px-3 py-2 text-xs outline-none transition-colors"
+                                style={{ backgroundColor: themeColors.inputBg, border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.2)'}`, color: themeColors.textPrimary }}
                                 placeholder="输入 webappId"
                                 value={webappId}
                                 onChange={(e) => handleWebappIdChange(e.target.value)}
@@ -1025,15 +1078,16 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         {/* 应用参数输入 */}
                         {appInfo?.nodeInfoList && appInfo.nodeInfoList.length > 0 && (
                             <div className="space-y-2">
-                                <label className="text-[10px] text-emerald-400/80 uppercase tracking-wider font-medium">应用参数</label>
+                                <label className="text-[10px] uppercase tracking-wider font-medium" style={{ color: isLightCanvas ? '#059669' : 'rgba(52,211,153,0.8)' }}>应用参数</label>
                                 {appInfo.nodeInfoList.map((info: any, idx: number) => {
                                     const key = `${info.nodeId}_${info.fieldName}`;
                                     return (
                                         <div key={key} className="space-y-1">
-                                            <label className="text-[9px] text-zinc-500">{info.fieldName}</label>
+                                            <label className="text-[9px]" style={{ color: themeColors.textMuted }}>{info.fieldName}</label>
                                             <input
                                                 type="text"
-                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-emerald-500/30 placeholder-zinc-600"
+                                                className="w-full rounded-lg px-2 py-1.5 text-xs outline-none transition-colors"
+                                                style={{ backgroundColor: themeColors.inputBg, border: `1px solid ${themeColors.inputBorder}`, color: themeColors.textPrimary }}
                                                 placeholder={info.fieldValue || '输入值'}
                                                 value={nodeInputs[key] || ''}
                                                 onChange={(e) => handleNodeInputChange(key, e.target.value)}
@@ -1055,13 +1109,13 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 )}
                 
                 {/* 底部状态 */}
-                <div className="h-6 bg-black/30 border-t border-emerald-500/10 px-3 flex items-center justify-between text-[10px] text-zinc-500">
+                <div className="h-6 px-3 flex items-center justify-between text-[10px]" style={{ backgroundColor: themeColors.footerBg, borderTop: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.1)'}`, color: themeColors.textMuted }}>
                     <span>{hasOutput ? '✅ 已生成' : (appInfo ? `参数: ${appInfo.nodeInfoList?.length || 0}` : '待配置')}</span>
-                    <span className="text-emerald-400/60">{webappId ? webappId.slice(0, 8) + '...' : ''}</span>
+                    <span style={{ color: isLightCanvas ? '#059669' : 'rgba(52,211,153,0.6)' }}>{webappId ? webappId.slice(0, 8) + '...' : ''}</span>
                 </div>
                 
                 {isRunning && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-30">
+                    <div className="absolute inset-0 backdrop-blur-[2px] flex items-center justify-center z-30" style={{ backgroundColor: isLightCanvas ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }}>
                         <div className="w-8 h-8 border-2 border-emerald-400/50 border-t-emerald-400 rounded-full animate-spin"></div>
                     </div>
                 )}
@@ -1115,18 +1169,18 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         };
         
         return (
-            <div className="w-full h-full bg-[#0a1a14] flex flex-col border border-emerald-500/30 rounded-xl relative shadow-lg">
+            <div className="w-full h-full flex flex-col rounded-xl relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
                 {/* 头部 - 简化标题 */}
-                <div className="h-8 border-b border-emerald-500/20 flex items-center justify-between px-3 bg-emerald-500/10 shrink-0">
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.2)'}`, backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.1)' }}>
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center flex-shrink-0">
                             <span className="text-white font-black text-[10px]">R</span>
                         </div>
                         <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] font-bold text-emerald-200 truncate max-w-[180px]">
+                            <span className="text-[10px] font-bold truncate max-w-[180px]" style={{ color: isLightCanvas ? '#059669' : '#a7f3d0' }}>
                                 {appName}
                             </span>
-                            <span className="text-[7px] text-emerald-400/60 truncate">
+                            <span className="text-[7px] truncate" style={{ color: isLightCanvas ? '#047857' : 'rgba(52,211,153,0.6)' }}>
                                 ID: {webappId.slice(0, 12)}...
                             </span>
                         </div>
@@ -1135,21 +1189,21 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 
                 {/* 封面图 */}
                 {coverUrl && (
-                    <div className="w-full h-28 bg-black relative shrink-0">
+                    <div className="w-full h-44 bg-black relative shrink-0">
                         <img 
                             src={coverUrl} 
                             alt="Cover" 
                             className="w-full h-full object-cover opacity-80" 
                             draggable={false}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0a1a14]"></div>
+                        <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent, ${themeColors.nodeBg})` }}></div>
                     </div>
                 )}
                 
                 {/* 参数配置区 - 每个参数有连接点 */}
                 <div className="flex-1 p-2 flex flex-col gap-1.5 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                    <div className="text-[9px] text-emerald-400/80 uppercase tracking-wider font-medium px-1">
-                        应用参数 <span className="text-zinc-500">({appInfo?.nodeInfoList?.length || 0})</span>
+                    <div className="text-[9px] uppercase tracking-wider font-medium px-1" style={{ color: isLightCanvas ? '#059669' : 'rgba(52,211,153,0.8)' }}>
+                        应用参数 <span style={{ color: themeColors.textMuted }}>({appInfo?.nodeInfoList?.length || 0})</span>
                     </div>
                     
                     {appInfo?.nodeInfoList && appInfo.nodeInfoList.length > 0 ? (
@@ -1159,10 +1213,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             const isFileType = ['IMAGE', 'VIDEO', 'AUDIO'].includes(fieldType);
                             
                             return (
-                                <div key={key} className="relative bg-black/30 rounded-lg p-2 pl-6">
+                                <div key={key} className="relative rounded-lg p-2 pl-6" style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.3)' }}>
                                     {/* 左侧连接点 - 支持拉线输入 */}
                                     <div 
-                                        className="absolute left-1 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-emerald-500/30 border-2 border-emerald-500 cursor-crosshair hover:bg-emerald-500 hover:scale-125 transition-all z-10"
+                                        className="absolute left-1 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-emerald-500 cursor-crosshair hover:bg-emerald-500 hover:scale-125 transition-all z-10"
+                                        style={{ backgroundColor: 'rgba(16,185,129,0.3)' }}
                                         data-port-type="in"
                                         data-port-key={key}
                                         onMouseDown={(e) => {
@@ -1180,10 +1235,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                     
                                     {/* 参数标题和类型 */}
                                     <div className="flex items-center justify-between mb-1">
-                                        <label className="text-[9px] text-zinc-400 truncate max-w-[200px]">
+                                        <label className="text-[9px] truncate max-w-[200px]" style={{ color: themeColors.textSecondary }}>
                                             {info.description || info.fieldName}
                                         </label>
-                                        <span className="text-[7px] text-emerald-500/60 bg-emerald-500/10 px-1 py-0.5 rounded">
+                                        <span className="text-[7px] px-1 py-0.5 rounded" style={{ color: isLightCanvas ? '#047857' : 'rgba(16,185,129,0.6)', backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.1)' }}>
                                             {fieldType}
                                         </span>
                                     </div>
@@ -1196,13 +1251,13 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                         // 如果有连接，显示“已连接”状态
                                         if (hasConnection) {
                                             return (
-                                                <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded px-2 py-1">
-                                                    <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <div className="flex items-center gap-1.5 rounded px-2 py-1" style={{ backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.1)', border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: isLightCanvas ? '#10b981' : '#34d399' }}>
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                                                     </svg>
-                                                    <span className="text-[10px] text-emerald-300 font-medium">已连接</span>
+                                                    <span className="text-[10px] font-medium" style={{ color: isLightCanvas ? '#059669' : '#6ee7b7' }}>已连接</span>
                                                     {nodeInputs[key] && (
-                                                        <span className="text-[9px] text-emerald-400/60 truncate max-w-[120px]">
+                                                        <span className="text-[9px] truncate max-w-[120px]" style={{ color: isLightCanvas ? '#047857' : 'rgba(52,211,153,0.6)' }}>
                                                             {nodeInputs[key].length > 20 ? nodeInputs[key].slice(0, 20) + '...' : nodeInputs[key]}
                                                         </span>
                                                     )}
@@ -1242,14 +1297,16 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                                 <div className="flex items-center gap-1">
                                                     <input
                                                         type="text"
-                                                        className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-200 outline-none focus:border-emerald-500/30 placeholder-zinc-600"
+                                                        className="flex-1 rounded px-2 py-1 text-[10px] outline-none transition-colors"
+                                                        style={{ backgroundColor: themeColors.inputBg, border: `1px solid ${themeColors.inputBorder}`, color: themeColors.textPrimary }}
                                                         placeholder="输入Key或拉线连接"
                                                         value={nodeInputs[key] || ''}
                                                         onChange={(e) => handleNodeInputChange(key, e.target.value)}
                                                         onMouseDown={(e) => e.stopPropagation()}
                                                     />
                                                     <button
-                                                        className="px-1.5 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded text-[9px] text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+                                                        className="px-1.5 py-1 rounded text-[9px] transition-colors"
+                                                        style={{ backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)', border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}`, color: isLightCanvas ? '#059669' : '#6ee7b7' }}
                                                         onClick={() => handleFileUpload(key, fieldType)}
                                                         onMouseDown={(e) => e.stopPropagation()}
                                                         title="上传文件"
@@ -1268,25 +1325,26 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                             return (
                                                 <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
                                                     <button
-                                                        className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-200 outline-none hover:border-emerald-500/30 flex items-center justify-between gap-1"
+                                                        className="w-full rounded px-2 py-1 text-[10px] outline-none flex items-center justify-between gap-1 transition-colors"
+                                                        style={{ backgroundColor: themeColors.inputBg, border: `1px solid ${themeColors.inputBorder}`, color: themeColors.textPrimary }}
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             setOpenSelectKey(openSelectKey === key ? null : key);
                                                         }}
                                                     >
                                                         <span className="truncate">{currentValue || '选择...'}</span>
-                                                        <ChevronDown className={`w-3 h-3 text-emerald-400 transition-transform ${openSelectKey === key ? 'rotate-180' : ''}`} />
+                                                        <ChevronDown className={`w-3 h-3 transition-transform ${openSelectKey === key ? 'rotate-180' : ''}`} style={{ color: isLightCanvas ? '#10b981' : '#34d399' }} />
                                                     </button>
                                                     {openSelectKey === key && (
-                                                        <div className="absolute z-50 w-full mt-1 bg-[#0a1a14] border border-emerald-500/30 rounded-lg shadow-xl max-h-48 overflow-y-auto scrollbar-hide">
+                                                        <div className="absolute z-50 w-full mt-1 rounded-lg shadow-xl max-h-48 overflow-y-auto scrollbar-hide" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
                                                             {options.map((opt: string, optIdx: number) => (
                                                                 <div
                                                                     key={optIdx}
-                                                                    className={`px-2 py-1.5 text-[10px] cursor-pointer transition-colors ${
-                                                                        currentValue === opt 
-                                                                            ? 'bg-emerald-500/20 text-emerald-300' 
-                                                                            : 'text-zinc-300 hover:bg-emerald-500/10 hover:text-emerald-200'
-                                                                    }`}
+                                                                    className="px-2 py-1.5 text-[10px] cursor-pointer transition-colors"
+                                                                    style={{ 
+                                                                        backgroundColor: currentValue === opt ? (isLightCanvas ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)') : 'transparent',
+                                                                        color: currentValue === opt ? (isLightCanvas ? '#059669' : '#6ee7b7') : themeColors.textSecondary
+                                                                    }}
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         handleNodeInputChange(key, opt);
@@ -1306,7 +1364,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                         return (
                                             <input
                                                 type="text"
-                                                className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-[10px] text-zinc-200 outline-none focus:border-emerald-500/30 placeholder-zinc-600"
+                                                className="w-full rounded px-2 py-1 text-[10px] outline-none transition-colors"
+                                                style={{ backgroundColor: themeColors.inputBg, border: `1px solid ${themeColors.inputBorder}`, color: themeColors.textPrimary }}
                                                 placeholder={info.fieldValue || '输入文本或拉线连接...'}
                                                 value={nodeInputs[key] || ''}
                                                 onChange={(e) => handleNodeInputChange(key, e.target.value)}
@@ -1319,7 +1378,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         })
                     ) : (
                         <div className="text-center py-4">
-                            <div className="text-[10px] text-zinc-500">无可配置参数</div>
+                            <div className="text-[10px]" style={{ color: themeColors.textMuted }}>无可配置参数</div>
                         </div>
                     )}
                     
@@ -1332,14 +1391,14 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 </div>
                 
                 {/* 底部状态 */}
-                <div className="h-6 bg-black/30 border-t border-emerald-500/10 px-2 flex items-center justify-between text-[9px] text-zinc-500">
+                <div className="h-6 px-2 flex items-center justify-between text-[9px]" style={{ backgroundColor: themeColors.footerBg, borderTop: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.1)'}`, color: themeColors.textMuted }}>
                     <span>→ 输出图片</span>
                 </div>
                 
                 {isRunning && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center z-30">
+                    <div className="absolute inset-0 backdrop-blur-[2px] flex flex-col items-center justify-center z-30" style={{ backgroundColor: isLightCanvas ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }}>
                         <div className="w-8 h-8 border-2 border-emerald-400/50 border-t-emerald-400 rounded-full animate-spin mb-2"></div>
-                        <span className="text-[10px] text-emerald-300">正在执行...</span>
+                        <span className="text-[10px]" style={{ color: isLightCanvas ? '#059669' : '#6ee7b7' }}>正在执行...</span>
                     </div>
                 )}
             </div>
@@ -1351,14 +1410,14 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         const ideaTitle = node.title || '创意';
         
         return (
-            <div className="w-full h-full bg-[#1c1c1e] flex flex-col overflow-hidden border border-blue-500/30 rounded-xl shadow-lg relative">
+            <div className="w-full h-full flex flex-col overflow-hidden rounded-xl shadow-lg relative" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.3)'}` }}>
                 {/* 标题栏 - 与BP一致 */}
-                <div className="h-8 border-b border-blue-500/20 flex items-center justify-between px-3 bg-blue-500/10 shrink-0">
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${isLightCanvas ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.2)'}`, backgroundColor: isLightCanvas ? 'rgba(59,130,246,0.08)' : 'rgba(59,130,246,0.1)' }}>
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <Icons.Sparkles size={12} className="text-blue-300 flex-shrink-0" />
-                        <span className="text-[10px] font-bold text-blue-200 truncate max-w-[200px]">{ideaTitle}</span>
+                        <Icons.Sparkles size={12} className="flex-shrink-0" style={{ color: isLightCanvas ? '#3b82f6' : '#93c5fd' }} />
+                        <span className="text-[10px] font-bold truncate max-w-[200px]" style={{ color: isLightCanvas ? '#2563eb' : '#bfdbfe' }}>{ideaTitle}</span>
                     </div>
-                    <span className="text-[8px] text-blue-300/60 bg-blue-500/20 px-1.5 py-0.5 rounded">IDEA</span>
+                    <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: isLightCanvas ? '#1d4ed8' : 'rgba(147,197,253,0.6)', backgroundColor: isLightCanvas ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.2)' }}>IDEA</span>
                 </div>
                 
                 {/* 提示词编辑区 - 固定高度，内容滚动 */}
@@ -1366,7 +1425,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium block mb-1.5 flex-shrink-0">提示词</label>
                     <div className="flex-1 min-h-0 overflow-hidden">
                         <textarea 
-                            className="w-full h-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:border-blue-500/50 focus:outline-none transition-colors resize-none overflow-y-auto scrollbar-hide"
+                            className={`w-full h-full ${controlBg} border rounded-lg px-3 py-2 text-xs outline-none transition-colors resize-none overflow-y-auto scrollbar-hide ${isLightCanvas ? 'border-gray-200 text-gray-800 focus:border-blue-400 placeholder-gray-400' : 'border-white/10 text-zinc-200 focus:border-blue-500/50'}`}
                             placeholder="输入提示词..."
                             value={localContent}
                             onChange={(e) => setLocalContent(e.target.value)}
@@ -1381,11 +1440,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 {/* 设置区 - 与BP一致的样式 */}
                 <div className="px-3 pb-3 space-y-1.5 flex-shrink-0">
                     {/* 比例第一行 */}
-                    <div className="flex bg-black/40 rounded-lg p-0.5">
+                    <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                         {['AUTO', '1:1', '2:3', '3:2', '3:4', '4:3'].map(ratio => (
                             <button
                                 key={ratio}
-                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${(settings.aspectRatio || 'AUTO') === ratio ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${(settings.aspectRatio || 'AUTO') === ratio ? `${selectedBg} ${selectedText}` : 'text-zinc-500 hover:text-zinc-300'}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onUpdate(node.id, { data: { ...node.data, settings: { ...settings, aspectRatio: ratio } } });
@@ -1397,11 +1456,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         ))}
                     </div>
                     {/* 比例第二行 */}
-                    <div className="flex bg-black/40 rounded-lg p-0.5">
+                    <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                         {['3:5', '5:3', '9:16', '16:9', '21:9'].map(ratio => (
                             <button
                                 key={ratio}
-                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${settings.aspectRatio === ratio ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${settings.aspectRatio === ratio ? `${selectedBg} ${selectedText}` : 'text-zinc-500 hover:text-zinc-300'}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onUpdate(node.id, { data: { ...node.data, settings: { ...settings, aspectRatio: ratio } } });
@@ -1413,11 +1472,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         ))}
                     </div>
                     {/* 分辨率 */}
-                    <div className="flex bg-black/40 rounded-lg p-0.5">
+                    <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                         {['1K', '2K', '4K'].map(res => (
                             <button
                                 key={res}
-                                className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${(settings.resolution || '2K') === res ? 'bg-blue-500/30 text-blue-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${(settings.resolution || '2K') === res ? `${selectedBg} ${selectedText}` : 'text-zinc-500 hover:text-zinc-300'}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onUpdate(node.id, { data: { ...node.data, settings: { ...settings, resolution: res } } });
@@ -1431,7 +1490,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 </div>
                 
                 {/* 底部状态 - 与BP一致 */}
-                <div className="h-6 bg-black/30 border-t border-white/5 px-3 flex items-center justify-between text-[10px] text-zinc-500">
+                <div className={`h-6 ${footerBarBg} border-t px-3 flex items-center justify-between text-[10px]`} style={{ borderColor: themeColors.headerBorder, color: themeColors.textMuted }}>
                     <span>输入: 1/1</span>
                     <span>{settings.aspectRatio || 'AUTO'} · {settings.resolution || '2K'}</span>
                 </div>
@@ -1457,14 +1516,20 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
       const nodeColor = getNodeTypeColor(node.type);
       
       return (
-        <div className={`w-full h-full relative group flex flex-col overflow-hidden rounded-xl ${!hasImage ? 'bg-[#1c1c1e] border-2 border-dashed border-white/10' : 'bg-black'}`}>
+        <div 
+          className={`w-full h-full relative group flex flex-col overflow-hidden rounded-xl ${!hasImage ? 'border-2 border-dashed' : ''}`}
+          style={{ 
+            backgroundColor: !hasImage ? themeColors.nodeBg : '#000000',
+            borderColor: !hasImage ? themeColors.inputBorder : 'transparent'
+          }}
+        >
            {!hasImage ? (
                // 空状态：显示上传按钮和prompt输入
-               <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-500 gap-2">
-                   <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                      <Icons.Image size={18} className="text-zinc-500" />
+               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ color: themeColors.textMuted }}>
+                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isLightCanvas ? 'bg-gray-100' : 'bg-white/5'}`}>
+                      <Icons.Image size={18} className={isLightCanvas ? 'text-gray-400' : 'text-zinc-500'} />
                    </div>
-                   <div className="text-[9px] font-medium text-zinc-600 uppercase tracking-widest text-center">
+                   <div className={`text-[9px] font-medium uppercase tracking-widest text-center ${isLightCanvas ? 'text-gray-500' : 'text-zinc-600'}`}>
                        Upload or Prompt
                    </div>
                    <button 
@@ -1479,7 +1544,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                    {/* Prompt Input */}
                    <div className="absolute bottom-2 left-2 right-2">
                       <textarea 
-                          className="w-full bg-black/50 border border-white/10 rounded-lg p-2 text-[10px] text-zinc-300 outline-none resize-none focus:border-blue-500/50 focus:text-white transition-colors placeholder-zinc-600"
+                          className={`w-full rounded-lg p-2 text-[10px] outline-none resize-none transition-colors ${isLightCanvas ? 'bg-gray-100 border border-gray-200 text-gray-700 placeholder-gray-400 focus:border-blue-400' : 'bg-black/50 border border-white/10 text-zinc-300 placeholder-zinc-600 focus:border-blue-500/50 focus:text-white'}`}
                           placeholder="输入描述文生图..."
                           value={localPrompt}
                           onChange={(e) => setLocalPrompt(e.target.value)}
@@ -1608,8 +1673,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
            <div 
              className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded text-[9px] font-bold uppercase backdrop-blur-md"
              style={{
-               backgroundColor: hasImage ? `${nodeColor.primary}40` : 'rgb(39, 39, 42)',
-               color: hasImage ? nodeColor.light : 'rgb(113, 113, 122)'
+               backgroundColor: hasImage ? `${nodeColor.primary}40` : (isLightCanvas ? 'rgb(229, 231, 235)' : 'rgb(39, 39, 42)'),
+               color: hasImage ? nodeColor.light : (isLightCanvas ? 'rgb(75, 85, 99)' : 'rgb(113, 113, 122)')
              }}
            >
                Image
@@ -1649,13 +1714,13 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
 
         // 视频节点始终显示配置界面
         return (
-            <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
+            <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${themeColors.nodeBorder}` }}>
                 {/* Header with TAB切换 */}
-                <div className="h-7 border-b border-white/10 flex items-center justify-between px-3 bg-white/5 shrink-0">
+                <div className="h-7 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${themeColors.headerBorder}`, backgroundColor: themeColors.headerBg }}>
                     <div className="flex items-center gap-1">
-                        <Icons.Video size={12} className="text-white/70" />
+                        <Icons.Video size={12} style={{ color: themeColors.textSecondary }} />
                         {/* TAB切换按钮 */}
-                        <div className="flex bg-black/40 rounded p-0.5 ml-1">
+                        <div className={`flex ${controlBg} rounded p-0.5 ml-1`}>
                             <button
                                 className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded transition-all ${
                                     videoService === 'sora' 
@@ -1694,7 +1759,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 <div className="flex-1 p-2 flex flex-col gap-2 overflow-hidden">
                     {/* Prompt - 可扩展的提示词区域 */}
                     <textarea 
-                        className="flex-1 min-h-[60px] bg-black/40 border border-white/10 rounded p-2 text-[11px] text-zinc-200 outline-none resize-none focus:border-yellow-500/50 placeholder-zinc-600"
+                        className={`flex-1 min-h-[60px] ${controlBg} border rounded p-2 text-[11px] outline-none resize-none transition-colors ${isLightCanvas ? 'border-gray-200 text-gray-800 focus:border-yellow-500 placeholder-gray-400' : 'border-white/10 text-zinc-200 focus:border-yellow-500/50 placeholder-zinc-600'}`}
                         placeholder="描述视频场景..."
                         value={localPrompt}
                         onChange={(e) => setLocalPrompt(e.target.value)}
@@ -1708,7 +1773,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             {/* Row 1: Aspect + Quality */}
                             <div className="flex gap-1.5">
                                 {/* Aspect Ratio */}
-                                <div className="flex bg-black/40 rounded p-0.5 flex-1">
+                                <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
                                     <button
                                         className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSize === '1280x720' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                                         onClick={() => handleVideoSettingChange('videoSize', '1280x720')}
@@ -1725,7 +1790,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                     </button>
                                 </div>
                                 {/* Quality */}
-                                <div className="flex bg-black/40 rounded p-0.5 flex-1">
+                                <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
                                     <button
                                         className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${!isHD ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                                         onClick={() => handleVideoSettingChange('videoModel', 'sora-2')}
@@ -1743,7 +1808,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </div>
                             </div>
                             {/* Row 2: Duration */}
-                            <div className="flex bg-black/40 rounded p-0.5">
+                            <div className={`flex ${controlBg} rounded p-0.5`}>
                                 <button
                                     className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${videoSeconds === '10' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                                     onClick={() => handleVideoSettingChange('videoSeconds', '10')}
@@ -1775,9 +1840,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     {videoService === 'veo' && (
                         <div className="flex flex-col gap-1.5 shrink-0">
                             {/* Row 1: 视频模式 */}
-                            <div className="flex bg-black/40 rounded p-0.5">
+                            <div className={`flex ${controlBg} rounded p-0.5`}>
                                 <button
-                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'text2video' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'text2video' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
                                     onClick={() => handleVideoSettingChange('veoMode', 'text2video')}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="纯文字生成视频"
@@ -1785,7 +1850,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                     文生视频
                                 </button>
                                 <button
-                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'image2video' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'image2video' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
                                     onClick={() => handleVideoSettingChange('veoMode', 'image2video')}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="单图直出视频"
@@ -1793,7 +1858,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                     图生视频
                                 </button>
                                 <button
-                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'keyframes' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'keyframes' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
                                     onClick={() => handleVideoSettingChange('veoMode', 'keyframes')}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="首尾帧控制视频"
@@ -1801,7 +1866,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                     首尾帧
                                 </button>
                                 <button
-                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'multi-reference' ? 'bg-purple-500/30 text-purple-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'multi-reference' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
                                     onClick={() => onUpdate(node.id, { data: { ...node.data, veoMode: 'multi-reference', veoModel: 'veo3.1-components' } })}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="多图参考生成"
@@ -1813,9 +1878,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             {/* Row 1.5: 模型选择 - 6个模型分两行 */}
                             <div className="flex flex-col gap-1">
                                 {/* 第一行: fast, 4k, pro */}
-                                <div className="flex bg-black/40 rounded-lg p-0.5">
+                                <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                                     <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-fast' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-fast' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
                                         onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-fast')}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         title="快速模式"
@@ -1823,7 +1888,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                         fast
                                     </button>
                                     <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-4k' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-4k' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
                                         onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-4k')}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         title="4K 标准"
@@ -1831,7 +1896,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                         4k
                                     </button>
                                     <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
                                         onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-pro')}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         title="高质量"
@@ -1840,9 +1905,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                     </button>
                                 </div>
                                 {/* 第二行: pro-4k, components, components-4k */}
-                                <div className="flex bg-black/40 rounded-lg p-0.5">
+                                <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                                     <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro-4k' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro-4k' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
                                         onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-pro-4k')}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         title="4K 高质量"
@@ -1850,7 +1915,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                         pro-4k
                                     </button>
                                     <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
                                         onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-components')}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         title="多图参考"
@@ -1858,7 +1923,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                         comp
                                     </button>
                                     <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components-4k' ? 'bg-purple-500/30 text-purple-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components-4k' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
                                         onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-components-4k')}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         title="4K 多图参考"
@@ -1871,16 +1936,16 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             {/* Row 2: 宽高比 + 增强提示词 */}
                             {veoMode !== 'multi-reference' && (
                                 <div className="flex gap-1.5">
-                                    <div className="flex bg-black/40 rounded p-0.5 flex-1">
+                                    <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
                                         <button
-                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '16:9' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '16:9' ? (isLightCanvas ? 'bg-gray-200 text-gray-800' : 'bg-white/20 text-white') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
                                             onClick={() => handleVideoSettingChange('veoAspectRatio', '16:9')}
                                             onMouseDown={(e) => e.stopPropagation()}
                                         >
                                             16:9
                                         </button>
                                         <button
-                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '9:16' ? 'bg-white/20 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '9:16' ? (isLightCanvas ? 'bg-gray-200 text-gray-800' : 'bg-white/20 text-white') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
                                             onClick={() => handleVideoSettingChange('veoAspectRatio', '9:16')}
                                             onMouseDown={(e) => e.stopPropagation()}
                                         >
@@ -1888,7 +1953,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                         </button>
                                     </div>
                                     <button
-                                        className={`px-2 py-1 text-[8px] font-medium rounded transition-all ${veoEnhancePrompt ? 'bg-purple-500/30 text-purple-300' : 'bg-black/40 text-zinc-400 hover:text-zinc-200'}`}
+                                        className={`px-2 py-1 text-[8px] font-medium rounded transition-all ${veoEnhancePrompt ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : `${controlBg} ${isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200'}`}`}
                                         onClick={() => handleVideoSettingChange('veoEnhancePrompt', !veoEnhancePrompt)}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         title="AI自动优化提示词"
@@ -2254,14 +2319,14 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         };
         
         return (
-            <div className="w-full h-full bg-[#0a0a0f] rounded-xl overflow-hidden relative flex flex-col border border-white/20">
+            <div className="w-full h-full rounded-xl overflow-hidden relative flex flex-col" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${themeColors.nodeBorder}` }}>
                 {/* 标题栏 */}
-                <div className="h-8 border-b border-white/10 flex items-center justify-between px-3 bg-white/5 shrink-0">
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${themeColors.headerBorder}`, backgroundColor: themeColors.headerBg }}>
                     <div className="flex items-center gap-2">
-                        <Icons.Scissors size={14} className="text-white/70" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-white/90">帧提取器</span>
+                        <Icons.Scissors size={14} style={{ color: themeColors.textSecondary }} />
+                        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: themeColors.textPrimary }}>帧提取器</span>
                     </div>
-                    <span className="text-[9px] text-zinc-500 font-mono">{formatTime(localTime)} / {formatTime(duration)}</span>
+                    <span className="text-[9px] font-mono" style={{ color: themeColors.textMuted }}>{formatTime(localTime)} / {formatTime(duration)}</span>
                 </div>
                 
                 {/* 视频预览区 */}
@@ -2412,10 +2477,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             };
             
             return (
-                <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
-                    <div className="h-8 border-b border-white/10 flex items-center px-3 gap-2 bg-white/5 shrink-0">
+                <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${themeColors.nodeBorder}` }}>
+                    <div className="h-8 flex items-center px-3 gap-2 shrink-0" style={{ borderBottom: `1px solid ${themeColors.headerBorder}`, backgroundColor: themeColors.headerBg }}>
                         {icon}
-                        <span className="text-xs font-bold uppercase tracking-wider text-white/90">{label}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: themeColors.textPrimary }}>{label}</span>
                     </div>
                     <div className="flex-1 relative overflow-hidden">
                         <img 
@@ -2486,21 +2551,21 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         // Edit 节点 - 显示设置界面（与创意节点UI保持一致）
         if (node.type === 'edit') {
             return (
-                <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-yellow-500/30 rounded-xl overflow-hidden relative shadow-lg">
+                <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(234,179,8,0.3)' : 'rgba(234,179,8,0.3)'}` }}>
                     {/* 头部 - 与创意节点一致 */}
-                    <div className="h-8 border-b border-yellow-500/20 flex items-center justify-between px-3 bg-yellow-500/10 shrink-0">
+                    <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${isLightCanvas ? 'rgba(234,179,8,0.2)' : 'rgba(234,179,8,0.2)'}`, backgroundColor: isLightCanvas ? 'rgba(234,179,8,0.08)' : 'rgba(234,179,8,0.1)' }}>
                         <div className="flex items-center gap-2">
-                            <BananaIcon size={12} className="text-yellow-300" />
-                            <span className="text-[10px] font-bold text-yellow-200 truncate max-w-[200px]">{label}</span>
+                            <BananaIcon size={12} className={isLightCanvas ? 'text-yellow-600' : 'text-yellow-300'} />
+                            <span className="text-[10px] font-bold truncate max-w-[200px]" style={{ color: isLightCanvas ? '#a16207' : '#fef08a' }}>{label}</span>
                         </div>
-                        <span className="text-[8px] text-yellow-300/60 bg-yellow-500/20 px-1.5 py-0.5 rounded">MAGIC</span>
+                        <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: isLightCanvas ? '#854d0e' : 'rgba(253,224,71,0.6)', backgroundColor: isLightCanvas ? 'rgba(234,179,8,0.15)' : 'rgba(234,179,8,0.2)' }}>MAGIC</span>
                     </div>
                     <div className="flex-1 p-3 flex flex-col gap-2 overflow-hidden">
                         {/* Prompt */}
                         <div className="flex-1 min-h-0 flex flex-col">
                             <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium block mb-1.5 flex-shrink-0">编辑指令</label>
                             <textarea 
-                                className="flex-1 w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-200 outline-none resize-none focus:border-yellow-500/50 placeholder-zinc-600 overflow-y-auto scrollbar-hide"
+                                className={`flex-1 w-full ${controlBg} border rounded-lg px-3 py-2 text-xs outline-none resize-none overflow-y-auto scrollbar-hide transition-colors ${isLightCanvas ? 'border-gray-200 text-gray-800 focus:border-yellow-500 placeholder-gray-400' : 'border-white/10 text-zinc-200 focus:border-yellow-500/50 placeholder-zinc-600'}`}
                                 placeholder="输入编辑指令..."
                                 value={localPrompt}
                                 onChange={(e) => setLocalPrompt(e.target.value)}
@@ -2513,7 +2578,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     {/* 设置区 - 与创意节点一致的样式 */}
                     <div className="px-3 pb-3 space-y-1.5 flex-shrink-0">
                         {/* Aspect Ratio Row 1 */}
-                        <div className="flex bg-black/40 rounded-lg p-0.5">
+                        <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                             {aspectRatios1.map(r => (
                                 <button
                                     key={r}
@@ -2526,7 +2591,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             ))}
                         </div>
                         {/* Aspect Ratio Row 2 */}
-                        <div className="flex bg-black/40 rounded-lg p-0.5">
+                        <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                             {aspectRatios2.map(r => (
                                 <button
                                     key={r}
@@ -2539,7 +2604,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             ))}
                         </div>
                         {/* Resolution */}
-                        <div className="flex bg-black/40 rounded-lg p-0.5">
+                        <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                             {resolutions.map(r => (
                                 <button
                                     key={r}
@@ -2554,7 +2619,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     </div>
                     
                     {/* 底部状态 - 与创意节点一致 */}
-                    <div className="h-6 bg-black/30 border-t border-white/5 px-3 flex items-center justify-between text-[10px] text-zinc-500">
+                    <div className={`h-6 ${footerBarBg} border-t px-3 flex items-center justify-between text-[10px]`} style={{ borderColor: themeColors.headerBorder, color: themeColors.textMuted }}>
                         <span>输入: 1/1</span>
                         <span>{editAspectRatio} · {editResolution}</span>
                     </div>
@@ -2574,13 +2639,13 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             const upscaleResolutions = ['2K', '4K'];
             
             return (
-                <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
-                    <div className="h-7 border-b border-white/10 flex items-center justify-between px-3 bg-white/5 shrink-0">
+                <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${themeColors.nodeBorder}` }}>
+                    <div className="h-7 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${themeColors.headerBorder}`, backgroundColor: themeColors.headerBg }}>
                         <div className="flex items-center gap-2">
                             {icon}
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-white/90">Upscale HD</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: themeColors.textPrimary }}>Upscale HD</span>
                         </div>
-                        <span className="text-[7px] text-white/40 uppercase">IMG → HD</span>
+                        <span className="text-[7px] uppercase" style={{ color: themeColors.textMuted }}>IMG → HD</span>
                     </div>
                     <div className="flex-1 p-3 flex flex-col justify-center gap-3">
                         {/* 说明文字 */}
@@ -2592,7 +2657,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         {/* 分辨率选择 */}
                         <div className="space-y-1">
                             <label className="text-[9px] font-bold text-zinc-500 uppercase px-1">目标分辨率</label>
-                            <div className="flex bg-black/40 rounded p-0.5">
+                            <div className={`flex ${controlBg} rounded p-0.5`}>
                                 {upscaleResolutions.map(r => (
                                     <button
                                         key={r}
@@ -2626,10 +2691,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
 
         // No output yet - show input form (remove-bg)
         return (
-            <div className="w-full h-full bg-[#1c1c1e] flex flex-col border border-white/20 rounded-xl overflow-hidden relative shadow-lg">
-                <div className="h-8 border-b border-white/10 flex items-center px-3 gap-2 bg-white/5">
+            <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${themeColors.nodeBorder}` }}>
+                <div className="h-8 flex items-center px-3 gap-2" style={{ borderBottom: `1px solid ${themeColors.headerBorder}`, backgroundColor: themeColors.headerBg }}>
                     {icon}
-                    <span className="text-xs font-bold uppercase tracking-wider text-white/90">{label}</span>
+                    <span className="text-xs font-bold uppercase tracking-wider" style={{ color: themeColors.textPrimary }}>{label}</span>
                 </div>
                 <div className="flex-1 p-3 flex flex-col gap-2 relative">
                     <textarea 
@@ -2660,7 +2725,14 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     };
 
     return (
-      <div className="w-full h-full bg-[#1c1c1e] flex flex-col rounded-xl overflow-hidden border border-white/20 shadow-lg relative group/text">
+      <div 
+        className="w-full h-full flex flex-col rounded-xl overflow-hidden shadow-lg relative group/text"
+        style={{ 
+          backgroundColor: themeColors.nodeBg, 
+          border: `1px solid ${themeColors.nodeBorder}`,
+          color: themeColors.textPrimary 
+        }}
+      >
         {isEditing ? (
            <div 
                className="flex-1 p-3 flex flex-col h-full gap-2" 
@@ -2711,7 +2783,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
       ref={nodeRef}
       className={`absolute transition-all duration-75 flex flex-col select-none
         ${isRelay ? 'rounded-full' : 'rounded-xl'}
-        ${isSelected ? 'ring-2 ring-blue-500/50 z-50' : 'ring-1 ring-white/5 hover:ring-white/20 z-10'}
+        ${isSelected ? 'ring-2 ring-blue-500/50 z-50' : `ring-1 ${isLightCanvas ? 'ring-black/10 hover:ring-black/20' : 'ring-white/5 hover:ring-white/20'} z-10`}
         ${isSelected && !isRelay ? 'shadow-2xl' : ''}
         ${isRunning ? 'ring-2 ring-yellow-500 animate-pulse' : ''}
       `}
@@ -2720,8 +2792,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         width: node.width,
         height: node.height,
         cursor: 'grab',
-        backgroundColor: isRelay ? 'transparent' : '#1c1c1e',
+        backgroundColor: isRelay ? 'transparent' : themeColors.nodeBg,
         pointerEvents: 'auto',
+        boxShadow: isLightCanvas ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
       } as React.CSSProperties}
       onMouseDown={(e) => {
         // Prevent drag start if clicking interactive elements, BUT allow if it's the text display div
@@ -2765,7 +2838,12 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
              {['text', 'idea'].includes(node.type) && !isEditing && (
                  <button 
                     onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
-                    className="p-1.5 rounded-lg border border-white/10 shadow-lg bg-[#2c2c2e] text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
+                    className="p-1.5 rounded-lg border shadow-lg transition-colors"
+                    style={{ 
+                      backgroundColor: isLightCanvas ? '#ffffff' : '#2c2c2e',
+                      borderColor: isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)',
+                      color: isLightCanvas ? '#6e6e73' : '#d4d4d8'
+                    }}
                     title="Edit Text (Enter)"
                  >
                     <Icons.Edit size={12} fill="currentColor" />
@@ -2777,18 +2855,26 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                  <div className="flex items-center gap-0.5">
                    {/* 批量数量选择器 - 对图片生成类型节点显示 */}
                    {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config'].includes(node.type) && !isRunning && (
-                     <div className="flex items-center h-8 rounded-l-lg border border-r-0 border-white/10 bg-[#2c2c2e] overflow-hidden">
+                     <div 
+                       className="flex items-center h-8 rounded-l-lg border border-r-0 overflow-hidden"
+                       style={{ 
+                         backgroundColor: isLightCanvas ? '#ffffff' : '#2c2c2e',
+                         borderColor: isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'
+                       }}
+                     >
                        <button
                          onClick={(e) => { e.stopPropagation(); setBatchCount(Math.max(1, batchCount - 1)); }}
-                         className="w-6 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                         className="w-6 h-full flex items-center justify-center transition-colors"
+                         style={{ color: isLightCanvas ? '#6e6e73' : '#a1a1aa' }}
                          title="减少"
                        >
                          <Icons.Minus size={10} />
                        </button>
-                       <span className="w-5 text-center text-[10px] font-bold text-zinc-300">{batchCount}</span>
+                       <span className="w-5 text-center text-[10px] font-bold" style={{ color: isLightCanvas ? '#1d1d1f' : '#d4d4d8' }}>{batchCount}</span>
                        <button
                          onClick={(e) => { e.stopPropagation(); setBatchCount(Math.min(9, batchCount + 1)); }}
-                         className="w-6 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                         className="w-6 h-full flex items-center justify-center transition-colors"
+                         style={{ color: isLightCanvas ? '#6e6e73' : '#a1a1aa' }}
                          title="增加"
                        >
                          <Icons.Plus size={10} />
@@ -2798,19 +2884,22 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                    <button 
                       onClick={(e) => { 
                           e.stopPropagation(); 
-                          // 防止重复执行：如果已在运行中，只允许停止
                           if (isRunning) {
                               onStop(node.id);
                           } else if (node.status !== 'running') {
-                              // 只有当节点状态不是 running 时才允许执行
                               onExecute(node.id, batchCount);
                           }
                       }}
                       disabled={!isRunning && node.status === 'running'}
-                      className={`h-8 px-2.5 border border-white/10 shadow-lg transition-colors flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed
+                      className={`h-8 px-2.5 border shadow-lg transition-colors flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed
                           ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
-                          ${isRunning ? 'bg-red-500/20 text-red-300 border-red-500/50 hover:bg-red-500/30' : 'bg-[#2c2c2e] text-green-400 hover:bg-green-500/20 hover:text-green-300'}
+                          ${isRunning ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : ''}
                       `}
+                      style={!isRunning ? {
+                        backgroundColor: isLightCanvas ? '#ffffff' : '#2c2c2e',
+                        borderColor: isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)',
+                        color: '#22c55e'
+                      } : undefined}
                    >
                       {isRunning ? <Icons.Stop size={12} fill="currentColor" /> : <Icons.Play size={12} fill="currentColor" />}
                       {isRunning ? 'Stop' : 'Run'}
@@ -2822,7 +2911,12 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             {(node.content) && (
                  <button 
                     onClick={(e) => { e.stopPropagation(); onDownload(node.id); }}
-                    className="bg-[#2c2c2e] text-zinc-300 h-8 w-8 rounded-lg hover:bg-white/10 hover:text-white transition-colors border border-white/10 shadow-lg flex items-center justify-center"
+                    className="h-8 w-8 rounded-lg transition-colors border shadow-lg flex items-center justify-center"
+                    style={{ 
+                      backgroundColor: isLightCanvas ? '#ffffff' : '#2c2c2e',
+                      borderColor: isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)',
+                      color: isLightCanvas ? '#6e6e73' : '#d4d4d8'
+                    }}
                     title="Download Output"
                 >
                     <Icons.Download size={14} />
@@ -2832,7 +2926,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             {/* Close Button */}
             <button 
                 onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
-                className="bg-[#2c2c2e] text-red-400 h-8 w-8 rounded-lg hover:bg-red-500/20 hover:text-red-300 transition-colors border border-white/10 shadow-lg flex items-center justify-center"
+                className="h-8 w-8 rounded-lg transition-colors border shadow-lg flex items-center justify-center text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                style={{ 
+                  backgroundColor: isLightCanvas ? '#ffffff' : '#2c2c2e',
+                  borderColor: isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'
+                }}
             >
                 <Icons.Close size={14} />
             </button>

@@ -344,6 +344,26 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiConfigured, setApiConfigured] = useState(false);
 
+  // 画布主题（深色/浅色）
+  const [canvasTheme, setCanvasTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      const saved = localStorage.getItem('pebbling_canvas_theme');
+      return (saved === 'light' || saved === 'dark') ? saved : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+  const isLightCanvas = canvasTheme === 'light';
+
+  // 保存画布主题到 localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('pebbling_canvas_theme', canvasTheme);
+    } catch (e) {
+      console.error('Failed to save canvas theme:', e);
+    }
+  }, [canvasTheme]);
+
   // Check API configuration on mount
   useEffect(() => {
     setApiConfigured(isApiConfigured());
@@ -3287,8 +3307,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           content: '',
                           x: node.x + node.width + 100,
                           y: node.y,
-                          width: 320,
-                          height: Math.max(300, 150 + (appInfo.nodeInfoList?.length || 0) * 60),
+                          width: 400,
+                          height: Math.max(400, 200 + (appInfo.nodeInfoList?.length || 0) * 60),
                           data: {
                               webappId,
                               appInfo,
@@ -3375,9 +3395,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           type: 'image',
                           content: '',
                           x: node.x + node.width + 100,
-                          y: node.y + (batchIdx * 320), // 每个节点向下偏移
-                          width: 300,
-                          height: 300,
+                          y: node.y + (batchIdx * 420), // 每个节点向下偏移
+                          width: 400,
+                          height: 400,
                           data: {},
                           status: 'running'
                       };
@@ -4202,7 +4222,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
   return (
     <div 
-      className="w-full h-full bg-[#0a0a0f] text-white overflow-hidden relative" 
+      className={`w-full h-full text-white overflow-hidden relative transition-colors duration-300 ${
+        isLightCanvas ? 'bg-[#f5f5f7]' : 'bg-[#0a0a0f]'
+      }`}
+      style={{ color: isLightCanvas ? '#1d1d1f' : '#ffffff' }}
       onContextMenu={handleContextMenu}
     >
 
@@ -4230,6 +4253,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           onManualSave={handleManualSave}
           autoSaveEnabled={autoSaveEnabled}
           hasUnsavedChanges={hasUnsavedChanges}
+          canvasTheme={canvasTheme}
+          onToggleTheme={() => setCanvasTheme(prev => prev === 'dark' ? 'light' : 'dark')}
           onApplyCreativeIdea={(idea) => {
             // 应用创意库到画布
             const baseX = -canvasOffset.x / scale + 200;
@@ -4334,9 +4359,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       > 
         {/* Background Grid */}
         <div 
-            className="absolute inset-0 pointer-events-none opacity-20"
+            className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
+              isLightCanvas ? 'opacity-30' : 'opacity-20'
+            }`}
             style={{
-                backgroundImage: 'radial-gradient(circle, #444 1px, transparent 1px)',
+                backgroundImage: `radial-gradient(circle, ${isLightCanvas ? '#c0c0c0' : '#444'} 1px, transparent 1px)`,
                 backgroundSize: `${20 * scale}px ${20 * scale}px`,
                 backgroundPosition: `${canvasOffset.x}px ${canvasOffset.y}px`
             }}
@@ -4373,18 +4400,33 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                             <feMergeNode in="SourceGraphic"/>
                         </feMerge>
                     </filter>
-                    {/* 黑白渐变 */}
-                    <linearGradient id="grad-mono" x1="0%" y1="0%" x2="100%" y2="0%">
+                    {/* 黑白渐变 - 深色模式 */}
+                    <linearGradient id="grad-mono-dark" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#666" stopOpacity="0.4"/>
                         <stop offset="30%" stopColor="#fff" stopOpacity="0.9"/>
                         <stop offset="70%" stopColor="#fff" stopOpacity="0.9"/>
                         <stop offset="100%" stopColor="#666" stopOpacity="0.4"/>
+                    </linearGradient>
+                    {/* 浅色模式渐变 */}
+                    <linearGradient id="grad-mono-light" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#999" stopOpacity="0.4"/>
+                        <stop offset="30%" stopColor="#333" stopOpacity="0.9"/>
+                        <stop offset="70%" stopColor="#333" stopOpacity="0.9"/>
+                        <stop offset="100%" stopColor="#999" stopOpacity="0.4"/>
                     </linearGradient>
                     <linearGradient id="grad-selected" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#888" stopOpacity="0.5"/>
                         <stop offset="50%" stopColor="#fff" stopOpacity="1"/>
                         <stop offset="100%" stopColor="#888" stopOpacity="0.5"/>
                     </linearGradient>
+                    {/* 浅色模式的发光滤镜 */}
+                    <filter id="glow-dark" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                        <feMerge>
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
                 </defs>
                 {connections.map(conn => {
                     // 🔧 使用 nodesRef 获取最新位置，确保拖拽时连线实时跟随
@@ -4469,19 +4511,23 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                 strokeWidth="20"
                                 fill="none"
                             />
-                            {/* 外层光晕 - 使用纯白色 */}
+                            {/* 外层光晕 */}
                             <path 
                                 d={pathD}
-                                stroke={isSelected ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)'}
+                                stroke={isLightCanvas 
+                                    ? (isSelected ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)')
+                                    : (isSelected ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)')}
                                 strokeWidth={isSelected ? 8 : 5}
                                 fill="none"
-                                filter="url(#glow-white)"
+                                filter={isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)'}
                                 strokeLinecap="round"
                             />
-                            {/* 主线条 - 使用纯白色 */}
+                            {/* 主线条 */}
                             <path 
                                 d={pathD}
-                                stroke={isSelected ? '#ffffff' : 'rgba(255,255,255,0.9)'}
+                                stroke={isLightCanvas 
+                                    ? (isSelected ? '#1d1d1f' : 'rgba(0,0,0,0.7)')
+                                    : (isSelected ? '#ffffff' : 'rgba(255,255,255,0.9)')}
                                 strokeWidth={isSelected ? 3 : 2}
                                 fill="none"
                                 strokeLinecap="round"
@@ -4491,15 +4537,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                 cx={startX} 
                                 cy={startY} 
                                 r={isSelected ? 5 : 4} 
-                                fill="#ffffff"
-                                filter="url(#glow-white)"
+                                fill={isLightCanvas ? '#1d1d1f' : '#ffffff'}
+                                filter={isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)'}
                             />
                             <circle 
                                 cx={endX} 
                                 cy={endY} 
                                 r={isSelected ? 5 : 4} 
-                                fill="#ffffff"
-                                filter="url(#glow-white)"
+                                fill={isLightCanvas ? '#1d1d1f' : '#ffffff'}
+                                filter={isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)'}
                             />
                         </g>
                     );
@@ -4550,22 +4596,22 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                         <>
                             <path 
                                 d={`M ${startX} ${startY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${endX} ${endY}`}
-                                stroke="rgba(255,255,255,0.4)"
+                                stroke={isLightCanvas ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.4)'}
                                 strokeWidth="4"
                                 fill="none"
-                                filter="url(#glow-white)"
+                                filter={isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)'}
                                 strokeLinecap="round"
                             />
                             <path 
                                 d={`M ${startX} ${startY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${endX} ${endY}`}
-                                stroke="url(#grad-mono)"
+                                stroke={isLightCanvas ? 'url(#grad-mono-light)' : 'url(#grad-mono-dark)'}
                                 strokeWidth="1.5"
                                 fill="none"
                                 strokeLinecap="round"
                                 strokeDasharray="6,4"
                             />
-                            <circle cx={startX} cy={startY} r="3" fill="rgba(255,255,255,0.8)" filter="url(#glow-white)" />
-                            <circle cx={endX} cy={endY} r="3" fill="rgba(255,255,255,0.6)" filter="url(#glow-white)" />
+                            <circle cx={startX} cy={startY} r="3" fill={isLightCanvas ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)'} filter={isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)'} />
+                            <circle cx={endX} cy={endY} r="3" fill={isLightCanvas ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.6)'} filter={isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)'} />
                         </>
                      )
                 })()}
@@ -4577,6 +4623,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     key={node.id}
                     node={node}
                     isSelected={selectedNodeIds.has(node.id)}
+                    isLightCanvas={isLightCanvas}
                     scale={scale}
                     effectiveColor={node.type === 'relay' ? 'stroke-' + resolveEffectiveType(node.id).replace('text', 'emerald').replace('image', 'blue').replace('llm', 'purple') + '-400' : undefined}
                     hasDownstream={connections.some(c => c.fromNode === node.id)}

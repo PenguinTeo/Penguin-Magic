@@ -43,12 +43,16 @@ interface SidebarProps {
     onManualSave?: () => void;
     autoSaveEnabled?: boolean;
     hasUnsavedChanges?: boolean;
+    // 画布主题
+    canvasTheme?: 'dark' | 'light';
+    onToggleTheme?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   onDragStart, onAdd, userPresets, onAddPreset, onDeletePreset, onHome, onOpenSettings, isApiConfigured,
   canvasList, currentCanvasId, canvasName, isCanvasLoading, onCreateCanvas, onLoadCanvas, onDeleteCanvas, onRenameCanvas,
-  creativeIdeas = [], onApplyCreativeIdea, onManualSave, autoSaveEnabled = false, hasUnsavedChanges = false
+  creativeIdeas = [], onApplyCreativeIdea, onManualSave, autoSaveEnabled = false, hasUnsavedChanges = false,
+  canvasTheme = 'dark', onToggleTheme
 }) => {
   const [activeLibrary, setActiveLibrary] = useState(false);
   const [showCanvasPanel, setShowCanvasPanel] = useState(false);
@@ -56,6 +60,16 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [editingName, setEditingName] = useState('');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'bp' | 'workflow' | 'favorite'>('all');
   const [hoveredIdeaId, setHoveredIdeaId] = useState<number | null>(null);
+
+  // 根据主题设置颜色
+  const isLight = canvasTheme === 'light';
+  const dockBg = isLight ? 'bg-white/95' : 'bg-[#1c1c1e]/95';
+  const dockBorder = isLight ? 'border-gray-200' : 'border-white/10';
+  const btnBg = isLight ? 'bg-gray-100' : 'bg-white/5';
+  const btnHoverBg = isLight ? 'hover:bg-gray-200' : 'hover:bg-white/15';
+  const btnText = isLight ? 'text-gray-600' : 'text-zinc-400';
+  const btnHoverText = isLight ? 'hover:text-gray-900' : 'hover:text-white';
+  const labelText = isLight ? 'text-gray-500' : 'text-zinc-600';
 
   // Default Presets
   const defaultPresets = [
@@ -117,9 +131,32 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
         )}
 
+        {/* 画布主题切换按钮 */}
+        {onToggleTheme && (
+            <button 
+                onClick={(e) => { e.stopPropagation(); onToggleTheme(); }}
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-xl backdrop-blur-sm pointer-events-auto select-none transition-all active:scale-95 ${
+                    canvasTheme === 'light'
+                        ? 'bg-amber-100 border-amber-300 text-amber-600'
+                        : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                }`}
+                title={canvasTheme === 'light' ? '切换到深色画布' : '切换到浅色画布'}
+            >
+                {canvasTheme === 'light' ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                )}
+            </button>
+        )}
+
         {/* Main Dock */}
         <div 
-            className="bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 p-2 rounded-2xl flex flex-col gap-2 shadow-2xl pointer-events-auto items-center"
+            className={`${dockBg} backdrop-blur-xl border ${dockBorder} p-2 rounded-2xl flex flex-col gap-2 shadow-2xl pointer-events-auto items-center`}
             onMouseDown={(e) => {
                 // 只在点击在 dock 背景上时阻止传播，不阻止拖拽事件
                 if (e.target === e.currentTarget) {
@@ -132,38 +169,39 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button 
                 onClick={(e) => { e.stopPropagation(); setActiveLibrary(!activeLibrary); }}
                 className={`p-2.5 rounded-xl transition-all shadow-inner border flex items-center justify-center mb-1
-                    ${activeLibrary ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : 'bg-white/5 text-zinc-400 border-transparent hover:text-white hover:bg-white/15'}
+                    ${activeLibrary ? 'bg-purple-500/20 text-purple-300 border-purple-500/50' : `${btnBg} ${btnText} border-transparent ${btnHoverText} ${btnHoverBg}`}
                 `}
                 title="Creative Library"
             >
                 <Icons.Layers size={18} />
             </button>
 
-            <div className="w-8 h-px bg-white/10 my-1" />
+            <div className={`w-8 h-px ${isLight ? 'bg-gray-200' : 'bg-white/10'} my-1`} />
 
             {/* Media Group */}
             <div className="flex flex-col gap-1.5">
-                <span className="text-[9px] font-bold text-zinc-600 text-center uppercase tracking-wider">Media</span>
-                <DraggableButton type="image" icon={<Icons.Image />} label="Image" onDragStart={onDragStart} onClick={() => onAdd('image')} />
-                <DraggableButton type="text" icon={<Icons.Type />} label="Text" onDragStart={onDragStart} onClick={() => onAdd('text')} />
-                <DraggableButton type="video" icon={<Icons.Video />} label="Video" onDragStart={onDragStart} onClick={() => onAdd('video')} />
+                <span className={`text-[9px] font-bold ${labelText} text-center uppercase tracking-wider`}>Media</span>
+                <DraggableButton type="image" icon={<Icons.Image />} label="Image" onDragStart={onDragStart} onClick={() => onAdd('image')} isLight={isLight} />
+                <DraggableButton type="text" icon={<Icons.Type />} label="Text" onDragStart={onDragStart} onClick={() => onAdd('text')} isLight={isLight} />
+                <DraggableButton type="video" icon={<Icons.Video />} label="Video" onDragStart={onDragStart} onClick={() => onAdd('video')} isLight={isLight} />
             </div>
             
-            <div className="w-8 h-px bg-white/10 my-1" />
+            <div className={`w-8 h-px ${isLight ? 'bg-gray-200' : 'bg-white/10'} my-1`} />
             
             {/* Logic Group */}
             <div className="flex flex-col gap-1.5">
-                <span className="text-[9px] font-bold text-zinc-600 text-center uppercase tracking-wider">Logic</span>
-                <DraggableButton type="llm" icon={<Icons.Sparkles />} label="LLM / Vision" onDragStart={onDragStart} onClick={() => onAdd('llm')} />
-                <DraggableButton type="idea" icon={<Icons.Magic />} label="Idea Gen" onDragStart={onDragStart} onClick={() => onAdd('idea')} />
-                <DraggableButton type="relay" icon={<Icons.Relay />} label="Relay" onDragStart={onDragStart} onClick={() => onAdd('relay')} />
-                <DraggableButton type="edit" icon={<BananaIcon />} label="Magic" onDragStart={onDragStart} onClick={() => onAdd('edit')} />
+                <span className={`text-[9px] font-bold ${labelText} text-center uppercase tracking-wider`}>Logic</span>
+                <DraggableButton type="llm" icon={<Icons.Sparkles />} label="LLM / Vision" onDragStart={onDragStart} onClick={() => onAdd('llm')} isLight={isLight} />
+                <DraggableButton type="idea" icon={<Icons.Magic />} label="Idea Gen" onDragStart={onDragStart} onClick={() => onAdd('idea')} isLight={isLight} />
+                <DraggableButton type="relay" icon={<Icons.Relay />} label="Relay" onDragStart={onDragStart} onClick={() => onAdd('relay')} isLight={isLight} />
+                <DraggableButton type="edit" icon={<BananaIcon />} label="Magic" onDragStart={onDragStart} onClick={() => onAdd('edit')} isLight={isLight} />
                 <DraggableButton 
                     type="runninghub" 
                     icon={<span className="text-[10px] font-black">R</span>} 
                     label="RunningHub" 
                     onDragStart={onDragStart} 
                     onClick={() => onAdd('runninghub')} 
+                    isLight={isLight}
                 />
             </div>
 
@@ -498,9 +536,17 @@ const Sidebar: React.FC<SidebarProps> = ({
   );
 };
 
-const DraggableButton = ({ type, icon, label, onDragStart, onClick }: { type: NodeType, icon: React.ReactNode, label: string, onDragStart: (t: NodeType) => void, onClick: () => void }) => {
+const DraggableButton = ({ type, icon, label, onDragStart, onClick, isLight = false }: { type: NodeType, icon: React.ReactNode, label: string, onDragStart: (t: NodeType) => void, onClick: () => void, isLight?: boolean }) => {
     const [isDragging, setIsDragging] = React.useState(false);
     const startPosRef = React.useRef({ x: 0, y: 0 });
+    
+    const btnBg = isLight ? 'bg-gray-100' : 'bg-white/5';
+    const btnHoverBg = isLight ? 'hover:bg-gray-200' : 'hover:bg-white/15';
+    const btnText = isLight ? 'text-gray-600' : 'text-zinc-400';
+    const btnHoverText = isLight ? 'hover:text-gray-900' : 'hover:text-white';
+    const tooltipBg = isLight ? 'bg-white' : 'bg-[#1c1c1e]';
+    const tooltipBorder = isLight ? 'border-gray-200' : 'border-white/10';
+    const tooltipText = isLight ? 'text-gray-800' : 'text-white';
     
     const handleMouseDown = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -555,11 +601,11 @@ const DraggableButton = ({ type, icon, label, onDragStart, onClick }: { type: No
             onMouseDown={handleMouseDown}
             className="group relative cursor-grab active:cursor-grabbing select-none"
         >
-            <div className="w-8 h-8 rounded-lg bg-white/5 text-zinc-400 hover:text-white hover:bg-white/15 hover:scale-105 transition-all shadow-inner border border-transparent hover:border-white/10 active:scale-95 flex items-center justify-center">
+            <div className={`w-8 h-8 rounded-lg ${btnBg} ${btnText} ${btnHoverText} ${btnHoverBg} hover:scale-105 transition-all shadow-inner border border-transparent hover:border-white/10 active:scale-95 flex items-center justify-center`}>
                  {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { size: 16 }) : icon}
             </div>
             {/* Tooltip */}
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2 py-1 bg-[#1c1c1e] border border-white/10 rounded text-[10px] font-medium text-white opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-50 shadow-lg translate-x-[-5px] group-hover:translate-x-0">
+            <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2 py-1 ${tooltipBg} border ${tooltipBorder} rounded text-[10px] font-medium ${tooltipText} opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-50 shadow-lg translate-x-[-5px] group-hover:translate-x-0`}>
                 {label}
             </div>
         </div>
