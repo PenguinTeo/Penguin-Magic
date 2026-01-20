@@ -5,7 +5,7 @@ import { normalizeImageUrl } from './utils/image';
 import { GeneratedImageDisplay } from './components/GeneratedImageDisplay';
 import { editImageWithGemini, generateCreativePromptFromImage, initializeAiClient, processBPTemplate, setThirdPartyConfig, optimizePrompt } from './services/geminiService';
 import CreativeExtractor, { extractCreatives } from './services/creativeExtractor';
-import { ApiStatus, GeneratedContent, CreativeIdea, SmartPlusConfig, ThirdPartyApiConfig, GenerationHistory, DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopVideoItem, CreativeCategoryType } from './types';
+import { ApiStatus, GeneratedContent, CreativeIdea, SmartPlusConfig, ThirdPartyApiConfig, GenerationHistory, DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem, DesktopVideoItem, CreativeCategoryType } from './types';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
 import { AddCreativeIdeaModal } from './components/AddCreativeIdeaModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -2771,10 +2771,15 @@ const App: React.FC = () => {
         const occupiedPositions = new Set(
           prevItems
             .filter(existingItem => {
+              // 排除文件夹内的项目
               const isInFolder = prevItems.some(
                 other => other.type === 'folder' && (other as DesktopFolderItem).itemIds.includes(existingItem.id)
               );
-              return !isInFolder;
+              // 排除叠放内的项目
+              const isInStack = prevItems.some(
+                other => other.type === 'stack' && (other as DesktopStackItem).itemIds.includes(existingItem.id)
+              );
+              return !isInFolder && !isInStack;
             })
             .map(existingItem => `${Math.round(existingItem.position.x / gridSize)},${Math.round(existingItem.position.y / gridSize)}`)
         );

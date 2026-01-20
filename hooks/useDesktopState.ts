@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { DesktopItem, DesktopImageItem, DesktopFolderItem, GenerationHistory } from '../types';
+import { DesktopItem, DesktopImageItem, DesktopFolderItem, DesktopStackItem, GenerationHistory } from '../types';
 import * as desktopApi from '../services/api/desktop';
 
 export interface UseDesktopStateReturn {
@@ -106,11 +106,15 @@ export const useDesktopState = (): UseDesktopStateReturn => {
     const occupiedPositions = new Set(
       desktopItems
         .filter(item => {
-          // 只考虑不在文件夹内的项目
+          // 排除文件夹内的项目
           const isInFolder = desktopItems.some(
             other => other.type === 'folder' && (other as DesktopFolderItem).itemIds.includes(item.id)
           );
-          return !isInFolder;
+          // 排除叠放内的项目
+          const isInStack = desktopItems.some(
+            other => other.type === 'stack' && (other as DesktopStackItem).itemIds.includes(item.id)
+          );
+          return !isInFolder && !isInStack;
         })
         .map(item => `${Math.round(item.position.x / GRID_SIZE)},${Math.round(item.position.y / GRID_SIZE)}`)
     );
@@ -134,10 +138,15 @@ export const useDesktopState = (): UseDesktopStateReturn => {
       const occupiedPositions = new Set(
         prevItems
           .filter(existingItem => {
+            // 排除文件夹内的项目
             const isInFolder = prevItems.some(
               other => other.type === 'folder' && (other as DesktopFolderItem).itemIds.includes(existingItem.id)
             );
-            return !isInFolder;
+            // 排除叠放内的项目
+            const isInStack = prevItems.some(
+              other => other.type === 'stack' && (other as DesktopStackItem).itemIds.includes(existingItem.id)
+            );
+            return !isInFolder && !isInStack;
           })
           .map(existingItem => `${Math.round(existingItem.position.x / GRID_SIZE)},${Math.round(existingItem.position.y / GRID_SIZE)}`)
       );
