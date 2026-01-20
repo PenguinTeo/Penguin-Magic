@@ -115,7 +115,8 @@
         "zip"
       ],
       "icon": "resources/icon.icns",
-      "category": "public.app-category.graphics-design"
+      "category": "public.app-category.graphics-design",
+      "identity": null
     },
     "linux": {
       "target": [

@@ -138,6 +138,9 @@ export const Desktop: React.FC<DesktopProps> = ({
   const [editingName, setEditingName] = useState('');
   const [clipboard, setClipboard] = useState<ClipboardState | null>(null);
   const [dropTargetFolderId, setDropTargetFolderId] = useState<string | null>(null);
+  // 叠放/图片放置目标（用于拖拽图片到叠放或另一个图片上创建叠放）
+  const [dropTargetStackId, setDropTargetStackId] = useState<string | null>(null);
+  const [dropTargetImageId, setDropTargetImageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [hideFileNames, setHideFileNames] = useState(false); // 是否隐藏文件名
   const [isExporting, setIsExporting] = useState(false); // 导出中状态
@@ -349,7 +352,7 @@ export const Desktop: React.FC<DesktopProps> = ({
     setDragStartPos({ x: e.clientX, y: e.clientY });
   };
 
-  // 处理拖拽移动 - 支持拖入文件夹
+  // 处理拖拽移动 - 支持拖入文件夹、叠放、以及图片上创建叠放
   useEffect(() => {
     if (!isDragging || !dragStartPos || !dragItemId) return;
 
@@ -357,11 +360,15 @@ export const Desktop: React.FC<DesktopProps> = ({
       const newPos = { x: e.clientX, y: e.clientY };
       setDragCurrentPos(newPos);
       
-      // 检测是否拖动到文件夹上
+      // 检测是否拖动到文件夹、叠放或图片上
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
         const mouseX = e.clientX - rect.left + containerRef.current.scrollLeft;
         const mouseY = e.clientY - rect.top + containerRef.current.scrollTop;
+        
+        // 获取被拖拽的项目类型
+        const draggedItem = items.find(i => i.id === dragItemId);
+        const isDraggingImage = draggedItem && (draggedItem.type === 'image' || draggedItem.type === 'video');
         
         // 查找鼠标下的文件夹（排除已选中的项目）
         const targetFolder = currentItems.find(item => {
@@ -372,7 +379,27 @@ export const Desktop: React.FC<DesktopProps> = ({
                  mouseY >= folderY && mouseY <= folderY + ICON_SIZE;
         });
         
+        // 查找鼠标下的叠放（排除已选中的项目）
+        const targetStack = currentItems.find(item => {
+          if (item.type !== 'stack' || selectedIds.includes(item.id)) return false;
+          const stackX = horizontalPadding + item.position.x;
+          const stackY = TOP_OFFSET + item.position.y;
+          return mouseX >= stackX && mouseX <= stackX + ICON_SIZE &&
+                 mouseY >= stackY && mouseY <= stackY + ICON_SIZE;
+        });
+        
+        // 查找鼠标下的图片/视频（仅当拖拽图片/视频时，排除已选中的项目）
+        const targetImage = isDraggingImage ? currentItems.find(item => {
+          if ((item.type !== 'image' && item.type !== 'video') || selectedIds.includes(item.id)) return false;
+          const imageX = horizontalPadding + item.position.x;
+          const imageY = TOP_OFFSET + item.position.y;
+          return mouseX >= imageX && mouseX <= imageX + ICON_SIZE &&
+                 mouseY >= imageY && mouseY <= imageY + ICON_SIZE;
+        }) : null;
+        
         setDropTargetFolderId(targetFolder?.id || null);
+        setDropTargetStackId(targetStack?.id || null);
+        setDropTargetImageId(targetImage?.id || null);
       }
     };
 
@@ -396,7 +423,66 @@ export const Desktop: React.FC<DesktopProps> = ({
         });
         onItemsChange(updatedItems);
         onSelectionChange([]);
-      } else if (dragStartPos && dragCurrentPos) {
+      } 
+      // 如果有目标叠放，将选中的图片/视频添加到叠放中
+      else if (dropTargetStackId && selectedIds.length > 0) {
+        const updatedItems = items.map(item => {
+          if (item.id === dropTargetStackId && item.type === 'stack') {
+            const stack = item as DesktopStackItem;
+            const newItemIds = [...stack.itemIds];
+            selectedIds.forEach(id => {
+              const selectedItem = items.find(i => i.id === id);
+              // 只添加图片和视频到叠放
+              if (selectedItem && (selectedItem.type === 'image' || selectedItem.type === 'video') && !newItemIds.includes(id)) {
+                newItemIds.push(id);
+              }
+            });
+            return { 
+              ...stack, 
+              itemIds: newItemIds, 
+              name: `叠放 (${newItemIds.length})`,
+              updatedAt: Date.now() 
+            };
+          }
+          return item;
+        });
+        onItemsChange(updatedItems);
+        onSelectionChange([]);
+      }
+      // 如果有目标图片/视频，将其与选中的图片/视频合并为叠放
+      else if (dropTargetImageId && selectedIds.length > 0) {
+        const targetImage = items.find(i => i.id === dropTargetImageId);
+        if (targetImage && (targetImage.type === 'image' || targetImage.type === 'video')) {
+          // 收集要叠放的项目ID（目标图片 + 选中的图片/视频）
+          const stackItemIds: string[] = [dropTargetImageId];
+          selectedIds.forEach(id => {
+            const selectedItem = items.find(i => i.id === id);
+            if (selectedItem && (selectedItem.type === 'image' || selectedItem.type === 'video') && !stackItemIds.includes(id)) {
+              stackItemIds.push(id);
+            }
+          });
+          
+          // 只有当至少有2个项目时才创建叠放
+          if (stackItemIds.length >= 2) {
+            // 创建新叠放
+            const newStack: DesktopStackItem = {
+              id: generateId(),
+              type: 'stack',
+              name: `叠放 (${stackItemIds.length})`,
+              position: targetImage.position,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              itemIds: stackItemIds,
+              isExpanded: false,
+            };
+            
+            // 添加叠放到 items 列表
+            onItemsChange([...items, newStack]);
+            onSelectionChange([newStack.id]);
+          }
+        }
+      }
+      else if (dragStartPos && dragCurrentPos) {
         const deltaX = dragCurrentPos.x - dragStartPos.x;
         const deltaY = dragCurrentPos.y - dragStartPos.y;
 
@@ -520,6 +606,8 @@ export const Desktop: React.FC<DesktopProps> = ({
       setDragCurrentPos(null);
       setDragItemId(null);
       setDropTargetFolderId(null);
+      setDropTargetStackId(null);
+      setDropTargetImageId(null);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -529,7 +617,7 @@ export const Desktop: React.FC<DesktopProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragStartPos, dragCurrentPos, dragItemId, selectedIds, items, onItemsChange, currentItems, dropTargetFolderId]);
+  }, [isDragging, dragStartPos, dragCurrentPos, dragItemId, selectedIds, items, onItemsChange, currentItems, dropTargetFolderId, dropTargetStackId, dropTargetImageId]);
 
   // 处理双击
   const handleItemDoubleClick = (item: DesktopItem) => {
@@ -1774,7 +1862,11 @@ export const Desktop: React.FC<DesktopProps> = ({
       {currentItems.map(item => {
         const isSelected = selectedIds.includes(item.id);
         const offset = isSelected && isDragging ? dragOffset : { x: 0, y: 0 };
-        const isDropTarget = dropTargetFolderId === item.id;
+        // 放置目标高亮：文件夹、叠放或图片
+        const isDropTargetFolder = dropTargetFolderId === item.id;
+        const isDropTargetStack = dropTargetStackId === item.id;
+        const isDropTargetImage = dropTargetImageId === item.id;
+        const isDropTarget = isDropTargetFolder || isDropTargetStack || isDropTargetImage;
         
         return (
           <div
@@ -1796,17 +1888,35 @@ export const Desktop: React.FC<DesktopProps> = ({
               className={`relative aspect-square rounded-xl overflow-hidden transition-all duration-200 ${
                 isSelected
                   ? 'ring-2 ring-offset-2 ring-offset-transparent shadow-xl scale-105'
-                  : isDropTarget
+                  : isDropTargetFolder
+                  ? 'ring-2 ring-green-500 scale-110 shadow-2xl'
+                  : isDropTargetStack
                   ? 'ring-2 ring-blue-500 scale-110 shadow-2xl'
+                  : isDropTargetImage
+                  ? 'ring-2 ring-purple-500 scale-110 shadow-2xl'
                   : 'hover:scale-105 hover:shadow-lg'
               }`}
               style={{
                 backgroundColor: item.type === 'folder' 
-                  ? isDropTarget 
+                  ? isDropTargetFolder 
                     ? 'rgba(34, 197, 94, 0.3)' 
                     : `${(item as DesktopFolderItem).color || theme.colors.accent}20`
+                  : item.type === 'stack'
+                  ? isDropTargetStack
+                    ? 'rgba(59, 130, 246, 0.3)' // 叠放目标 - 蓝色高亮
+                    : 'rgba(0,0,0,0.4)'
+                  : isDropTargetImage
+                  ? 'rgba(139, 92, 246, 0.3)' // 图片目标 - 紫色高亮（表示将创建叠放）
                   : 'rgba(0,0,0,0.4)',
-                borderColor: isSelected ? theme.colors.primary : isDropTarget ? '#22c55e' : 'transparent',
+                borderColor: isSelected 
+                  ? theme.colors.primary 
+                  : isDropTargetFolder 
+                  ? '#22c55e' 
+                  : isDropTargetStack 
+                  ? '#3b82f6' 
+                  : isDropTargetImage 
+                  ? '#8b5cf6' 
+                  : 'transparent',
               }}
             >
               {item.type === 'image' ? (

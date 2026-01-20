@@ -1268,13 +1268,18 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
     pendingImageRef.current = null;
   }, [onPendingImageAdded]);
 
-  const updateNode = (id: string, updates: Partial<CanvasNode>) => {
+  // 🔧 修复竞态条件：使用函数式更新确保状态一致性
+  const updateNode = useCallback((id: string, updates: Partial<CanvasNode>) => {
       // 先同步更新 ref，确保级联执行时能立即获取最新状态
-      const newNodes = nodesRef.current.map(n => n.id === id ? { ...n, ...updates } : n);
-      nodesRef.current = newNodes;
-      // 再更新 React 状态
-      setNodes(newNodes);
-  };
+      nodesRef.current = nodesRef.current.map(n => 
+          n.id === id ? { ...n, ...updates } : n
+      );
+      
+      // 使用函数式更新，确保基于最新状态
+      setNodes(prev => prev.map(n => 
+          n.id === id ? { ...n, ...updates } : n
+      ));
+  }, []);
 
   // --- EXECUTION LOGIC ---
 
