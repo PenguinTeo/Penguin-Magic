@@ -1,7 +1,7 @@
 {
   "name": "penguin-magic",
   "private": true,
-  "version": "1.5.3",
+  "version": "1.5.8",
   "description": "企鹅工坊 - AI 图像创意管理应用",
   "author": "PenguinCreative",
   "type": "module",

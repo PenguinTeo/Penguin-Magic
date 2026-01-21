@@ -1959,9 +1959,29 @@ const App: React.FC = () => {
             
             return restored;
           }
+          // 🔧 处理视频项目的加载状态
+          if (item.type === 'video') {
+            const videoItem = item as DesktopVideoItem;
+            let restored = { ...videoItem };
+            
+            // 清除卡住的loading状态
+            if (videoItem.isLoading) {
+              restored.isLoading = false;
+              if (!videoItem.videoUrl) {
+                restored.loadingError = '加载中断，请重新生成';
+              }
+            }
+            
+            return restored;
+          }
           return item;
         });
         setDesktopItems(restoredItems);
+        
+        // 🔧 异步为缺失缩略图的视频生成缩略图
+        setTimeout(() => {
+          regenerateMissingVideoThumbnails(restoredItems);
+        }, 1000);
       } else {
         console.warn('加载桌面状态失败:', desktopResult.error);
         setDesktopItems([]);
@@ -2732,20 +2752,34 @@ const App: React.FC = () => {
       safeDesktopSave(items);
     }, [safeDesktopSave]);
   
-    // 查找桌面空闲位置
-    const findNextFreePosition = useCallback((): { x: number, y: number } => {
+    // 查找桌面空闲位置（支持文件夹内查找）
+    const findNextFreePosition = useCallback((inFolderId?: string | null): { x: number, y: number } => {
       const gridSize = 100;
-      const maxCols = 10; // 每行最多10个
+      // 🔧 使用较小的列数以确保不超出边界（适配大多数屏幕）
+      const maxCols = 8; // 每行最多8个
+      
+      let itemsToCheck: DesktopItem[];
+      
+      if (inFolderId) {
+        // 🔧 在文件夹内查找空闲位置
+        const folder = desktopItems.find(i => i.id === inFolderId) as DesktopFolderItem | undefined;
+        if (folder) {
+          itemsToCheck = desktopItems.filter(item => folder.itemIds.includes(item.id));
+        } else {
+          itemsToCheck = [];
+        }
+      } else {
+        // 桌面顶层查找
+        itemsToCheck = desktopItems.filter(item => {
+          const isInFolder = desktopItems.some(
+            other => other.type === 'folder' && (other as DesktopFolderItem).itemIds.includes(item.id)
+          );
+          return !isInFolder;
+        });
+      }
+      
       const occupiedPositions = new Set(
-        desktopItems
-          .filter(item => {
-            // 只考虑不在文件夹内的项目
-            const isInFolder = desktopItems.some(
-              other => other.type === 'folder' && (other as DesktopFolderItem).itemIds.includes(item.id)
-            );
-            return !isInFolder;
-          })
-          .map(item => `${Math.round(item.position.x / gridSize)},${Math.round(item.position.y / gridSize)}`)
+        itemsToCheck.map(item => `${Math.round(item.position.x / gridSize)},${Math.round(item.position.y / gridSize)}`)
       );
       
       // 从左上角开始找空位
@@ -2850,19 +2884,48 @@ const App: React.FC = () => {
           const video = document.createElement('video');
           video.crossOrigin = 'anonymous';
           video.muted = true;
+          video.preload = 'auto';
           
           let fullUrl = videoUrl;
           if (videoUrl.startsWith('/files/')) {
             fullUrl = `http://localhost:8765${videoUrl}`;
           }
           
-          video.onloadeddata = () => {
-            // 跳到首帧
+          console.log('[VideoThumbnail] 开始加载视频:', fullUrl.slice(0, 80));
+          
+          let resolved = false;
+          const tryResolve = (value: string | null) => {
+            if (!resolved) {
+              resolved = true;
+              resolve(value);
+            }
+          };
+          
+          video.onloadedmetadata = () => {
+            console.log('[VideoThumbnail] 元数据加载完成, 跳转到首帧');
             video.currentTime = 0;
           };
           
+          video.onloadeddata = () => {
+            console.log('[VideoThumbnail] 数据加载完成');
+            // 如果 currentTime 已经是 0，直接尝试提取
+            if (video.currentTime === 0 && video.videoWidth > 0) {
+              extractFrame();
+            }
+          };
+          
           video.onseeked = () => {
+            console.log('[VideoThumbnail] 跳转完成, 开始提取帧');
+            extractFrame();
+          };
+          
+          const extractFrame = () => {
             try {
+              if (video.videoWidth === 0 || video.videoHeight === 0) {
+                console.warn('[VideoThumbnail] 视频尺寸无效');
+                tryResolve(null);
+                return;
+              }
               const canvas = document.createElement('canvas');
               canvas.width = video.videoWidth;
               canvas.height = video.videoHeight;
@@ -2870,24 +2933,29 @@ const App: React.FC = () => {
               if (ctx) {
                 ctx.drawImage(video, 0, 0);
                 const thumbnail = canvas.toDataURL('image/jpeg', 0.8);
-                console.log('[VideoThumbnail] 首帧提取成功');
-                resolve(thumbnail);
+                console.log('[VideoThumbnail] 首帧提取成功, 大小:', (thumbnail.length / 1024).toFixed(1), 'KB');
+                tryResolve(thumbnail);
               } else {
-                resolve(null);
+                tryResolve(null);
               }
             } catch (e) {
               console.error('[VideoThumbnail] 提取失败:', e);
-              resolve(null);
+              tryResolve(null);
             }
           };
           
-          video.onerror = () => {
-            console.error('[VideoThumbnail] 视频加载失败');
-            resolve(null);
+          video.onerror = (e) => {
+            console.error('[VideoThumbnail] 视频加载失败:', e);
+            tryResolve(null);
           };
           
-          // 设置超时
-          setTimeout(() => resolve(null), 5000);
+          // 设置超时 - 10秒
+          setTimeout(() => {
+            if (!resolved) {
+              console.warn('[VideoThumbnail] 提取超时');
+              tryResolve(null);
+            }
+          }, 10000);
           
           video.src = fullUrl;
           video.load();
@@ -2898,10 +2966,49 @@ const App: React.FC = () => {
       });
     };
 
+    // 🔧 为缺失缩略图的视频重新生成缩略图
+    const regenerateMissingVideoThumbnails = async (items: DesktopItem[]) => {
+      const videoItems = items.filter(
+        item => item.type === 'video' && (item as DesktopVideoItem).videoUrl && !(item as DesktopVideoItem).thumbnailUrl
+      ) as DesktopVideoItem[];
+      
+      if (videoItems.length === 0) return;
+      
+      console.log(`[VideoThumbnail] 发现 ${videoItems.length} 个视频缺失缩略图，开始生成...`);
+      
+      for (const videoItem of videoItems) {
+        try {
+          const thumbnailData = await extractVideoThumbnail(videoItem.videoUrl);
+          if (thumbnailData) {
+            const thumbResult = await saveThumbnail(thumbnailData, `video_thumb_${videoItem.id}.jpg`);
+            if (thumbResult.success && thumbResult.data?.url) {
+              // 更新桌面项目的缩略图
+              setDesktopItems(prev => {
+                const updated = prev.map(item => 
+                  item.id === videoItem.id 
+                    ? { ...item, thumbnailUrl: thumbResult.data!.url } 
+                    : item
+                );
+                // 保存到后端
+                safeDesktopSave(updated);
+                return updated;
+              });
+              console.log(`[VideoThumbnail] 视频缩略图已生成: ${videoItem.name}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`[VideoThumbnail] 为视频 ${videoItem.name} 生成缩略图失败:`, e);
+        }
+      }
+    };
+
     // 画布生成图片/视频同步到桌面（添加到对应画布文件夹）
     const handleCanvasImageGenerated = useCallback(async (imageUrl: string, prompt: string, canvasId?: string, canvasName?: string) => {
       // 🔧 判断是图片还是视频
       const isVideo = imageUrl.includes('.mp4') || imageUrl.includes('.webm') || imageUrl.startsWith('data:video');
+      
+      // 🔧 保留原始数据用于缩略图提取（base64更可靠）
+      const originalImageUrl = imageUrl;
       
       // 先将base64图片/视频保存到本地文件
       let finalUrl = imageUrl;
@@ -2930,10 +3037,12 @@ const App: React.FC = () => {
       let newItem: DesktopItem;
       
       if (isVideo) {
-        // 🔧 提取视频首帧作为缩略图
+        // 🔧 提取视频首帧作为缩略图（优先使用原始base64数据）
         let thumbnailUrl: string | undefined;
         try {
-          const thumbnailData = await extractVideoThumbnail(finalUrl);
+          // 优先使用原始 base64 数据提取（更可靠），否则使用文件URL
+          const videoDataForThumbnail = originalImageUrl.startsWith('data:') ? originalImageUrl : finalUrl;
+          const thumbnailData = await extractVideoThumbnail(videoDataForThumbnail);
           if (thumbnailData) {
             // 保存缩略图到 thumbnails 目录
             const thumbResult = await saveThumbnail(thumbnailData, `video_thumb_${now}.jpg`);
@@ -3104,7 +3213,8 @@ const App: React.FC = () => {
       ).length;
         
       for (let i = 0; i < batchCount; i++) {
-        const freePos = findNextFreePosition();
+        // 🔧 在文件夹内时，查找文件夹内的空闲位置
+        const freePos = findNextFreePosition(openFolderId);
         const itemName = activeTemplateTitle 
           ? `${activeTemplateTitle}(${existingCount + i + 1})`
           : `${baseItemName} #${i + 1}`;
@@ -3126,7 +3236,20 @@ const App: React.FC = () => {
       }
         
       // 添加所有占位项到桌面
-      const newItems = [...desktopItems, ...placeholderItems];
+      // 🔧 如果在子文件夹内，需要把新项目添加到文件夹的 itemIds 中
+      let newItems: DesktopItem[];
+      if (openFolderId) {
+        const newItemIds = placeholderItems.map(item => item.id);
+        newItems = [...desktopItems, ...placeholderItems].map(item => {
+          if (item.id === openFolderId && item.type === 'folder') {
+            const folder = item as DesktopFolderItem;
+            return { ...folder, itemIds: [...folder.itemIds, ...newItemIds], updatedAt: Date.now() };
+          }
+          return item;
+        });
+      } else {
+        newItems = [...desktopItems, ...placeholderItems];
+      }
       setDesktopItems(newItems);
       await desktopApi.saveDesktopItems(newItems);
         
@@ -3202,7 +3325,8 @@ const App: React.FC = () => {
   
     // === 单张生成逻辑（采用占位项模式，支持并发） ===
     // 先创建占位项
-    const freePos = findNextFreePosition();
+    // 🔧 在文件夹内时，查找文件夹内的空闲位置
+    const freePos = findNextFreePosition(openFolderId);
     const existingCount = desktopItems.filter(item => 
       item.type === 'image' && item.name.startsWith(baseItemName)
     ).length;
@@ -3226,7 +3350,19 @@ const App: React.FC = () => {
     };
     
     // 添加占位项到桌面
-    const newItems = [...desktopItems, placeholderItem];
+    // 🔧 如果在子文件夹内，需要把新项目添加到文件夹的 itemIds 中
+    let newItems: DesktopItem[];
+    if (openFolderId) {
+      newItems = [...desktopItems, placeholderItem].map(item => {
+        if (item.id === openFolderId && item.type === 'folder') {
+          const folder = item as DesktopFolderItem;
+          return { ...folder, itemIds: [...folder.itemIds, placeholderId], updatedAt: Date.now() };
+        }
+        return item;
+      });
+    } else {
+      newItems = [...desktopItems, placeholderItem];
+    }
     setDesktopItems(newItems);
     desktopApi.saveDesktopItems(newItems);
     
@@ -3294,7 +3430,7 @@ const App: React.FC = () => {
       console.error('[Generate] 生成失败');
       setStatus(ApiStatus.Error);
     }
-  }, [files, prompt, apiKey, thirdPartyApiConfig, activeSmartTemplate, activeSmartPlusTemplate, activeBPTemplate, autoSave, downloadImage, aspectRatio, imageSize, activeCreativeIdea, findNextFreePosition, handleAddToDesktop, bpInputs, smartPlusOverrides, batchCount, desktopItems, saveToHistory]);
+  }, [files, prompt, apiKey, thirdPartyApiConfig, activeSmartTemplate, activeSmartPlusTemplate, activeBPTemplate, autoSave, downloadImage, aspectRatio, imageSize, activeCreativeIdea, findNextFreePosition, handleAddToDesktop, bpInputs, smartPlusOverrides, batchCount, desktopItems, saveToHistory, openFolderId]);
 
   // 卸载创意库：清空所有模板设置和提示词
   const handleClearTemplate = useCallback(() => {

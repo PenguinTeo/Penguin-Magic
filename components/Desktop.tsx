@@ -406,10 +406,47 @@ export const Desktop: React.FC<DesktopProps> = ({
     const handleMouseUp = (e: MouseEvent) => {
       // 如果有目标文件夹，将选中项目移入文件夹
       if (dropTargetFolderId && selectedIds.length > 0) {
+        // 🔧 计算文件夹内的空闲位置，为新拖入的项目分配位置
+        const targetFolder = items.find(i => i.id === dropTargetFolderId) as DesktopFolderItem | undefined;
+        if (!targetFolder) return;
+        
+        // 🔧 使用动态计算的最大列数，确保不超出边界
+        const effectiveMaxX = maxX > 0 ? maxX : 700;
+        const effectiveMaxCols = Math.max(1, Math.floor(effectiveMaxX / gridSize) + 1);
+        
+        // 获取文件夹内已有项目的位置
+        const folderItems = items.filter(item => targetFolder.itemIds.includes(item.id));
+        const occupiedPositions = new Set(
+          folderItems.map(item => `${Math.round(item.position.x / gridSize)},${Math.round(item.position.y / gridSize)}`)
+        );
+        
+        // 为每个新拖入的项目分配空闲位置
+        const newPositions = new Map<string, { x: number, y: number }>();
+        selectedIds.forEach(id => {
+          const selectedItem = items.find(i => i.id === id);
+          if (selectedItem && selectedItem.type !== 'folder' && !targetFolder.itemIds.includes(id)) {
+            // 找空闲位置（使用动态列数）
+            let found = false;
+            for (let y = 0; y < 100 && !found; y++) {
+              for (let x = 0; x < effectiveMaxCols && !found; x++) {
+                const key = `${x},${y}`;
+                if (!occupiedPositions.has(key)) {
+                  newPositions.set(id, { x: x * gridSize, y: y * gridSize });
+                  occupiedPositions.add(key); // 标记为已占用
+                  found = true;
+                }
+              }
+            }
+            if (!found) {
+              newPositions.set(id, { x: 0, y: 0 });
+            }
+          }
+        });
+        
         const updatedItems = items.map(item => {
+          // 更新文件夹的 itemIds
           if (item.id === dropTargetFolderId && item.type === 'folder') {
             const folder = item as DesktopFolderItem;
-            // 添加选中的非文件夹项目到文件夹
             const newItemIds = [...folder.itemIds];
             selectedIds.forEach(id => {
               const selectedItem = items.find(i => i.id === id);
@@ -418,6 +455,11 @@ export const Desktop: React.FC<DesktopProps> = ({
               }
             });
             return { ...folder, itemIds: newItemIds, updatedAt: Date.now() };
+          }
+          // 更新拖入项目的位置
+          const newPos = newPositions.get(item.id);
+          if (newPos) {
+            return { ...item, position: newPos, updatedAt: Date.now() };
           }
           return item;
         });
@@ -743,8 +785,9 @@ export const Desktop: React.FC<DesktopProps> = ({
     snappedPos.x = Math.min(maxX, Math.max(0, snappedPos.x));
     snappedPos.y = Math.min(maxY, Math.max(0, snappedPos.y));
     
+    const newFolderId = generateId();
     const newFolder: DesktopFolderItem = {
-      id: generateId(),
+      id: newFolderId,
       type: 'folder',
       name: '新建文件夹',
       position: snappedPos,
@@ -754,7 +797,20 @@ export const Desktop: React.FC<DesktopProps> = ({
       color: theme.colors.accent,
     };
     
-    onItemsChange([...items, newFolder]);
+    // 🔧 如果在文件夹内，需要将新文件夹添加到当前文件夹的 itemIds 中
+    if (openFolderId) {
+      const updatedItems = items.map(item => {
+        if (item.id === openFolderId && item.type === 'folder') {
+          const folder = item as DesktopFolderItem;
+          return { ...folder, itemIds: [...folder.itemIds, newFolderId], updatedAt: Date.now() };
+        }
+        return item;
+      });
+      onItemsChange([...updatedItems, newFolder]);
+    } else {
+      onItemsChange([...items, newFolder]);
+    }
+    
     setContextMenu(null);
   };
 
@@ -922,8 +978,9 @@ export const Desktop: React.FC<DesktopProps> = ({
     const firstItem = items.find(i => i.id === imageIds[0]);
     const stackPos = firstItem ? firstItem.position : { x: 100, y: 100 };
     
+    const newStackId = generateId();
     const newStack: DesktopStackItem = {
-      id: generateId(),
+      id: newStackId,
       type: 'stack',
       name: `叠放 (${imageIds.length})`,
       position: stackPos,
@@ -933,8 +990,24 @@ export const Desktop: React.FC<DesktopProps> = ({
       isExpanded: false,
     };
     
-    onItemsChange([...items, newStack]);
-    onSelectionChange([newStack.id]);
+    // 🔧 如果在文件夹内，需要更新文件夹的 itemIds
+    if (openFolderId) {
+      const updatedItems = items.map(item => {
+        if (item.id === openFolderId && item.type === 'folder') {
+          const folder = item as DesktopFolderItem;
+          // 移除被叠放的图片，添加叠放
+          const newItemIds = folder.itemIds.filter(id => !imageIds.includes(id));
+          newItemIds.push(newStackId);
+          return { ...folder, itemIds: newItemIds, updatedAt: Date.now() };
+        }
+        return item;
+      });
+      onItemsChange([...updatedItems, newStack]);
+    } else {
+      onItemsChange([...items, newStack]);
+    }
+    
+    onSelectionChange([newStackId]);
     setContextMenu(null);
   };
 
@@ -1126,6 +1199,11 @@ export const Desktop: React.FC<DesktopProps> = ({
     const folder = items.find(i => i.id === openFolderId) as DesktopFolderItem | undefined;
     if (!folder) return;
     
+    // 🔧 计算有效的最大边界
+    const effectiveMaxX = maxX > 0 ? maxX : 700;
+    const effectiveMaxY = maxY > 0 ? maxY : 500;
+    const maxCols = Math.floor(effectiveMaxX / gridSize) + 1;
+    
     // 初始化已占用位置集合（排除文件夹/叠放内的项目）
     const occupiedPositions = new Set<string>();
     items.forEach(item => {
@@ -1141,7 +1219,19 @@ export const Desktop: React.FC<DesktopProps> = ({
       }
     });
     
-    // 为移出的项目分配新位置
+    // 🔧 为移出的项目分配新位置（确保在边界内）
+    const findDesktopFreePosition = (): { x: number, y: number } => {
+      for (let y = 0; y <= effectiveMaxY; y += gridSize) {
+        for (let x = 0; x <= effectiveMaxX; x += gridSize) {
+          const key = `${x / gridSize},${y / gridSize}`;
+          if (!occupiedPositions.has(key)) {
+            return { x, y };
+          }
+        }
+      }
+      return { x: 0, y: 0 };
+    };
+    
     let updatedItems = items.map(item => {
       if (item.id === openFolderId && item.type === 'folder') {
         return {
@@ -1152,9 +1242,8 @@ export const Desktop: React.FC<DesktopProps> = ({
       }
       // 为移出的项目分配新位置
       if (selectedIds.includes(item.id)) {
-        const basePos = { x: folder.position.x, y: folder.position.y };
-        const freePos = findNearestFreePosition(basePos, item.id, occupiedPositions);
-        const newPosKey = `${Math.round(freePos.x / gridSize)},${Math.round(freePos.y / gridSize)}`;
+        const freePos = findDesktopFreePosition();
+        const newPosKey = `${freePos.x / gridSize},${freePos.y / gridSize}`;
         occupiedPositions.add(newPosKey);
         return { ...item, position: freePos, updatedAt: Date.now() };
       }
@@ -1164,7 +1253,7 @@ export const Desktop: React.FC<DesktopProps> = ({
     onItemsChange(updatedItems);
     onSelectionChange([]);
     setContextMenu(null);
-  }, [openFolderId, selectedIds, items, onItemsChange, onSelectionChange, gridSize, findNearestFreePosition]);
+  }, [openFolderId, selectedIds, items, onItemsChange, onSelectionChange, gridSize, maxX, maxY]);
 
   // 从叠放中移出项目
   const handleMoveOutOfStack = useCallback(() => {
@@ -1172,6 +1261,10 @@ export const Desktop: React.FC<DesktopProps> = ({
     
     const stack = items.find(i => i.id === openStackId) as DesktopStackItem | undefined;
     if (!stack) return;
+    
+    // 🔧 计算有效的最大边界
+    const effectiveMaxX = maxX > 0 ? maxX : 700;
+    const effectiveMaxY = maxY > 0 ? maxY : 500;
     
     // 初始化已占用位置集合（排除文件夹/叠放内的项目）
     const occupiedPositions = new Set<string>();
@@ -1190,7 +1283,19 @@ export const Desktop: React.FC<DesktopProps> = ({
     
     const remainingIds = stack.itemIds.filter(id => !selectedIds.includes(id));
     
-    // 为移出的项目分配新位置
+    // 🔧 为移出的项目分配新位置（确保在边界内）
+    const findDesktopFreePosition = (): { x: number, y: number } => {
+      for (let y = 0; y <= effectiveMaxY; y += gridSize) {
+        for (let x = 0; x <= effectiveMaxX; x += gridSize) {
+          const key = `${x / gridSize},${y / gridSize}`;
+          if (!occupiedPositions.has(key)) {
+            return { x, y };
+          }
+        }
+      }
+      return { x: 0, y: 0 };
+    };
+    
     let updatedItems = items.map(item => {
       if (item.id === openStackId && item.type === 'stack') {
         return {
@@ -1202,9 +1307,8 @@ export const Desktop: React.FC<DesktopProps> = ({
       }
       // 为移出的项目分配新位置
       if (selectedIds.includes(item.id)) {
-        const basePos = { x: stack.position.x, y: stack.position.y };
-        const freePos = findNearestFreePosition(basePos, item.id, occupiedPositions);
-        const newPosKey = `${Math.round(freePos.x / gridSize)},${Math.round(freePos.y / gridSize)}`;
+        const freePos = findDesktopFreePosition();
+        const newPosKey = `${freePos.x / gridSize},${freePos.y / gridSize}`;
         occupiedPositions.add(newPosKey);
         return { ...item, position: freePos, updatedAt: Date.now() };
       }
@@ -1214,7 +1318,7 @@ export const Desktop: React.FC<DesktopProps> = ({
     onItemsChange(updatedItems);
     onSelectionChange([]);
     setContextMenu(null);
-  }, [openStackId, selectedIds, items, onItemsChange, onSelectionChange, gridSize, findNearestFreePosition]);
+  }, [openStackId, selectedIds, items, onItemsChange, onSelectionChange, gridSize, maxX, maxY]);
 
   // 键盘快捷键
   useEffect(() => {

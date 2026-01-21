@@ -118,7 +118,7 @@ const RHNode: React.FC<NodeProps> = ({ id, data, selected }) => {
               <select
                 value={value}
                 onChange={(e) => handleInputChange(node.nodeId, node.fieldName, e.target.value)}
-                className="w-full px-2 py-1.5 text-[10px] bg-black/40 border border-white/10 rounded-md text-white focus:border-emerald-500/50 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-black/40 border border-white/10 rounded-md text-white focus:border-emerald-500/50 focus:outline-none"
               >
                 {options.map((opt, i) => (
                   <option key={i} value={opt}>{opt}</option>

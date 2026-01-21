@@ -510,7 +510,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
                 <select
                   value={suggestedAspectRatio}
                   onChange={(e) => setSuggestedAspectRatio(e.target.value as AspectRatioType | '')}
-                  className="w-full px-2 py-1.5 border rounded-lg text-[10px] focus:border-blue-500 outline-none"
+                  className="w-full px-3 py-2.5 border rounded-lg text-sm focus:border-blue-500 outline-none"
                   style={{ 
                     background: isLight ? 'rgba(248,250,252,0.95)' : 'rgba(31,41,55,0.95)',
                     borderColor: theme.colors.border,
@@ -532,7 +532,7 @@ export const AddCreativeIdeaModal: React.FC<AddCreativeIdeaModalProps> = ({ isOp
                 <select
                   value={suggestedResolution}
                   onChange={(e) => setSuggestedResolution(e.target.value as ImageSizeType | '')}
-                  className="w-full px-2 py-1.5 border rounded-lg text-[10px] focus:border-blue-500 outline-none"
+                  className="w-full px-3 py-2.5 border rounded-lg text-sm focus:border-blue-500 outline-none"
                   style={{ 
                     background: isLight ? 'rgba(248,250,252,0.95)' : 'rgba(31,41,55,0.95)',
                     borderColor: theme.colors.border,

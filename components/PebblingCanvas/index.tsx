@@ -1144,6 +1144,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (type === 'relay') { width = 40; height = 40; }
       if (['edit', 'remove-bg', 'upscale', 'llm', 'resize'].includes(type)) { width = 280; height = 250; }
       if (type === 'llm') { width = 320; height = 300; }
+      // 画板节点需要更大的尺寸（约4个图片节点大小）
+      if (type === 'drawing-board') { width = 800; height = 700; }
 
       if (position) {
           x = position.x;
@@ -1329,18 +1331,28 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           console.log('[Video节点] 视频已保存到本地:', result.data.filename);
           
           // 更新节点内容为本地URL（不是base64，节省内存）
+          // 重要：清除 videoTaskId 和 videoTaskStatus，否则UI会一直显示生成中
           updateNode(nodeId, { 
               content: localVideoUrl, 
               status: 'completed',
-              data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, videoTaskId: undefined }
+              data: { 
+                  ...nodesRef.current.find(n => n.id === nodeId)?.data, 
+                  videoTaskId: undefined,
+                  videoTaskStatus: undefined, // 清除任务状态
+                  videoProgress: undefined,   // 清除进度
+                  videoFailReason: undefined  // 清除错误信息
+              }
           });
           
           // 保存画布
           saveCurrentCanvas();
           
           // 🔧 同步视频到桌面（复用图片回调，桌面会显示为视频图标）
+          // 添加延迟确保视频文件完全写入后再提取缩略图
           if (onImageGenerated) {
-              onImageGenerated(localVideoUrl, '视频生成结果', currentCanvasId || undefined, canvasName);
+              setTimeout(() => {
+                  onImageGenerated(localVideoUrl, '视频生成结果', currentCanvasId || undefined, canvasName);
+              }, 500);
           }
           
           console.log('[Video节点] 视频处理完成');
@@ -2235,6 +2247,85 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (batchCount >= 1 && node.type === 'video') {
           try {
               await handleVideoBatchExecute(nodeId, node, batchCount);
+          } finally {
+              executingNodesRef.current.delete(nodeId); // 解锁
+          }
+          return;
+      }
+      
+      // 画板节点执行：接收图片(count=1) 或 输出PNG(count=2)
+      if (node.type === 'drawing-board') {
+          try {
+              if (batchCount === 1) {
+                  // 接收上游图片
+                  const inputs = resolveInputs(nodeId);
+                  const inputImages = inputs.images;
+                  
+                  console.log('[DrawingBoard] 接收图片:', inputImages.length);
+                  
+                  if (inputImages.length > 0) {
+                      updateNode(nodeId, { 
+                          status: 'completed',
+                          data: { ...node.data, receivedImages: inputImages }
+                      });
+                  } else {
+                      console.warn('[DrawingBoard] 无上游图片输入');
+                      updateNode(nodeId, { status: 'completed' });
+                  }
+              } else if (batchCount === 2) {
+                  // 输出PNG：从 node.content 获取 dataUrl
+                  const outputDataUrl = node.content;
+                  
+                  if (outputDataUrl && outputDataUrl.startsWith('data:image')) {
+                      console.log('[DrawingBoard] 输出图片...');
+                      
+                      // 保存到服务器
+                      try {
+                          const { saveToOutput } = await import('../../services/api/files');
+                          const savedPath = await saveToOutput(outputDataUrl, 'drawing-board-output.png');
+                          console.log('[DrawingBoard] 图片已保存:', savedPath);
+                      } catch (err) {
+                          console.warn('[DrawingBoard] 保存到output失败:', err);
+                      }
+                      
+                      // 创建输出图片节点
+                      const outputNodeId = uuid();
+                      const outputNode: CanvasNode = {
+                          id: outputNodeId,
+                          type: 'image',
+                          title: '画板输出',
+                          content: outputDataUrl,
+                          x: node.x + node.width + 100,
+                          y: node.y,
+                          width: 280,
+                          height: 280,
+                          data: {},
+                          status: 'completed'
+                      };
+                      
+                      const newConnection: Connection = {
+                          id: uuid(),
+                          fromNode: nodeId,
+                          toNode: outputNodeId
+                      };
+                      
+                      setNodes(prev => [...prev, outputNode]);
+                      setConnections(prev => [...prev, newConnection]);
+                      nodesRef.current = [...nodesRef.current, outputNode];
+                      connectionsRef.current = [...connectionsRef.current, newConnection];
+                      
+                      updateNode(nodeId, { status: 'completed', data: { ...node.data, outputImageUrl: outputDataUrl } });
+                      saveCurrentCanvas();
+                      
+                      // 同步到桌面
+                      if (onImageGenerated) {
+                          onImageGenerated(outputDataUrl, '画板输出', currentCanvasId || undefined, canvasName);
+                      }
+                  } else {
+                      console.warn('[DrawingBoard] 无有效输出内容');
+                      updateNode(nodeId, { status: 'error' });
+                  }
+              }
           } finally {
               executingNodesRef.current.delete(nodeId); // 解锁
           }

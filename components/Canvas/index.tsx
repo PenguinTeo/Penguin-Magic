@@ -35,9 +35,10 @@ import TextNode from './nodes/TextNode';
 import SaveImageNode from './nodes/SaveImageNode';
 import MultiAngleNode from './nodes/MultiAngleNode';
 import RHNode from './nodes/RHNode';
+import DrawingBoardNode from './nodes/DrawingBoardNode';
 
 // 节点类型定义
-export type CanvasNodeType = 'creative' | 'image' | 'prompt' | 'text' | 'saveImage' | 'multiAngle' | 'runninghub';
+export type CanvasNodeType = 'creative' | 'image' | 'prompt' | 'text' | 'saveImage' | 'multiAngle' | 'runninghub' | 'drawingBoard';
 
 export interface CanvasNodeData {
   [key: string]: unknown; // 索引签名，满足 Record<string, unknown> 约束
@@ -67,6 +68,7 @@ const nodeTypes: NodeTypes = {
   saveImage: SaveImageNode,
   multiAngle: MultiAngleNode,
   runninghub: RHNode,
+  drawingBoard: DrawingBoardNode,
 };
 
 // 自定义可删除边组件
@@ -446,6 +448,164 @@ export const Canvas: React.FC<CanvasProps> = ({
     setNodes((nds) => [...nds, newNode]);
   }, [setNodes, handleDeleteNode, handleEditNode]);
 
+  // 添加画板节点
+  const addDrawingBoardNode = useCallback(() => {
+    const nodeId = `drawingBoard-${Date.now()}`;
+    const newNode: Node<CanvasNodeData> = {
+      id: nodeId,
+      type: 'drawingBoard',
+      position: { x: 200 + Math.random() * 100, y: 100 + Math.random() * 100 },
+      data: {
+        label: '画板',
+        type: 'drawingBoard',
+        boardWidth: 500,
+        boardHeight: 380,
+        elements: [],
+        onDelete: handleDeleteNode,
+        onEdit: handleEditNode,
+        // onReceive 和 onExport 由 useEffect 绑定
+      },
+    };
+    setNodes((nds) => [...nds, newNode]);
+  }, [setNodes, handleDeleteNode, handleEditNode]);
+
+  // 画板节点 - 接收上游图片
+  const handleDrawingBoardReceive = useCallback(async (nodeId: string) => {
+    const boardNode = nodes.find(n => n.id === nodeId);
+    if (!boardNode || boardNode.type !== 'drawingBoard') return;
+    
+    // 设置接收中状态
+    setNodes(nds => nds.map(n => 
+      n.id === nodeId 
+        ? { ...n, data: { ...n.data, isReceiving: true } }
+        : n
+    ));
+    
+    try {
+      // 查找连接到该节点的边
+      const incomingEdges = edges.filter(e => e.target === nodeId);
+      const receivedImages: string[] = [];
+      
+      for (const edge of incomingEdges) {
+        const sourceNode = nodes.find(n => n.id === edge.source);
+        if (!sourceNode) continue;
+        
+        // 从图片节点获取图片
+        if (sourceNode.type === 'image') {
+          const imageUrl = (sourceNode.data as any).imageUrl;
+          if (imageUrl) receivedImages.push(imageUrl);
+        }
+        // 从保存图片节点获取生成的图片
+        else if (sourceNode.type === 'saveImage') {
+          const generatedUrl = (sourceNode.data as any).generatedImageUrl;
+          if (generatedUrl) receivedImages.push(generatedUrl);
+        }
+        // 从 RunningHub 节点获取输出
+        else if (sourceNode.type === 'runninghub') {
+          const outputUrl = (sourceNode.data as any).outputUrl;
+          if (outputUrl) receivedImages.push(outputUrl);
+        }
+        // 从另一个画板节点获取输出
+        else if (sourceNode.type === 'drawingBoard') {
+          const outputUrl = (sourceNode.data as any).outputImageUrl;
+          if (outputUrl) receivedImages.push(outputUrl);
+        }
+      }
+      
+      // 更新节点数据
+      setNodes(nds => nds.map(n => 
+        n.id === nodeId 
+          ? { ...n, data: { ...n.data, isReceiving: false, receivedImages } }
+          : n
+      ));
+      
+      console.log('[DrawingBoard] 接收到', receivedImages.length, '张图片');
+    } catch (error) {
+      console.error('[DrawingBoard] 接收失败:', error);
+      setNodes(nds => nds.map(n => 
+        n.id === nodeId 
+          ? { ...n, data: { ...n.data, isReceiving: false } }
+          : n
+      ));
+    }
+  }, [nodes, edges, setNodes]);
+
+  // 画板节点 - 输出PNG并创建图片节点
+  const handleDrawingBoardExport = useCallback(async (nodeId: string, imageDataUrl: string) => {
+    const boardNode = nodes.find(n => n.id === nodeId);
+    if (!boardNode || boardNode.type !== 'drawingBoard') return;
+    
+    // 设置导出中状态
+    setNodes(nds => nds.map(n => 
+      n.id === nodeId 
+        ? { ...n, data: { ...n.data, isExporting: true } }
+        : n
+    ));
+    
+    try {
+      // 保存图片到服务器
+      const { saveToOutput } = await import('../../services/api/files');
+      const filename = `画板输出-${Date.now()}.png`;
+      const result = await saveToOutput(imageDataUrl, filename);
+      
+      if (result.success && result.data) {
+        const outputUrl = result.data.url;
+        
+        // 更新节点输出URL
+        setNodes(nds => nds.map(n => 
+          n.id === nodeId 
+            ? { ...n, data: { ...n.data, isExporting: false, outputImageUrl: outputUrl } }
+            : n
+        ));
+        
+        // 保存到桌面
+        if (onSaveImage) {
+          onSaveImage(outputUrl, filename);
+        }
+        
+        // 创建图片节点显示输出
+        const newImageNode: Node<CanvasNodeData> = {
+          id: `image-output-${Date.now()}`,
+          type: 'image',
+          position: { 
+            x: boardNode.position.x + 600, 
+            y: boardNode.position.y 
+          },
+          data: {
+            label: filename,
+            type: 'image',
+            imageUrl: outputUrl,
+            onDelete: handleDeleteNode,
+            onEdit: handleEditNode,
+            onUpload: () => {},
+          },
+        };
+        setNodes(nds => [...nds, newImageNode]);
+        
+        // 自动创建连接
+        setEdges(eds => addEdge({
+          id: `edge-${nodeId}-${newImageNode.id}`,
+          source: nodeId,
+          target: newImageNode.id,
+          type: 'deletable',
+          animated: false,
+          data: { onDelete: handleDeleteEdge },
+        }, eds));
+        
+        console.log('[DrawingBoard] 导出成功:', outputUrl);
+      } else {
+        throw new Error(result.error || '保存失败');
+      }
+    } catch (error: any) {
+      console.error('[DrawingBoard] 导出失败:', error);
+      setNodes(nds => nds.map(n => 
+        n.id === nodeId 
+          ? { ...n, data: { ...n.data, isExporting: false } }
+          : n
+      ));
+    }
+  }, [nodes, setNodes, setEdges, handleDeleteNode, handleEditNode, handleDeleteEdge, onSaveImage]);
+
   // 执行 RunningHub 节点
   const handleExecuteRHNode = useCallback(async (nodeId: string) => {
     const rhNode = nodes.find(n => n.id === nodeId);
@@ -636,7 +796,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   }, [nodes, edges, onGenerateFromFlow, onSaveImage, isExecuting]);
 
-  // 确保 saveImage 和 runninghub 节点都有执行回调（用于恢复的节点）
+  // 确保 saveImage、runninghub 和 drawingBoard 节点都有执行回调（用于恢复的节点）
   useEffect(() => {
     let needUpdate = false;
     const updatedNodes = nodes.map(n => {
@@ -660,12 +820,23 @@ export const Canvas: React.FC<CanvasProps> = ({
           }
         };
       }
+      if (n.type === 'drawingBoard' && (!(n.data as any).onReceive || !(n.data as any).onExport)) {
+        needUpdate = true;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            onReceive: () => handleDrawingBoardReceive(n.id),
+            onExport: (imageDataUrl: string) => handleDrawingBoardExport(n.id, imageDataUrl),
+          }
+        };
+      }
       return n;
     });
     if (needUpdate) {
       setNodes(updatedNodes);
     }
-  }, [nodes, handleExecuteSingleNode, handleExecuteRHNode, setNodes]);
+  }, [nodes, handleExecuteSingleNode, handleExecuteRHNode, handleDrawingBoardReceive, handleDrawingBoardExport, setNodes]);
 
   // 执行工作流
   const handleExecuteFlow = useCallback(async () => {
@@ -999,6 +1170,14 @@ export const Canvas: React.FC<CanvasProps> = ({
               <span>RunningHub</span>
             </button>
 
+            <button
+              onClick={addDrawingBoardNode}
+              className="w-full px-4 py-2.5 text-sm font-medium rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 transition-all flex items-center gap-3"
+            >
+              <span className="text-lg">🎨</span>
+              <span>画板</span>
+            </button>
+
             <div className="h-px bg-white/10 my-2" />
 
             {/* 进度显示 */}
@@ -1113,6 +1292,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               case 'saveImage': return theme.colors.primary;
               case 'multiAngle': return '#a855f7';
               case 'runninghub': return '#10b981';
+              case 'drawingBoard': return '#f59e0b';
               default: return '#6b7280';
             }
           }}

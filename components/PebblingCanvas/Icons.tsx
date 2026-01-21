@@ -31,7 +31,13 @@ import {
   Info,
   Wrench,
   Expand,
-  Camera
+  Camera,
+  Palette,
+  ArrowUp,
+  ArrowDown,
+  ChevronUp,
+  ChevronDown,
+  Trash2
 } from 'lucide-react';
 
 export const Icons = {
@@ -65,5 +71,11 @@ export const Icons = {
   Wrench,
   Expand,
   Pause,
-  Camera
+  Camera,
+  Palette,
+  ArrowUp,
+  ArrowDown,
+  ChevronUp,
+  ChevronDown,
+  Trash: Trash2
 };

@@ -363,7 +363,7 @@ export const RunningHubGenerator: React.FC<RunningHubGeneratorProps> = ({
                                                     <select
                                                         value={inputs[field.id] || ''}
                                                         onChange={(e) => handleInputChange(field.id, e.target.value)}
-                                                        className="w-full px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none"
+                                                        className="w-full px-4 py-3.5 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none text-sm"
                                                     >
                                                         <option value="">请选择...</option>
                                                         {field.options?.map(opt => (
@@ -376,7 +376,7 @@ export const RunningHubGenerator: React.FC<RunningHubGeneratorProps> = ({
                                                         value={inputs[field.id] || ''}
                                                         onChange={(e) => handleInputChange(field.id, e.target.value)}
                                                         placeholder={field.placeholder}
-                                                        className="w-full px-4 py-2.5 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none placeholder-gray-600"
+                                                        className="w-full px-4 py-3.5 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all outline-none placeholder-gray-600 text-sm"
                                                     />
                                                 )}
                                             </div>

@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'drawing-board';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -104,6 +104,28 @@ export interface NodeData {
   outputType?: string; // 输出文件类型
   coverUrl?: string; // 应用封面URL
   error?: string; // 错误信息
+  
+  // Drawing Board Node Specifics
+  boardElements?: Array<{
+    id: string;
+    type: 'image' | 'text' | 'path' | 'rect' | 'circle' | 'line';
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+    imageUrl?: string;
+    text?: string;
+    fontSize?: number;
+    color?: string;
+    points?: Array<{ x: number; y: number }>;
+    strokeWidth?: number;
+    strokeColor?: string;
+    fillColor?: string;
+  }>;
+  boardWidth?: number;
+  boardHeight?: number;
+  receivedImages?: string[]; // 接收到的上游图片URL列表
+  outputImageUrl?: string; // 画板输出的PNG图片URL
 }
 
 export interface CanvasNode {
@@ -177,6 +199,10 @@ export const ARCTIC_COLORS = {
   // RunningHub深绿 - RunningHub节点
   rhGreen: 'rgb(16, 185, 129)',
   rhGreenLight: 'rgb(52, 211, 153)',
+  
+  // 画板橙色 - DrawingBoard节点
+  boardOrange: 'rgb(245, 158, 11)',
+  boardOrangeLight: 'rgb(251, 191, 36)',
 } as const;
 
 // 节点类型颜色映射
@@ -207,6 +233,9 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
     case 'runninghub':
     case 'rh-config':
       return { primary: ARCTIC_COLORS.rhGreen, light: ARCTIC_COLORS.rhGreenLight };
+    
+    case 'drawing-board':
+      return { primary: ARCTIC_COLORS.boardOrange, light: ARCTIC_COLORS.boardOrangeLight };
     
     default:
       return { primary: ARCTIC_COLORS.arcticGray, light: ARCTIC_COLORS.arcticGrayLight };

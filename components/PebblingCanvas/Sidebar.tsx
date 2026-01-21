@@ -203,6 +203,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => onAdd('runninghub')} 
                     isLight={isLight}
                 />
+                <DraggableButton 
+                    type="drawing-board" 
+                    icon={<Icons.Palette />} 
+                    label="画板" 
+                    onDragStart={onDragStart} 
+                    onClick={() => onAdd('drawing-board')} 
+                    isLight={isLight}
+                />
             </div>
 
         </div>
