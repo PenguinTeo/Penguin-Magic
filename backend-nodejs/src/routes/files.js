@@ -203,14 +203,57 @@ router.post('/download-remote-video', async (req, res) => {
     return res.status(400).json({ success: false, error: '无效的URL格式' });
   }
   
-  try {
-    console.log('[Download Video] 开始下载远程视频:', videoUrl.substring(0, 80) + '...');
+  // 重试下载函数
+  const downloadWithRetry = async (url, maxRetries = 3, timeout = 120000) => {
+    let lastError;
     
-    // 下载视频
-    const response = await fetch(videoUrl);
-    if (!response.ok) {
-      throw new Error(`下载失败: ${response.status} ${response.statusText}`);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[Download Video] 尝试下载 (${attempt}/${maxRetries}):`, url.substring(0, 80) + '...');
+        
+        // 创建 AbortController 用于超时控制
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'video/*,*/*'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        console.log(`[Download Video] 下载成功，Content-Type:`, response.headers.get('content-type'));
+        return response;
+      } catch (err) {
+        lastError = err;
+        const isAbort = err.name === 'AbortError';
+        const errorMsg = isAbort ? '下载超时' : err.message;
+        console.warn(`[Download Video] 尝试 ${attempt} 失败:`, errorMsg);
+        
+        if (attempt < maxRetries) {
+          // 等待后重试（指数退避）
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+          console.log(`[Download Video] ${delay}ms 后重试...`);
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
     }
+    
+    throw lastError;
+  };
+  
+  try {
+    console.log('[Download Video] 开始下载远程视频:', videoUrl.substring(0, 100));
+    
+    // 下载视频（带重试）
+    const response = await downloadWithRetry(videoUrl);
     
     const buffer = await response.arrayBuffer();
     const base64 = Buffer.from(buffer).toString('base64');
@@ -226,8 +269,10 @@ router.post('/download-remote-video', async (req, res) => {
     console.log('[Download Video] 远程视频已保存:', result.data?.filename, '大小:', (buffer.byteLength / 1024 / 1024).toFixed(2), 'MB');
     res.json(result);
   } catch (error) {
-    console.error('[Download Video] 下载远程视频失败:', error.message);
-    res.status(500).json({ success: false, error: `下载失败: ${error.message}` });
+    const errorMsg = error.name === 'AbortError' ? '下载超时，请重试' : error.message;
+    console.error('[Download Video] 下载远程视频失败:', errorMsg);
+    console.error('[Download Video] 视频URL:', videoUrl);
+    res.status(500).json({ success: false, error: `下载失败: ${errorMsg}`, videoUrl });
   }
 });
 

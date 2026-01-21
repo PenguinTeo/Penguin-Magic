@@ -41,6 +41,7 @@ interface CanvasNodeProps {
   onExtractFrameFromExtractor?: (nodeId: string, time: number) => void; // 从帧提取器提取帧
   hasDownstream?: boolean; // 是否有下游连接
   incomingConnections?: Array<{ fromNode: string; toPortKey?: string }>; // 连入当前节点的连接
+  onRetryVideoDownload?: (nodeId: string) => void; // 重试视频下载
 }
 
 const CanvasNodeItem: React.FC<CanvasNodeProps> = ({ 
@@ -63,7 +64,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   onCreateFrameExtractor,
   onExtractFrameFromExtractor,
   hasDownstream = false,
-  incomingConnections = []
+  incomingConnections = [],
+  onRetryVideoDownload
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState(node.content);
@@ -3051,17 +3053,48 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         </div>
                     </>
                 ) : node.status === 'error' ? (
-                    // 错误状态
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-red-950/30 border-2 border-red-500/50 rounded-xl">
+                    // 错误状态 - 提供重试和打开原始URL的选项
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-red-950/30 border-2 border-red-500/50 rounded-xl p-4">
                         <Icons.Close size={24} className="text-red-400" />
                         <span className="text-[11px] text-red-400 font-medium">生成失败</span>
                         {node.data?.videoFailReason && (
-                            <span className="text-[9px] text-red-400/70 text-center px-4 max-w-full break-words">
-                                {node.data.videoFailReason.length > 100 
-                                    ? node.data.videoFailReason.slice(0, 100) + '...' 
+                            <span className="text-[9px] text-red-400/70 text-center px-2 max-w-full break-words">
+                                {node.data.videoFailReason.length > 80 
+                                    ? node.data.videoFailReason.slice(0, 80) + '...' 
                                     : node.data.videoFailReason}
                             </span>
                         )}
+                        {/* 操作按钮 */}
+                        <div className="flex gap-2 mt-1">
+                            {/* 重试下载按钮 */}
+                            {node.data?.videoUrl && onRetryVideoDownload && (
+                                <button
+                                    className="px-3 py-1.5 text-[10px] font-medium bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400 rounded-lg transition-colors flex items-center gap-1.5"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onRetryVideoDownload(node.id);
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    <Icons.Refresh size={12} />
+                                    重试下载
+                                </button>
+                            )}
+                            {/* 在新标签页打开原始URL */}
+                            {node.data?.videoUrl && (
+                                <button
+                                    className="px-3 py-1.5 text-[10px] font-medium bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 rounded-lg transition-colors flex items-center gap-1.5"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(node.data?.videoUrl, '_blank');
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    <Icons.ExternalLink size={12} />
+                                    打开链接
+                                </button>
+                            )}
+                        </div>
                     </div>
                 ) : (
                     // Loading 状态

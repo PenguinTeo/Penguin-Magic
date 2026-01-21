@@ -37,7 +37,9 @@ import {
   ArrowDown,
   ChevronUp,
   ChevronDown,
-  Trash2
+  Trash2,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 
 export const Icons = {
@@ -77,5 +79,7 @@ export const Icons = {
   ArrowDown,
   ChevronUp,
   ChevronDown,
-  Trash: Trash2
+  Trash: Trash2,
+  Refresh: RefreshCw,
+  ExternalLink
 };

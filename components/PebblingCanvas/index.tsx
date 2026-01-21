@@ -1977,9 +1977,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
   // 视频节点批量执行：创建多个 video-output 节点
   const handleVideoBatchExecute = async (sourceNodeId: string, sourceNode: CanvasNode, count: number) => {
-      // 立即标记源节点为 running，防止重复点击
-      updateNode(sourceNodeId, { status: 'running' });
-      
       console.log(`[视频批量] 开始生成 ${count} 个视频输出节点`);
       
       // 获取输入
@@ -2040,13 +2037,18 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       connectionsRef.current = [...connectionsRef.current, ...newConnections];
       setHasUnsavedChanges(true);
       
-      console.log(`[视频批量] 已创建 ${count} 个视频输出节点，开始并发执行`);
+      console.log(`[视频批量] 已创建 ${count} 个视频输出节点`);
+      
+      // 🔧 配置节点立即完成，不等待视频生成
+      // 任务状态由输出节点自己管理
+      updateNode(sourceNodeId, { status: 'completed' });
+      saveCurrentCanvas();
       
       // 获取视频设置
       const videoService = sourceNode.data?.videoService || 'sora';
       
-      // 并发执行所有结果节点的生成
-      const execPromises = resultNodeIds.map(async (outputNodeId, index) => {
+      // 🔧 后台异步执行所有结果节点的生成（不阻塞配置节点）
+      resultNodeIds.forEach(async (outputNodeId, index) => {
           const abortController = new AbortController();
           abortControllersRef.current.set(outputNodeId, abortController);
           const signal = abortController.signal;
@@ -2172,13 +2174,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           }
       });
       
-      await Promise.all(execPromises);
-      
-      // 标记源节点为完成
-      updateNode(sourceNodeId, { status: 'completed' });
-      
-      saveCurrentCanvas();
-      console.log(`[视频批量] 全部完成`);
+      console.log(`[视频批量] 任务已后台异步执行`);
   };
 
   const handleExecuteNode = async (nodeId: string, batchCount: number = 1) => {
@@ -4799,6 +4795,38 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     onExtractFrame={handleExtractFrame}
                     onCreateFrameExtractor={handleCreateFrameExtractor}
                     onExtractFrameFromExtractor={handleExtractFrameFromExtractor}
+                    onRetryVideoDownload={async (id) => {
+                        const n = nodesRef.current.find(x => x.id === id);
+                        if (!n || !n.data?.videoUrl) {
+                            console.warn('[RetryDownload] 节点无原始URL:', id);
+                            return;
+                        }
+                        
+                        const videoUrl = n.data.videoUrl;
+                        console.log('[RetryDownload] 重试下载:', videoUrl);
+                        
+                        // 更新状态为 running
+                        updateNode(id, { 
+                            status: 'running',
+                            data: { ...n.data, videoFailReason: undefined }
+                        });
+                        
+                        // 创建一个新的 AbortController
+                        const controller = new AbortController();
+                        abortControllersRef.current.set(id, controller);
+                        
+                        try {
+                            await downloadAndSaveVideo(videoUrl, id, controller.signal);
+                        } catch (err: any) {
+                            console.error('[RetryDownload] 重试失败:', err);
+                            updateNode(id, { 
+                                status: 'error',
+                                data: { ...n.data, videoFailReason: `重试失败: ${err.message || err}` }
+                            });
+                        } finally {
+                            abortControllersRef.current.delete(id);
+                        }
+                    }}
                 />
             ))}
         </div>
