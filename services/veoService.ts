@@ -4,14 +4,15 @@
  * 参考文档: veo3.1.md
  */
 
-// Veo 模型类型 - veo3.1 系列 6 个模型
+// Veo 模型类型 - veo3.1 系列7个模型
 export type VeoModel = 
   | 'veo3.1-fast'           // 快速模式
-  | 'veo3.1-pro-4k'         // 4K 高质量
-  | 'veo3.1-components-4k'  // 4K 多图参考
+  | 'veo3.1'                // 标准模式
   | 'veo3.1-4k'             // 4K 标准
+  | 'veo3.1-pro'            // 高质量
+  | 'veo3.1-pro-4k'         // 4K 高质量
   | 'veo3.1-components'     // 多图参考
-  | 'veo3.1-pro';           // 高质量
+  | 'veo3.1-components-4k'; // 4K 多图参考
 
 // Veo 视频模式
 export type VeoVideoMode = 

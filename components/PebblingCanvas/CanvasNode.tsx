@@ -2729,7 +2729,11 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             <div className={`flex ${controlBg} rounded p-0.5`}>
                                 <button
                                     className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'text2video' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
-                                    onClick={() => handleVideoSettingChange('veoMode', 'text2video')}
+                                    onClick={() => {
+                                        // 从多图参考切换时，自动选择 fast 模型
+                                        const newModel = (node.data?.veoModel || '').includes('components') ? 'veo3.1-fast' : node.data?.veoModel;
+                                        onUpdate(node.id, { data: { ...node.data, veoMode: 'text2video', veoModel: newModel || 'veo3.1-fast' } });
+                                    }}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="纯文字生成视频"
                                 >
@@ -2737,7 +2741,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                                 <button
                                     className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'image2video' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
-                                    onClick={() => handleVideoSettingChange('veoMode', 'image2video')}
+                                    onClick={() => {
+                                        const newModel = (node.data?.veoModel || '').includes('components') ? 'veo3.1-fast' : node.data?.veoModel;
+                                        onUpdate(node.id, { data: { ...node.data, veoMode: 'image2video', veoModel: newModel || 'veo3.1-fast' } });
+                                    }}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="单图直出视频"
                                 >
@@ -2745,7 +2752,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                                 <button
                                     className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'keyframes' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
-                                    onClick={() => handleVideoSettingChange('veoMode', 'keyframes')}
+                                    onClick={() => {
+                                        const newModel = (node.data?.veoModel || '').includes('components') ? 'veo3.1-fast' : node.data?.veoModel;
+                                        onUpdate(node.id, { data: { ...node.data, veoMode: 'keyframes', veoModel: newModel || 'veo3.1-fast' } });
+                                    }}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="首尾帧控制视频"
                                 >
@@ -2753,7 +2763,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                                 <button
                                     className={`flex-1 px-1.5 py-1 text-[8px] font-medium rounded transition-all ${veoMode === 'multi-reference' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
-                                    onClick={() => onUpdate(node.id, { data: { ...node.data, veoMode: 'multi-reference', veoModel: 'veo3.1-components' } })}
+                                    onClick={() => {
+                                        // 切换到多图参考时，自动选择 components 模型
+                                        onUpdate(node.id, { data: { ...node.data, veoMode: 'multi-reference', veoModel: 'veo3.1-components' } });
+                                    }}
                                     onMouseDown={(e) => e.stopPropagation()}
                                     title="多图参考生成"
                                 >
@@ -2761,62 +2774,80 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                             </div>
                             
-                            {/* Row 1.5: 模型选择 - 6个模型分两行 */}
+                            {/* Row 1.5: 模型选择 - 根据模式显示不同模型 */}
                             <div className="flex flex-col gap-1">
-                                {/* 第一行: fast, 4k, pro */}
-                                <div className={`flex ${controlBg} rounded-lg p-0.5`}>
-                                    <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-fast' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
-                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-fast')}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        title="快速模式"
-                                    >
-                                        fast
-                                    </button>
-                                    <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-4k' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
-                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-4k')}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        title="4K 标准"
-                                    >
-                                        4k
-                                    </button>
-                                    <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
-                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-pro')}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        title="高质量"
-                                    >
-                                        pro
-                                    </button>
-                                </div>
-                                {/* 第二行: pro-4k, components, components-4k */}
-                                <div className={`flex ${controlBg} rounded-lg p-0.5`}>
-                                    <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro-4k' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
-                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-pro-4k')}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        title="4K 高质量"
-                                    >
-                                        pro-4k
-                                    </button>
-                                    <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
-                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-components')}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        title="多图参考"
-                                    >
-                                        comp
-                                    </button>
-                                    <button
-                                        className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components-4k' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
-                                        onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-components-4k')}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        title="4K 多图参考"
-                                    >
-                                        comp-4k
-                                    </button>
-                                </div>
+                                {/* 文生视频/图生视频/首尾帧模式：显示 fast, 标准, 4k, pro, pro-4k */}
+                                {veoMode !== 'multi-reference' && (
+                                    <>
+                                        {/* 第一行: fast, 标准, 4k */}
+                                        <div className={`flex ${controlBg} rounded-lg p-0.5`}>
+                                            <button
+                                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-fast' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
+                                                onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-fast')}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                title="快速模式"
+                                            >
+                                                fast
+                                            </button>
+                                            <button
+                                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
+                                                onClick={() => handleVideoSettingChange('veoModel', 'veo3.1')}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                title="标准模式"
+                                            >
+                                                标准
+                                            </button>
+                                            <button
+                                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-4k' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
+                                                onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-4k')}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                title="4K 标准"
+                                            >
+                                                4k
+                                            </button>
+                                        </div>
+                                        {/* 第二行: pro, pro-4k */}
+                                        <div className={`flex ${controlBg} rounded-lg p-0.5`}>
+                                            <button
+                                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
+                                                onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-pro')}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                title="高质量"
+                                            >
+                                                pro
+                                            </button>
+                                            <button
+                                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-pro-4k' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
+                                                onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-pro-4k')}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                title="4K 高质量"
+                                            >
+                                                pro-4k
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                                {/* 多图参考模式：仅显示 components 和 components-4k */}
+                                {veoMode === 'multi-reference' && (
+                                    <div className={`flex ${controlBg} rounded-lg p-0.5`}>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
+                                            onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-components')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            title="多图参考标准"
+                                        >
+                                            comp
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded-md transition-all ${veoModel === 'veo3.1-components-4k' ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-200') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-500 hover:text-zinc-300')}`}
+                                            onClick={() => handleVideoSettingChange('veoModel', 'veo3.1-components-4k')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            title="4K 多图参考"
+                                        >
+                                            comp-4k
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             
                             {/* Row 2: 宽高比 + 增强提示词 */}
