@@ -1,8 +1,8 @@
-import React, { memo, useState, useCallback, useEffect } from 'react';
-import { Handle, Position, NodeProps } from '@xyflow/react';
+import React, { memo, useState, useCallback, useEffect, useRef } from 'react';
+import { Handle, Position, NodeProps, useUpdateNodeInternals } from '@xyflow/react';
 import type { CanvasNodeData } from '../index';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { Play, X, Settings, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Play, X, Settings, ExternalLink, CheckCircle, AlertCircle, Loader2, Link as LinkIcon } from 'lucide-react';
 import { getAIAppInfo, RHAIAppInfo, RHAIAppNodeInfoItem } from '../../../services/api/runninghub';
 
 // RH 节点扩展数据
@@ -16,11 +16,14 @@ export interface RHNodeExtendedData extends CanvasNodeData {
   outputUrl?: string; // 生成的输出 URL
   outputType?: string; // 输出类型 (image/video)
   onExecute?: () => void;
+  // 连接的输入数据
+  connectedInputs?: Record<string, string>; // handleId -> 连接的值
 }
 
 const RHNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const { theme } = useTheme();
   const nodeData = data as RHNodeExtendedData;
+  const updateNodeInternals = useUpdateNodeInternals();
   
   const [webappIdInput, setWebappIdInput] = useState(nodeData.webappId || '');
   const [isEditing, setIsEditing] = useState(!nodeData.webappId);
@@ -28,6 +31,13 @@ const RHNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const [nodeInputs, setNodeInputs] = useState<Record<string, string>>(nodeData.nodeInputs || {});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(nodeData.error || null);
+
+  // 当 appInfo 变化时，更新节点内部以刷新 Handle 位置
+  useEffect(() => {
+    if (appInfo) {
+      updateNodeInternals(id);
+    }
+  }, [appInfo, id, updateNodeInternals]);
 
   // 加载应用信息
   const loadAppInfo = useCallback(async (webappId: string) => {
@@ -86,19 +96,50 @@ const RHNode: React.FC<NodeProps> = ({ id, data, selected }) => {
     }
   };
 
-  // 渲染输入字段
-  const renderInputField = (node: RHAIAppNodeInfoItem) => {
+  // 检查某个字段是否已连接
+  const isFieldConnected = (nodeId: string, fieldName: string): string | null => {
+    const handleId = `input-${nodeId}-${fieldName}`;
+    return nodeData.connectedInputs?.[handleId] || null;
+  };
+
+  // 渲染输入字段（带独立连接点）
+  const renderInputField = (node: RHAIAppNodeInfoItem, index: number) => {
     const key = `${node.nodeId}_${node.fieldName}`;
     const value = nodeInputs[key] || '';
+    const handleId = `input-${node.nodeId}-${node.fieldName}`;
+    const connectedValue = isFieldConnected(node.nodeId, node.fieldName);
     
-    // 图片类型显示提示，实际上传通过连接处理
+    // 图片/视频/音频类型 - 需要连接输入
     if (node.fieldType === 'IMAGE' || node.fieldType === 'VIDEO' || node.fieldType === 'AUDIO') {
       return (
-        <div key={key} className="flex items-center gap-2 p-2 bg-black/20 rounded-lg border border-white/10">
-          <span className="text-sm">{getFieldTypeIcon(node.fieldType)}</span>
+        <div key={key} className="relative flex items-center gap-2 p-2 bg-black/20 rounded-lg border border-white/10">
+          {/* 该字段的独立连接点 */}
+          <Handle
+            type="target"
+            position={Position.Left}
+            id={handleId}
+            style={{ 
+              position: 'absolute',
+              left: '-8px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              backgroundColor: connectedValue ? '#10b981' : '#10b981',
+              borderColor: '#059669',
+            }}
+            className="!w-3 !h-3 !border-2 hover:!scale-125 transition-transform"
+            title={`${node.description || node.fieldName} 输入`}
+          />
+          <span className="text-sm ml-1">{getFieldTypeIcon(node.fieldType)}</span>
           <div className="flex-1 min-w-0">
             <div className="text-[10px] text-gray-400 truncate">{node.description || node.fieldName}</div>
-            <div className="text-[9px] text-emerald-400/70">从左侧连接输入</div>
+            {connectedValue ? (
+              <div className="text-[9px] text-emerald-400 flex items-center gap-1 truncate">
+                <LinkIcon className="w-2.5 h-2.5" />
+                已连接 <span className="text-emerald-300/70 truncate">{connectedValue.slice(0, 20)}...</span>
+              </div>
+            ) : (
+              <div className="text-[9px] text-gray-500">从左侧连接输入</div>
+            )}
           </div>
         </div>
       );
@@ -110,8 +151,24 @@ const RHNode: React.FC<NodeProps> = ({ id, data, selected }) => {
         const options = JSON.parse(node.fieldData);
         if (Array.isArray(options)) {
           return (
-            <div key={key} className="space-y-1">
-              <label className="text-[10px] text-gray-400 flex items-center gap-1">
+            <div key={key} className="relative space-y-1">
+              {/* 该字段的独立连接点 */}
+              <Handle
+                type="target"
+                position={Position.Left}
+                id={handleId}
+                style={{ 
+                  position: 'absolute',
+                  left: '-8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  backgroundColor: '#10b981',
+                  borderColor: '#059669',
+                }}
+                className="!w-3 !h-3 !border-2 hover:!scale-125 transition-transform"
+                title={`${node.description || node.fieldName} 输入`}
+              />
+              <label className="text-[10px] text-gray-400 flex items-center gap-1 ml-1">
                 {getFieldTypeIcon(node.fieldType)}
                 <span className="truncate">{node.description || node.fieldName}</span>
               </label>
@@ -132,8 +189,24 @@ const RHNode: React.FC<NodeProps> = ({ id, data, selected }) => {
     
     // 默认文本输入
     return (
-      <div key={key} className="space-y-1">
-        <label className="text-[10px] text-gray-400 flex items-center gap-1">
+      <div key={key} className="relative space-y-1">
+        {/* 该字段的独立连接点 */}
+        <Handle
+          type="target"
+          position={Position.Left}
+          id={handleId}
+          style={{ 
+            position: 'absolute',
+            left: '-8px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            backgroundColor: '#10b981',
+            borderColor: '#059669',
+          }}
+          className="!w-3 !h-3 !border-2 hover:!scale-125 transition-transform"
+          title={`${node.description || node.fieldName} 输入`}
+        />
+        <label className="text-[10px] text-gray-400 flex items-center gap-1 ml-1">
           {getFieldTypeIcon(node.fieldType)}
           <span className="truncate">{node.description || node.fieldName}</span>
         </label>
@@ -154,23 +227,13 @@ const RHNode: React.FC<NodeProps> = ({ id, data, selected }) => {
 
   return (
     <div
-      className={`rounded-2xl border-2 overflow-hidden transition-all backdrop-blur-xl min-w-[220px] max-w-[300px]`}
+      className={`rounded-2xl border-2 overflow-visible transition-all backdrop-blur-xl min-w-[260px] max-w-[320px]`}
       style={{
         borderColor: selected ? '#10b981' : 'rgba(16, 185, 129, 0.4)',
         background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.9), rgba(4, 47, 46, 0.9))',
         boxShadow: selected ? '0 10px 40px -10px rgba(16, 185, 129, 0.4)' : '0 4px 20px -4px rgba(0,0,0,0.5)',
       }}
     >
-      {/* 输入连接点 */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="input-media"
-        style={{ top: '50%', backgroundColor: '#10b981', borderColor: '#059669' }}
-        className="!w-4 !h-4 !border-2 hover:!scale-125 transition-transform"
-        title="媒体输入 (图片/视频)"
-      />
-
       {/* 节点头部 */}
       <div 
         className="px-3 py-2.5 flex items-center gap-2 border-b"
@@ -264,10 +327,17 @@ const RHNode: React.FC<NodeProps> = ({ id, data, selected }) => {
               </div>
             )}
 
-            {/* 输入字段 */}
+            {/* 应用参数区域标题 */}
             {appInfo?.nodeInfoList && appInfo.nodeInfoList.length > 0 && (
-              <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
-                {appInfo.nodeInfoList.map(renderInputField)}
+              <div className="text-[10px] text-emerald-400/80 font-medium flex items-center gap-1">
+                应用参数 ({appInfo.nodeInfoList.length})
+              </div>
+            )}
+
+            {/* 输入字段 - 每个字段都有独立的连接点 */}
+            {appInfo?.nodeInfoList && appInfo.nodeInfoList.length > 0 && (
+              <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1 overflow-x-visible">
+                {appInfo.nodeInfoList.map((node, index) => renderInputField(node, index))}
               </div>
             )}
           </>
@@ -313,16 +383,28 @@ const RHNode: React.FC<NodeProps> = ({ id, data, selected }) => {
             </div>
           </div>
         )}
+        
+        {/* 输出连接点标签 */}
+        <div className="relative flex items-center justify-end text-[10px] text-gray-500 pr-1">
+          → 输出图片
+          {/* 输出连接点 */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="output"
+            style={{ 
+              position: 'absolute',
+              right: '-12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              backgroundColor: '#10b981', 
+              borderColor: '#059669' 
+            }}
+            className="!w-3 !h-3 !border-2 hover:!scale-125 transition-transform"
+            title="输出 (图片/视频)"
+          />
+        </div>
       </div>
-
-      {/* 输出连接点 */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{ backgroundColor: '#10b981', borderColor: '#059669' }}
-        className="!w-4 !h-4 !border-2 hover:!scale-125 transition-transform"
-        title="输出 (图片/视频)"
-      />
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }

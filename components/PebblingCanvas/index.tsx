@@ -26,11 +26,79 @@ const isApiConfigured = (): boolean => {
   return hasThirdParty || hasGemini;
 };
 
-// base64 转 File
-const base64ToFile = async (base64: string, filename: string = 'image.png'): Promise<File> => {
-  const response = await fetch(base64);
-  const blob = await response.blob();
-  return new File([blob], filename, { type: blob.type || 'image/png' });
+// base64 转 File - 支持多种图片格式
+const base64ToFile = async (imageUrl: string, filename: string = 'image.png'): Promise<File> => {
+  try {
+    // 1. 如果是 data:image base64 格式，直接 fetch
+    if (imageUrl.startsWith('data:image')) {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      return new File([blob], filename, { type: blob.type || 'image/png' });
+    }
+    
+    // 2. 如果是本地路径 /files/xxx，需要通过 API 转换
+    if (imageUrl.startsWith('/files/') || imageUrl.startsWith('/api/')) {
+      // 加载图片并转为 base64
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      return new Promise((resolve, reject) => {
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(new File([blob], filename, { type: 'image/png' }));
+            } else {
+              reject(new Error('图片转换失败'));
+            }
+          }, 'image/png');
+        };
+        img.onerror = () => reject(new Error(`图片加载失败: ${imageUrl.slice(0, 100)}`));
+        img.src = imageUrl;
+      });
+    }
+    
+    // 3. 如果是 HTTP/HTTPS URL，通过 canvas 转换避免 CORS 问题
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || imageUrl.startsWith('//')) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous'; // 尝试跨域
+      
+      return new Promise((resolve, reject) => {
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(new File([blob], filename, { type: 'image/png' }));
+            } else {
+              reject(new Error('图片转换失败'));
+            }
+          }, 'image/png');
+        };
+        img.onerror = () => {
+          console.error('[base64ToFile] 图片加载失败，可能是 CORS 问题:', imageUrl.slice(0, 100));
+          reject(new Error(`图片加载失败(CORS): ${imageUrl.slice(0, 100)}`));
+        };
+        img.src = imageUrl;
+      });
+    }
+    
+    // 4. 其他格式，尝试直接 fetch
+    console.warn('[base64ToFile] 未知格式，尝试直接 fetch:', imageUrl.slice(0, 50));
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    return new File([blob], filename, { type: blob.type || 'image/png' });
+  } catch (error) {
+    console.error('[base64ToFile] 转换失败:', error, 'URL:', imageUrl.slice(0, 100));
+    throw error;
+  }
 };
 
 // 生成图片（文生图/图生图）- 自动选择贞贞API或Gemini
@@ -61,14 +129,45 @@ const editCreativeImage = async (
   signal?: AbortSignal
 ): Promise<string | null> => {
   try {
-    // 转换base64为File对象
-    const files = await Promise.all(images.map((img, i) => base64ToFile(img, `input_${i}.png`)));
+    console.log('[editCreativeImage] 开始处理, 输入图片数量:', images.length);
+    console.log('[editCreativeImage] 图片格式预览:', images.map(img => ({
+      prefix: img.slice(0, 50),
+      length: img.length,
+      isBase64: img.startsWith('data:image'),
+      isHttpUrl: img.startsWith('http'),
+      isLocalPath: img.startsWith('/files/')
+    })));
+    
+    // 转换所有图片为File对象
+    const files = await Promise.all(images.map(async (img, i) => {
+      try {
+        const file = await base64ToFile(img, `input_${i}.png`);
+        console.log(`[editCreativeImage] 图片 ${i + 1} 转换成功:`, {
+          name: file.name,
+          size: file.size,
+          type: file.type
+        });
+        return file;
+      } catch (err) {
+        console.error(`[editCreativeImage] 图片 ${i + 1} 转换失败:`, err);
+        throw err;
+      }
+    }));
+    
+    // 检查是否所有文件都有效
+    const validFiles = files.filter(f => f.size > 0);
+    console.log(`[editCreativeImage] 有效文件数: ${validFiles.length}/${files.length}`);
+    
+    if (validFiles.length === 0 && images.length > 0) {
+      console.error('[editCreativeImage] 所有图片转换失败，退化为文生图');
+    }
+    
     const imageConfig: ImageEditConfig = {
       aspectRatio: config?.aspectRatio || 'Auto',
       imageSize: config?.resolution || '1K',
     };
     // 使用统一的 editImageWithGemini，它会自动判断用哪个API
-    const result = await editImageWithGemini(files, prompt, imageConfig);
+    const result = await editImageWithGemini(validFiles, prompt, imageConfig);
     return result.imageUrl;
   } catch (e) {
     console.error('图生图失败:', e);
@@ -946,6 +1045,25 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       }
       // 2. Delete Connection
       if (selectedConnectionId) {
+          // 找到要删除的连接
+          const connToDelete = connectionsRef.current.find(c => c.id === selectedConnectionId);
+          
+          // 如果有 toPortKey，清除目标节点的参数值
+          if (connToDelete?.toPortKey) {
+              const targetNode = nodesRef.current.find(n => n.id === connToDelete.toNode);
+              if (targetNode?.data?.nodeInputs?.[connToDelete.toPortKey]) {
+                  updateNode(connToDelete.toNode, {
+                      data: {
+                          ...targetNode.data,
+                          nodeInputs: {
+                              ...targetNode.data.nodeInputs,
+                              [connToDelete.toPortKey]: '' // 清空参数值
+                          }
+                      }
+                  });
+              }
+          }
+          
           setConnections(prev => prev.filter(c => c.id !== selectedConnectionId));
           setSelectedConnectionId(null);
           setHasUnsavedChanges(true); // 标记未保存
@@ -1043,7 +1161,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           const x = (detail.x - rect.left - canvasOffset.x) / scale - 150;
           const y = (detail.y - rect.top - canvasOffset.y) / scale - 100;
           
-          if (detail.type && ['image', 'text', 'video', 'llm', 'idea', 'relay', 'edit', 'remove-bg', 'upscale', 'resize', 'bp'].includes(detail.type)) {
+          if (detail.type && ['image', 'text', 'video', 'llm', 'idea', 'relay', 'edit', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config', 'drawing-board'].includes(detail.type)) {
               console.log('[Canvas] 创建节点:', detail.type, '位置:', x, y);
               addNode(detail.type, '', { x, y });
           }
@@ -1144,6 +1262,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (type === 'relay') { width = 40; height = 40; }
       if (['edit', 'remove-bg', 'upscale', 'llm', 'resize'].includes(type)) { width = 280; height = 250; }
       if (type === 'llm') { width = 320; height = 300; }
+      // RunningHub 节点（输入 ID 的节点）
+      if (type === 'runninghub') { width = 280; height = 180; }
+      // RH-Main 节点（封面主节点）
+      if (type === 'rh-main') { width = 280; height = 280; }
+      // RH-Param 节点（独立参数 Ticket）
+      if (type === 'rh-param') { width = 280; height = 56; }
       // 画板节点需要更大的尺寸（约4个图片节点大小）
       if (type === 'drawing-board') { width = 800; height = 700; }
 
@@ -3390,17 +3514,28 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           }
                       });
                       
-                      // 创建配置节点 (rh-config)
+                      // 创建配置节点 (rh-config) - 大容器，包含所有 Ticket 参数卡片
                       const configNodeId = uuid();
+                      const nodeWidth = 320;
+                      const paramCount = appInfo.nodeInfoList?.length || 0;
+                      // 布局：头部(32) + 封面图(200) + 卡片区(padding8 + 每个Ticket 52px + 8px间距)
+                      const headerHeight = 32;
+                      const coverHeight = 200;
+                      const ticketPadding = 8;
+                      const ticketHeight = 52;
+                      const ticketGap = 8;
+                      const paramAreaHeight = ticketPadding + paramCount * (ticketHeight + ticketGap) + ticketPadding;
+                      const totalHeight = headerHeight + coverHeight + paramAreaHeight;
+                      
                       const configNode: CanvasNode = {
                           id: configNodeId,
                           type: 'rh-config',
                           title: appName,
                           content: '',
-                          x: node.x + node.width + 100,
+                          x: node.x + node.width + 80,
                           y: node.y,
-                          width: 400,
-                          height: Math.max(400, 200 + (appInfo.nodeInfoList?.length || 0) * 60),
+                          width: nodeWidth,
+                          height: totalHeight,
                           data: {
                               webappId,
                               appInfo,
@@ -3414,18 +3549,25 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       const defaultInputs: Record<string, string> = {};
                       appInfo.nodeInfoList?.forEach((info: any) => {
                           const key = `${info.nodeId}_${info.fieldName}`;
-                          defaultInputs[key] = info.fieldValue || '';
+                          const fieldType = (info.fieldType || '').toUpperCase();
+                          // 媒体类型不自动填入默认值
+                          if (['IMAGE', 'VIDEO', 'AUDIO'].includes(fieldType)) {
+                              defaultInputs[key] = '';
+                          } else {
+                              defaultInputs[key] = info.fieldValue || '';
+                          }
                       });
                       configNode.data!.nodeInputs = defaultInputs;
                       
-                      // 创建连接
+                      // 创建连接 - 连到封面图区域
                       const newConnection = {
                           id: uuid(),
                           fromNode: nodeId,
-                          toNode: configNodeId
+                          toNode: configNodeId,
+                          toPortKey: 'cover', // 连接到封面图端口
+                          toPortOffsetY: headerHeight + coverHeight / 2 // 封面图中心位置: 32 + 100 = 132
                       };
                       
-                      // 添加节点和连接 - 同时更新 ref 和 state
                       nodesRef.current = [...nodesRef.current, configNode];
                       connectionsRef.current = [...connectionsRef.current, newConnection];
                       setNodes(prev => [...prev, configNode]);
@@ -3433,8 +3575,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       setHasUnsavedChanges(true);
                       
                       console.log('[RunningHub] 已创建配置节点:', configNodeId.slice(0, 8));
-                      
-                      // 保存画布
                       saveCurrentCanvas();
                   } catch (err: any) {
                       console.error('[RunningHub] 获取应用信息失败:', err);
@@ -3449,7 +3589,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               // RunningHub 配置节点：执行 AI 应用并创建输出节点
               const webappId = node.data?.webappId;
               const appInfo = node.data?.appInfo;
-              const nodeInputs = node.data?.nodeInputs || {};
+              let nodeInputs = { ...(node.data?.nodeInputs || {}) };
               
               console.log('[RH-Config] 节点执行:', { webappId, hasAppInfo: !!appInfo, batchCount });
               
@@ -3462,13 +3602,84 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   const appName = (appInfo as any).webappName || appInfo.title || webappId;
                   console.log('[RH-Config] 开始执行 AI 应用:', appName, '批次:', batchCount);
                   
+                  // ============ RUN 时处理图片连接上传 ============
+                  // 查找所有连接到当前节点的图片连接
+                  const currentConnections = connectionsRef.current;
+                  const incomingImageConns = currentConnections.filter(c => 
+                      c.toNode === nodeId && c.toPortKey && c.toPortKey !== 'cover'
+                  );
+                  
+                  // 导入上传函数
+                  const { uploadImage } = await import('../../services/api/runninghub');
+                  
+                  // 处理每个图片连接
+                  for (const conn of incomingImageConns) {
+                      const sourceNode = nodesRef.current.find(n => n.id === conn.fromNode);
+                      if (!sourceNode?.content) continue;
+                      
+                      const hasImageContent = sourceNode.content.startsWith('data:image') ||
+                          sourceNode.content.startsWith('http') ||
+                          sourceNode.content.startsWith('/files/');
+                      
+                      if (!hasImageContent) continue;
+                      
+                      // 检查是否已有 fileKey（避免重复上传）
+                      const portKey = conn.toPortKey!;
+                      if (nodeInputs[portKey] && nodeInputs[portKey].length > 10) {
+                          console.log('[RH-Config] 参数已有值，跳过上传:', portKey);
+                          continue;
+                      }
+                      
+                      console.log('[RH-Config] 开始上传图片:', portKey);
+                      
+                      try {
+                          // 转换为 base64
+                          let imageData = sourceNode.content;
+                          if (imageData.startsWith('/files/') || imageData.startsWith('http')) {
+                              const img = new Image();
+                              img.crossOrigin = 'anonymous';
+                              imageData = await new Promise<string>((resolve, reject) => {
+                                  img.onload = () => {
+                                      const canvas = document.createElement('canvas');
+                                      canvas.width = img.naturalWidth;
+                                      canvas.height = img.naturalHeight;
+                                      const ctx = canvas.getContext('2d');
+                                      ctx?.drawImage(img, 0, 0);
+                                      resolve(canvas.toDataURL('image/png'));
+                                  };
+                                  img.onerror = () => reject(new Error('图片加载失败'));
+                                  img.src = imageData.startsWith('/files/') ? `http://localhost:8765${imageData}` : imageData;
+                              });
+                          }
+                          
+                          // 上传到 RunningHub
+                          const result = await uploadImage(imageData);
+                          if (result.success && result.data?.fileKey) {
+                              console.log('[RH-Config] 上传成功:', portKey, result.data.fileKey);
+                              nodeInputs[portKey] = result.data.fileKey;
+                          } else {
+                              console.error('[RH-Config] 上传失败:', portKey, result.error);
+                          }
+                      } catch (err) {
+                          console.error('[RH-Config] 上传异常:', portKey, err);
+                      }
+                  }
+                  
+                  // 更新节点的 nodeInputs（保存上传结果）
+                  updateNode(nodeId, { data: { ...node.data, nodeInputs } });
+                  // ============ 图片上传完成 ============
+                  
                   // 构建 nodeInfoList
+                  // 注意：如果用户显式清空了参数，应该传空字符串覆盖默认值
                   const nodeInfoList = appInfo.nodeInfoList?.map((info: any) => {
                       const key = `${info.nodeId}_${info.fieldName}`;
+                      // 检查 nodeInputs 中是否有这个 key（包括空字符串）
+                      const hasUserValue = key in nodeInputs;
                       return {
                           nodeId: info.nodeId,
                           fieldName: info.fieldName,
-                          fieldValue: nodeInputs[key] || info.fieldValue || ''
+                          // 用户设置的值优先（包括空值），否则用默认值
+                          fieldValue: hasUserValue ? (nodeInputs[key] || '') : (info.fieldValue || '')
                       };
                   }) || [];
                   
@@ -3546,6 +3757,135 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   
               } catch (err: any) {
                   console.error('[RH-Config] 执行异常:', err);
+                  updateNode(nodeId, {
+                      status: 'error',
+                      data: { ...node.data, error: err.message || '执行异常' }
+                  });
+              }
+          }
+          // ============ rh-main 节点执行（从关联的 rh-param 节点收集参数） ============
+          else if (node.type === 'rh-main') {
+              const webappId = node.data?.webappId;
+              const appInfo = node.data?.appInfo;
+              const mainNodeId = node.id;
+              
+              console.log('[RH-Main] 节点执行:', { webappId, hasAppInfo: !!appInfo, batchCount });
+              
+              if (!webappId || !appInfo) {
+                  updateNode(nodeId, { status: 'error', data: { ...node.data, error: '缺少应用配置' } });
+                  return;
+              }
+              
+              try {
+                  const appName = (appInfo as any).webappName || appInfo.title || webappId;
+                  console.log('[RH-Main] 开始执行 AI 应用:', appName, '批次:', batchCount);
+                  
+                  // 从关联的 rh-param 节点收集参数值
+                  const currentNodes = nodesRef.current;
+                  const paramNodes = currentNodes.filter(n => 
+                      n.type === 'rh-param' && n.data?.rhParentNodeId === mainNodeId
+                  );
+                  
+                  console.log('[RH-Main] 找到参数节点:', paramNodes.length);
+                  
+                  // 构建 nodeInfoList
+                  const nodeInfoList = appInfo.nodeInfoList?.map((info: any) => {
+                      const key = `${info.nodeId}_${info.fieldName}`;
+                      
+                      // 在参数节点中查找对应的值
+                      const paramNode = paramNodes.find(pn => 
+                          pn.data?.rhParamInfo?.nodeId === info.nodeId && 
+                          pn.data?.rhParamInfo?.fieldName === info.fieldName
+                      );
+                      
+                      const nodeInputs = paramNode?.data?.nodeInputs || {};
+                      const userValue = nodeInputs[key];
+                      
+                      return {
+                          nodeId: info.nodeId,
+                          fieldName: info.fieldName,
+                          fieldValue: userValue !== undefined ? (userValue || '') : (info.fieldValue || '')
+                      };
+                  }) || [];
+                  
+                  console.log('[RH-Main] nodeInfoList:', nodeInfoList);
+                  
+                  // 找到最后一个参数节点（用于定位输出节点）
+                  let lastParamNode = paramNodes[paramNodes.length - 1];
+                  const outputBaseY = lastParamNode ? (lastParamNode.y + lastParamNode.height + 50) : (node.y + node.height + 50);
+                  
+                  // 根据批次数多次执行任务
+                  for (let batchIdx = 0; batchIdx < batchCount; batchIdx++) {
+                      if (signal.aborted) return;
+                      
+                      console.log(`[RH-Main] 执行第 ${batchIdx + 1}/${batchCount} 次任务`);
+                      
+                      // 为每个任务创建输出节点
+                      const outputNodeId = uuid();
+                      const outputNode: CanvasNode = {
+                          id: outputNodeId,
+                          type: 'image',
+                          content: '',
+                          x: node.x,
+                          y: outputBaseY + (batchIdx * 420),
+                          width: 300,
+                          height: 300,
+                          data: {},
+                          status: 'running'
+                      };
+                      
+                      // 从最后一个参数节点连线到输出节点
+                      const fromNodeId = lastParamNode ? lastParamNode.id : nodeId;
+                      const newConnection = {
+                          id: uuid(),
+                          fromNode: fromNodeId,
+                          toNode: outputNodeId
+                      };
+                      
+                      nodesRef.current = [...nodesRef.current, outputNode];
+                      connectionsRef.current = [...connectionsRef.current, newConnection];
+                      setNodes(prev => [...prev, outputNode]);
+                      setConnections(prev => [...prev, newConnection]);
+                      setHasUnsavedChanges(true);
+                      console.log(`[RH-Main] 已创建输出节点 ${batchIdx + 1}:`, outputNodeId.slice(0, 8));
+                      
+                      // 调用 API
+                      const result = await runAIApp(webappId, nodeInfoList);
+                      
+                      if (signal.aborted) return;
+                      
+                      if (result.success && result.data?.outputs?.length) {
+                          const output = result.data.outputs[0];
+                          const outputUrl = output.fileUrl;
+                          const outputType = output.fileType === 'video' ? 'video' : 'image';
+                          
+                          console.log(`[RH-Main] 任务 ${batchIdx + 1} 执行成功:`, { outputUrl, outputType });
+                          
+                          // 更新输出节点
+                          const metadata = await extractImageMetadata(outputUrl);
+                          updateNode(outputNodeId, {
+                              content: outputUrl,
+                              data: { imageMetadata: metadata },
+                              status: 'completed'
+                          });
+                          
+                          // 同步到桌面
+                          if (outputType === 'image' && onImageGenerated) {
+                              onImageGenerated(outputUrl, `RunningHub: ${appName}`, currentCanvasId || undefined, canvasName);
+                          }
+                      } else {
+                          const errorMsg = result.error || '执行失败';
+                          console.error(`[RH-Main] 任务 ${batchIdx + 1} 执行失败:`, errorMsg);
+                          updateNode(outputNodeId, { status: 'error' });
+                      }
+                  }
+                  
+                  // 所有任务完成后更新主节点状态
+                  updateNode(nodeId, { status: 'completed' });
+                  saveCurrentCanvas();
+                  
+              } catch (err: any) {
+                  console.error('[RH-Main] 执行异常:', err);
                   updateNode(nodeId, {
                       status: 'error',
                       data: { ...node.data, error: err.message || '执行异常' }
@@ -3916,66 +4256,24 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               // 检查源节点是否是文字节点
               const isTextNode = sourceNode.type === 'text' || sourceNode.type === 'idea' || sourceNode.type === 'llm';
               
-              if (hasImageContent) {
-                  try {
-                      console.log('[Connection] 开始上传图片到 RunningHub...');
-                      
-                      // 动态导入 uploadImage
-                      const { uploadImage } = await import('../../services/api/runninghub');
-                      
-                      // 如果是本地文件路径，需要先转换为 base64
-                      let imageData = sourceNode.content;
-                      if (imageData.startsWith('/files/') || imageData.startsWith('http')) {
-                          // 加载图片并转换为 base64
-                          const img = new Image();
-                          img.crossOrigin = 'anonymous';
-                          const loadPromise = new Promise<string>((resolve, reject) => {
-                              img.onload = () => {
-                                  const canvas = document.createElement('canvas');
-                                  canvas.width = img.naturalWidth;
-                                  canvas.height = img.naturalHeight;
-                                  const ctx = canvas.getContext('2d');
-                                  ctx?.drawImage(img, 0, 0);
-                                  resolve(canvas.toDataURL('image/png'));
-                              };
-                              img.onerror = () => reject(new Error('图片加载失败'));
-                          });
-                          
-                          let imgSrc = imageData;
-                          if (imageData.startsWith('/files/')) {
-                              imgSrc = `http://localhost:8765${imageData}`;
-                          }
-                          img.src = imgSrc;
-                          imageData = await loadPromise;
-                      }
-                      
-                      // 上传到 RunningHub
-                      const result = await uploadImage(imageData);
-                      
-                      if (result.success && result.data?.fileKey) {
-                          console.log('[Connection] 上传成功, fileKey:', result.data.fileKey);
-                          
-                          // 更新 rh-config 节点的参数值
-                          const nodeInputs = targetNode.data?.nodeInputs || {};
-                          updateNode(targetNodeId, {
-                              data: {
-                                  ...targetNode.data,
-                                  nodeInputs: {
-                                      ...nodeInputs,
-                                      [portKey]: result.data.fileKey
-                                  }
-                              }
-                          });
-                      } else {
-                          console.error('[Connection] 上传失败:', result.error);
-                      }
-                  } catch (err) {
-                      console.error('[Connection] 上传异常:', err);
+              // 特殊处理：连接到封面图区域（即时更新显示）
+              if (portKey === 'cover' && hasImageContent) {
+                  console.log('[Connection] 连接到封面图区域');
+                  let displayUrl = sourceNode.content;
+                  if (displayUrl.startsWith('/files/')) {
+                      displayUrl = `http://localhost:8765${displayUrl}`;
                   }
-              } else if (isTextNode && sourceNode.content) {
-                  // 文字节点连接到 STRING 参数 - 直接填入文本内容
+                  updateNode(targetNodeId, {
+                      data: {
+                          ...targetNode.data,
+                          coverUrl: displayUrl
+                      }
+                  });
+              } 
+              // 图片连接：不立即上传，只记录连接关系，RUN 时再上传
+              // 文字节点：直接填入内容（即时）
+              else if (isTextNode && sourceNode.content) {
                   console.log('[Connection] 文字节点连接, 填入内容:', sourceNode.content.substring(0, 50));
-                  
                   const nodeInputs = targetNode.data?.nodeInputs || {};
                   updateNode(targetNodeId, {
                       data: {
@@ -3987,20 +4285,29 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       }
                   });
               }
+              // 图片连接：只记录，不上传（RUN 时处理）
           }
           
-          // 创建连接
+          // 立即创建连接（即时反馈）
           const exists = connections.some(c => c.fromNode === sourceNodeId && c.toNode === targetNodeId && c.toPortKey === portKey);
           if (!exists) {
+              // 计算端口相对于目标节点的 Y 偏移
+              let toPortOffsetY: number | undefined = undefined;
+              if (portKey && targetNode?.type === 'rh-config') {
+                  toPortOffsetY = linkingState.currPos.y - targetNode.y;
+              }
+              
               const newConnection = {
                   id: uuid(),
                   fromNode: sourceNodeId,
                   toNode: targetNodeId,
-                  toPortKey: portKey // 保存目标端口 key
+                  toPortKey: portKey,
+                  toPortOffsetY
               };
               connectionsRef.current = [...connectionsRef.current, newConnection];
               setConnections(prev => [...prev, newConnection]);
               setHasUnsavedChanges(true);
+              console.log('[Connection] 连接已创建（即时反馈）');
           }
       }
   };
@@ -4492,6 +4799,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                             <feMergeNode in="SourceGraphic"/>
                         </feMerge>
                     </filter>
+                    {/* 绿色发光滤镜 - 用于 RunningHub 连线 */}
+                    <filter id="glow-green" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                        <feMerge>
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
                     {/* 黑白渐变 - 深色模式 */}
                     <linearGradient id="grad-mono-dark" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#666" stopOpacity="0.4"/>
@@ -4529,30 +4844,67 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     const startX = from.x + from.width;
                     const startY = from.y + from.height / 2;
                     
-                    // 计算终点位置 - 如果有 toPortKey，需要计算参数端口的 Y 位置
-                    let endX = to.x;
+                    // 计算终点位置 - 默认连到节点左侧中心
+                    let endX = to.x - 8;
                     let endY = to.y + to.height / 2;
                     
-                    if (conn.toPortKey && to.type === 'rh-config' && to.data?.appInfo?.nodeInfoList) {
-                        // 计算参数端口的 Y 位置
-                        // rh-config 节点布局: 标题栏(32px) + 封面图(112px) + 参数标题(24px) + 参数项
-                        const headerHeight = 32; // 标题栏
-                        const coverHeight = to.data.coverUrl ? 112 : 0; // 封面图
-                        const paramTitleHeight = 24; // "应用参数" 标题
-                        const paramItemHeight = 60; // 每个参数项的高度
-                        const paramPadding = 8; // 上下边距
+                    // 🎨 判断是否是"图片连接到图片类型参数" - 只有这种情况才用绿色
+                    let isImageToImagePort = false;
+                    const isSourceImageNode = from.type === 'image';
+                    
+                    // ============ rh-config 节点：优先使用存储的 toPortOffsetY ============
+                    if (to.type === 'rh-config' && conn.toPortKey) {
+                        if (conn.toPortOffsetY !== undefined) {
+                            // ✅ 直接使用存储的偏移量，不需要任何计算
+                            endY = to.y + conn.toPortOffsetY;
+                        }
+                        // 向后兼容：如果没有存储偏移量，使用节点中心
                         
-                        // 找到参数在列表中的索引
-                        const portIndex = to.data.appInfo.nodeInfoList.findIndex((info: any) => 
-                            `${info.nodeId}_${info.fieldName}` === conn.toPortKey
-                        );
-                        
-                        if (portIndex >= 0) {
-                            // 计算参数端口的 Y 位置（参数项中心）
-                            endY = to.y + headerHeight + coverHeight + paramTitleHeight + paramPadding + 
-                                   (portIndex * paramItemHeight) + (paramItemHeight / 2);
+                        // 检查是否是图片类型参数
+                        if (to.data?.appInfo?.nodeInfoList) {
+                            const portInfo = to.data.appInfo.nodeInfoList.find((info: any) => 
+                                `${info.nodeId}_${info.fieldName}` === conn.toPortKey
+                            );
+                            const targetFieldType = (portInfo?.fieldType || '').toUpperCase();
+                            isImageToImagePort = isSourceImageNode && ['IMAGE', 'VIDEO', 'AUDIO'].includes(targetFieldType);
                         }
                     }
+                    // ============ rh-param 节点（独立 Ticket）============
+                    else if (to.type === 'rh-param') {
+                        // 独立参数节点：直接连到左侧中心
+                        endX = to.x - 8;
+                        endY = to.y + to.height / 2;
+                        
+                        // 检查是否是图片类型参数
+                        const paramFieldType = to.data?.rhParamInfo?.fieldType?.toUpperCase() || '';
+                        isImageToImagePort = isSourceImageNode && ['IMAGE', 'VIDEO', 'AUDIO'].includes(paramFieldType);
+                    }
+                    // ============ rh-main 节点（封面主节点）============
+                    else if (to.type === 'rh-main') {
+                        // 主节点：连到左侧中心
+                        endX = to.x - 8;
+                        endY = to.y + to.height / 2;
+                    }
+                    // ============ 旧 runninghub 节点的兼容处理 ============
+                    else if (conn.toPortKey && to.type === 'runninghub' && to.data?.appInfo?.nodeInfoList) {
+                        // 从 toPortKey 解析参数信息
+                        const portKeyMatch = conn.toPortKey.match(/^input-(.+)-(.+)$/);
+                        if (portKeyMatch) {
+                            const [_, nodeId, fieldName] = portKeyMatch;
+                            const portInfo = to.data.appInfo.nodeInfoList.find((info: any) => 
+                                info.nodeId === nodeId && info.fieldName === fieldName
+                            );
+                            const targetFieldType = (portInfo?.fieldType || '').toUpperCase();
+                            isImageToImagePort = isSourceImageNode && ['IMAGE', 'VIDEO', 'AUDIO'].includes(targetFieldType);
+                        }
+                    }
+                    
+                    // 根据是否是图片到图片端口连接决定颜色
+                    const lineColor = isImageToImagePort 
+                        ? { main: '#34d399', glow: 'rgba(52, 211, 153, 0.4)', selected: '#10b981' }
+                        : { main: isLightCanvas ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.9)', 
+                            glow: isLightCanvas ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.3)',
+                            selected: isLightCanvas ? '#1d1d1f' : '#ffffff' };
                     
                     const isSelected = selectedConnectionId === conn.id;
                     
@@ -4606,20 +4958,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                             {/* 外层光晕 */}
                             <path 
                                 d={pathD}
-                                stroke={isLightCanvas 
-                                    ? (isSelected ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)')
-                                    : (isSelected ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)')}
+                                stroke={isSelected ? (isImageToImagePort ? 'rgba(16, 185, 129, 0.6)' : (isLightCanvas ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)')) : lineColor.glow}
                                 strokeWidth={isSelected ? 8 : 5}
                                 fill="none"
-                                filter={isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)'}
+                                filter={isImageToImagePort ? 'url(#glow-green)' : (isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)')}
                                 strokeLinecap="round"
                             />
                             {/* 主线条 */}
                             <path 
                                 d={pathD}
-                                stroke={isLightCanvas 
-                                    ? (isSelected ? '#1d1d1f' : 'rgba(0,0,0,0.7)')
-                                    : (isSelected ? '#ffffff' : 'rgba(255,255,255,0.9)')}
+                                stroke={isSelected ? lineColor.selected : lineColor.main}
                                 strokeWidth={isSelected ? 3 : 2}
                                 fill="none"
                                 strokeLinecap="round"
@@ -4629,15 +4977,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                 cx={startX} 
                                 cy={startY} 
                                 r={isSelected ? 5 : 4} 
-                                fill={isLightCanvas ? '#1d1d1f' : '#ffffff'}
-                                filter={isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)'}
+                                fill={isImageToImagePort ? '#34d399' : (isLightCanvas ? '#1d1d1f' : '#ffffff')}
+                                filter={isImageToImagePort ? 'url(#glow-green)' : (isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)')}
                             />
                             <circle 
                                 cx={endX} 
                                 cy={endY} 
                                 r={isSelected ? 5 : 4} 
-                                fill={isLightCanvas ? '#1d1d1f' : '#ffffff'}
-                                filter={isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)'}
+                                fill={isImageToImagePort ? '#34d399' : (isLightCanvas ? '#1d1d1f' : '#ffffff')}
+                                filter={isImageToImagePort ? 'url(#glow-green)' : (isLightCanvas ? 'url(#glow-dark)' : 'url(#glow-white)')}
                             />
                         </g>
                     );

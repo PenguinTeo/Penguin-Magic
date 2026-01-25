@@ -20,6 +20,67 @@ const BananaIcon: React.FC<{ size?: number; className?: string }> = ({ size = 14
 // 动态导入 3D 组件以避免影响初始加载
 const MultiAngle3D = lazy(() => import('./MultiAngle3D'));
 
+// 自定义下拉选择器组件（替代原生 select，支持深色主题）
+const CustomSelect: React.FC<{
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+  isLightCanvas: boolean;
+  themeColors: { textSecondary: string };
+}> = ({ options, value, onChange, isLightCanvas, themeColors }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  
+  // 点击外部关闭
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+  
+  return (
+    <div ref={ref} className="relative w-full">
+      <div
+        className="w-full rounded px-1.5 py-0.5 text-[8px] cursor-pointer flex items-center justify-between"
+        style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', color: themeColors.textSecondary }}
+        onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <span className="truncate">{value}</span>
+        <ChevronDown size={10} className={`shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+      {isOpen && (
+        <div 
+          className="absolute top-full left-0 right-0 mt-0.5 rounded shadow-lg z-50 max-h-40 overflow-y-auto"
+          style={{ backgroundColor: isLightCanvas ? '#ffffff' : '#1c1c1e', border: `1px solid ${isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}` }}
+        >
+          {options.map((opt, i) => (
+            <div
+              key={i}
+              className={`px-2 py-1 text-[8px] cursor-pointer transition-colors ${opt === value ? 'font-bold' : ''}`}
+              style={{ 
+                backgroundColor: opt === value ? (isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.2)') : 'transparent',
+                color: opt === value ? '#10b981' : themeColors.textSecondary
+              }}
+              onClick={(e) => { e.stopPropagation(); onChange(opt); setIsOpen(false); }}
+              onMouseEnter={(e) => { (e.target as HTMLDivElement).style.backgroundColor = isLightCanvas ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)'; }}
+              onMouseLeave={(e) => { (e.target as HTMLDivElement).style.backgroundColor = opt === value ? (isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.2)') : 'transparent'; }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface CanvasNodeProps {
   node: CanvasNode;
   isSelected: boolean;
@@ -1141,6 +1202,380 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         );
     }
     
+    // ============ RH-Main 节点（封面主节点）============
+    if (node.type === 'rh-main') {
+        const webappId = node.data?.webappId || '';
+        const appInfo = node.data?.appInfo;
+        const coverUrl = node.data?.coverUrl;
+        const appName = (appInfo as any)?.webappName || appInfo?.title || '配置应用';
+        const [localBatchCount, setLocalBatchCount] = React.useState(1);
+        
+        return (
+            <div className="w-full h-full flex flex-col gap-2">
+                {/* 主体卡片 */}
+                <div className="rounded-xl relative shadow-lg overflow-hidden flex-1" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
+                    {/* 头部 */}
+                    <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.2)'}`, backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.1)' }}>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                                <span className="text-white font-black text-[10px]">R</span>
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-[10px] font-bold truncate max-w-[180px]" style={{ color: isLightCanvas ? '#059669' : '#a7f3d0' }}>
+                                    {appName}
+                                </span>
+                                <span className="text-[7px] truncate" style={{ color: isLightCanvas ? '#047857' : 'rgba(52,211,153,0.6)' }}>
+                                    ID: {webappId.slice(0, 12)}...
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* 封面图 */}
+                    <div className="w-full flex-1 relative" style={{ minHeight: '150px' }}>
+                        {coverUrl ? (
+                            <img 
+                                src={coverUrl} 
+                                alt="Cover" 
+                                className="w-full h-full object-cover" 
+                                draggable={false}
+                            />
+                        ) : (
+                            <div 
+                                className="w-full h-full flex flex-col items-center justify-center"
+                                style={{ backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.05)' : 'rgba(16,185,129,0.08)' }}
+                            >
+                                <svg className="w-12 h-12 mb-2" fill="none" stroke={isLightCanvas ? '#059669' : '#34d399'} viewBox="0 0 24 24" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                                </svg>
+                                <span className="text-[10px] font-medium" style={{ color: isLightCanvas ? '#059669' : '#34d399' }}>应用封面</span>
+                            </div>
+                        )}
+                        
+                        {/* 左侧输入连接点 */}
+                        <div 
+                            className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 cursor-crosshair hover:scale-125 transition-all z-10"
+                            style={{ 
+                                backgroundColor: 'rgba(16,185,129,0.3)',
+                                borderColor: '#10b981',
+                                boxShadow: '0 0 8px rgba(16,185,129,0.5)'
+                            }}
+                            onMouseUp={(e) => {
+                                e.stopPropagation();
+                                onEndConnection(node.id);
+                            }}
+                            title="主图输入"
+                        />
+                    </div>
+                </div>
+                
+                {/* 操作栏 - 批次控制 + RUN 按钮 */}
+                <div className="flex items-center justify-between gap-2 px-1">
+                    {/* 批次控制 */}
+                    <div className="flex items-center gap-1 rounded-lg px-2 py-1" style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)' }}>
+                        <button
+                            className="w-5 h-5 rounded flex items-center justify-center transition-all hover:scale-110"
+                            style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)' }}
+                            onClick={(e) => { e.stopPropagation(); setLocalBatchCount(Math.max(1, localBatchCount - 1)); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            <span className="text-[12px] font-bold" style={{ color: themeColors.textSecondary }}>−</span>
+                        </button>
+                        <span className="text-[11px] font-bold min-w-[16px] text-center" style={{ color: themeColors.textPrimary }}>{localBatchCount}</span>
+                        <button
+                            className="w-5 h-5 rounded flex items-center justify-center transition-all hover:scale-110"
+                            style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)' }}
+                            onClick={(e) => { e.stopPropagation(); setLocalBatchCount(Math.min(10, localBatchCount + 1)); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            <span className="text-[12px] font-bold" style={{ color: themeColors.textSecondary }}>+</span>
+                        </button>
+                    </div>
+                    
+                    {/* RUN 按钮 */}
+                    <button
+                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
+                        style={{ backgroundColor: '#10b981' }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onExecute(node.id, localBatchCount);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        disabled={isRunning}
+                    >
+                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                        <span className="text-[11px]">RUN</span>
+                    </button>
+                    
+                    {/* 停止按钮 */}
+                    {isRunning && (
+                        <button
+                            className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-500 text-white transition-all hover:bg-red-600"
+                            onClick={(e) => { e.stopPropagation(); onStop(node.id); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <rect x="6" y="6" width="12" height="12" rx="1"/>
+                            </svg>
+                        </button>
+                    )}
+                </div>
+                
+                {/* 底部输出连接点（连到第一个参数节点） */}
+                <div 
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-4 h-4 rounded-full border-2 cursor-crosshair hover:scale-125 transition-all z-10"
+                    style={{ 
+                        backgroundColor: '#10b981',
+                        borderColor: '#10b981'
+                    }}
+                    onMouseDown={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        onStartConnection(node.id, 'out', { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+                    }}
+                    title="连接到参数"
+                />
+                
+                {isRunning && (
+                    <div className="absolute inset-0 backdrop-blur-[2px] flex flex-col items-center justify-center z-30 rounded-xl" style={{ backgroundColor: isLightCanvas ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }}>
+                        <div className="w-8 h-8 border-2 border-emerald-400/50 border-t-emerald-400 rounded-full animate-spin mb-2"></div>
+                        <span className="text-[10px]" style={{ color: isLightCanvas ? '#059669' : '#6ee7b7' }}>正在执行...</span>
+                    </div>
+                )}
+            </div>
+        );
+    }
+    
+    // ============ RH-Param 节点（独立参数 Ticket）============
+    if (node.type === 'rh-param') {
+        const paramInfo = node.data?.rhParamInfo;
+        const nodeInputs = node.data?.nodeInputs || {};
+        const parentNodeId = node.data?.rhParentNodeId;
+        
+        if (!paramInfo) {
+            return (
+                <div className="w-full h-full rounded-xl flex items-center justify-center" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}` }}>
+                    <span className="text-[10px]" style={{ color: themeColors.textMuted }}>无参数信息</span>
+                </div>
+            );
+        }
+        
+        const key = `${paramInfo.nodeId}_${paramInfo.fieldName}`;
+        const fieldType = paramInfo.fieldType?.toUpperCase() || 'STRING';
+        const isFileType = ['IMAGE', 'VIDEO', 'AUDIO'].includes(fieldType);
+        const hasConnection = incomingConnections.some(c => c.toPortKey === key || (!c.toPortKey && c.toNode === node.id));
+        
+        // 类型配色
+        const typeConfigs: Record<string, { bg: string; border: string; text: string }> = {
+            'IMAGE': { bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.25)', text: '#3b82f6' },
+            'VIDEO': { bg: 'rgba(168, 85, 247, 0.08)', border: 'rgba(168, 85, 247, 0.25)', text: '#a855f7' },
+            'AUDIO': { bg: 'rgba(236, 72, 153, 0.08)', border: 'rgba(236, 72, 153, 0.25)', text: '#ec4899' },
+            'STRING': { bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.25)', text: '#10b981' },
+            'LIST': { bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.25)', text: '#f59e0b' },
+            'COMBO': { bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.25)', text: '#f59e0b' },
+        };
+        const typeConfig = typeConfigs[fieldType] || typeConfigs['STRING'];
+        
+        // 处理参数值变更
+        const handleParamChange = (value: string) => {
+            onUpdate(node.id, { data: { ...node.data, nodeInputs: { ...nodeInputs, [key]: value } } });
+        };
+        
+        // 处理文件上传
+        const handleFileUpload = async () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = fieldType === 'IMAGE' ? 'image/*' : (fieldType === 'VIDEO' ? 'video/*' : '*/*');
+            input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = async (ev) => {
+                    if (ev.target?.result) {
+                        try {
+                            const { uploadImage } = await import('../../services/api/runninghub');
+                            const result = await uploadImage(ev.target.result as string);
+                            if (result.success && result.data?.fileKey) {
+                                handleParamChange(result.data.fileKey);
+                            }
+                        } catch (err) {
+                            console.error('上传异常:', err);
+                        }
+                    }
+                };
+                reader.readAsDataURL(file);
+            };
+            input.click();
+        };
+        
+        // 类型图标
+        const renderTypeIcon = () => {
+            const iconClass = "w-4 h-4";
+            switch (fieldType) {
+                case 'IMAGE':
+                    return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+                case 'VIDEO':
+                    return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>;
+                case 'AUDIO':
+                    return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>;
+                case 'LIST':
+                case 'COMBO':
+                    return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>;
+                default:
+                    return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
+            }
+        };
+        
+        // LIST 类型选项解析
+        let listOptions: string[] = [];
+        let defaultValue = paramInfo.fieldValue || '';
+        if ((fieldType === 'LIST' || fieldType === 'COMBO') && paramInfo.options) {
+            listOptions = paramInfo.options;
+        }
+        
+        return (
+            <div 
+                className="w-full h-full rounded-xl shadow-md transition-all hover:shadow-lg relative"
+                style={{ 
+                    backgroundColor: themeColors.nodeBg,
+                    border: `1px solid ${hasConnection ? 'rgba(16,185,129,0.5)' : (isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)')}`,
+                    boxShadow: hasConnection ? '0 0 12px rgba(16,185,129,0.2)' : undefined
+                }}
+                onMouseUp={(e) => {
+                    e.stopPropagation();
+                    onEndConnection(node.id, key);
+                }}
+            >
+                {/* 顶部连接点（接收上一个节点的连线） */}
+                <div 
+                    className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 cursor-crosshair hover:scale-125 transition-all z-10"
+                    style={{ 
+                        backgroundColor: 'rgba(16,185,129,0.3)',
+                        borderColor: '#10b981'
+                    }}
+                    onMouseUp={(e) => {
+                        e.stopPropagation();
+                        onEndConnection(node.id);
+                    }}
+                    title="串联输入"
+                />
+                
+                {/* 左侧输入连接点（接收图片等数据连线） */}
+                <div 
+                    className="absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 cursor-crosshair hover:scale-125 transition-all z-10"
+                    style={{ 
+                        backgroundColor: hasConnection ? '#10b981' : (isLightCanvas ? '#d1d5db' : '#4b5563'),
+                        borderColor: '#10b981'
+                    }}
+                    onMouseUp={(e) => {
+                        e.stopPropagation();
+                        onEndConnection(node.id, key);
+                    }}
+                    title={`连接: ${paramInfo.description || paramInfo.fieldName}`}
+                />
+                
+                {/* 底部连接点（连到下一个参数节点） */}
+                <div 
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 cursor-crosshair hover:scale-125 transition-all z-10"
+                    style={{ 
+                        backgroundColor: '#10b981',
+                        borderColor: '#10b981'
+                    }}
+                    onMouseDown={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        onStartConnection(node.id, 'out', { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+                    }}
+                    title="串联输出"
+                />
+                
+                {/* 内容区 */}
+                <div className="px-3 py-2.5 flex items-center gap-3">
+                    {/* 类型图标 */}
+                    <div 
+                        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: typeConfig.bg, border: `1px solid ${typeConfig.border}` }}
+                    >
+                        {renderTypeIcon()}
+                    </div>
+                    
+                    {/* 参数名 + 输入区 */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[10px] font-medium truncate" style={{ color: themeColors.textPrimary }}>
+                                {paramInfo.description || paramInfo.fieldName}
+                            </span>
+                            <span 
+                                className="text-[8px] px-1.5 py-0.5 rounded font-medium shrink-0 ml-2"
+                                style={{ backgroundColor: typeConfig.bg, color: typeConfig.text, border: `1px solid ${typeConfig.border}` }}
+                            >
+                                {fieldType}
+                            </span>
+                        </div>
+                        
+                        {/* 输入控件 */}
+                        {hasConnection ? (
+                            <div className="flex items-center gap-1.5 rounded px-2 py-1" style={{ backgroundColor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                                <svg className="w-3 h-3 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span className="text-[9px] font-medium text-emerald-400">已连接</span>
+                            </div>
+                        ) : isFileType ? (
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="text"
+                                    className="flex-1 rounded px-2 py-1 text-[9px] outline-none"
+                                    style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', border: `1px solid ${isLightCanvas ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`, color: themeColors.textPrimary }}
+                                    placeholder="Key或拉线"
+                                    value={nodeInputs[key] || ''}
+                                    onChange={(e) => handleParamChange(e.target.value)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                />
+                                <button
+                                    className="p-1 rounded transition-all hover:scale-105 shrink-0"
+                                    style={{ backgroundColor: typeConfig.bg, border: `1px solid ${typeConfig.border}` }}
+                                    onClick={handleFileUpload}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    title="上传"
+                                >
+                                    <svg className="w-3 h-3" fill="none" stroke={typeConfig.text} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        ) : (fieldType === 'LIST' || fieldType === 'COMBO') && listOptions.length > 0 ? (
+                            <select
+                                className="w-full rounded px-2 py-1 text-[9px] outline-none cursor-pointer"
+                                style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', border: `1px solid ${isLightCanvas ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`, color: themeColors.textPrimary }}
+                                value={nodeInputs[key] || defaultValue || listOptions[0] || ''}
+                                onChange={(e) => handleParamChange(e.target.value)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            >
+                                {listOptions.map((opt, i) => (
+                                    <option key={i} value={opt}>{opt}</option>
+                                ))}
+                            </select>
+                        ) : (
+                            <input
+                                type="text"
+                                className="w-full rounded px-2 py-1 text-[9px] outline-none"
+                                style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', border: `1px solid ${isLightCanvas ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`, color: themeColors.textPrimary }}
+                                placeholder={paramInfo.fieldValue || '输入...'}
+                                value={nodeInputs[key] || ''}
+                                onChange={(e) => handleParamChange(e.target.value)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            />
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
     // RunningHub Config 节点 - 配置参数的节点（每个参数可拉线连接）
     if (node.type === 'rh-config') {
         const webappId = node.data?.webappId || '';
@@ -1163,12 +1598,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 const file = (e.target as HTMLInputElement).files?.[0];
                 if (!file) return;
                 
-                // 读取文件为 base64
                 const reader = new FileReader();
                 reader.onload = async (ev) => {
                     if (ev.target?.result) {
                         try {
-                            // 上传图片到服务器
                             const { uploadImage } = await import('../../services/api/runninghub');
                             const result = await uploadImage(ev.target.result as string);
                             if (result.success && result.data?.fileKey) {
@@ -1187,234 +1620,218 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         };
         
         return (
-            <div className="w-full h-full flex flex-col rounded-xl relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
-                {/* 头部 - 简化标题 */}
-                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.2)'}`, backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.1)' }}>
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                            <span className="text-white font-black text-[10px]">R</span>
+            <div className="w-full h-full flex flex-col">
+                {/* 头部(32px) + 封面图区域(200px) */}
+                <div className="rounded-t-xl relative shadow-lg overflow-hidden shrink-0" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}`, borderBottom: 'none' }}>
+                    {/* 头部 - 32px */}
+                    <div className="h-8 flex items-center justify-between px-3" style={{ backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.1)' }}>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                                <span className="text-white font-black text-[10px]">R</span>
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-[10px] font-bold truncate max-w-[200px]" style={{ color: isLightCanvas ? '#059669' : '#a7f3d0' }}>
+                                    {appName}
+                                </span>
+                                <span className="text-[7px] truncate" style={{ color: isLightCanvas ? '#047857' : 'rgba(52,211,153,0.6)' }}>
+                                    ID: {webappId.slice(0, 12)}...
+                                </span>
+                            </div>
                         </div>
-                        <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] font-bold truncate max-w-[180px]" style={{ color: isLightCanvas ? '#059669' : '#a7f3d0' }}>
-                                {appName}
-                            </span>
-                            <span className="text-[7px] truncate" style={{ color: isLightCanvas ? '#047857' : 'rgba(52,211,153,0.6)' }}>
-                                ID: {webappId.slice(0, 12)}...
-                            </span>
-                        </div>
+                    </div>
+                    
+                    {/* 封面图 - 固定200px高度 */}
+                    <div 
+                        className="w-full relative" 
+                        style={{ height: '200px' }}
+                        onMouseUp={() => onEndConnection(node.id, 'cover')}
+                    >
+                        {/* 封面图左侧连接点 */}
+                        <div 
+                            className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 cursor-crosshair hover:scale-125 transition-all z-10"
+                            style={{ 
+                                backgroundColor: incomingConnections.some(c => c.toPortKey === 'cover') ? '#10b981' : (isLightCanvas ? '#d1d5db' : '#4b5563'), 
+                                borderColor: '#10b981' 
+                            }}
+                            onMouseUp={() => onEndConnection(node.id, 'cover')}
+                            title="连接: 封面图"
+                        />
+                        {coverUrl ? (
+                            <img 
+                                src={coverUrl} 
+                                alt="Cover" 
+                                className="w-full h-full object-cover pointer-events-none" 
+                                draggable={false}
+                            />
+                        ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center" style={{ backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.05)' : 'rgba(16,185,129,0.08)' }}>
+                                <svg className="w-10 h-10 mb-1" fill="none" stroke={isLightCanvas ? '#059669' : '#34d399'} viewBox="0 0 24 24" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                                </svg>
+                                <span className="text-[9px] font-medium" style={{ color: isLightCanvas ? '#059669' : '#34d399' }}>应用封面</span>
+                            </div>
+                        )}
                     </div>
                 </div>
                 
-                {/* 封面图 */}
-                {coverUrl && (
-                    <div className="w-full h-44 bg-black relative shrink-0">
-                        <img 
-                            src={coverUrl} 
-                            alt="Cover" 
-                            className="w-full h-full object-cover opacity-80" 
-                            draggable={false}
-                        />
-                        <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent, ${themeColors.nodeBg})` }}></div>
-                    </div>
-                )}
-                
-                {/* 参数配置区 - 每个参数有连接点 */}
-                <div className="flex-1 p-2 flex flex-col gap-1.5 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                    <div className="text-[9px] uppercase tracking-wider font-medium px-1" style={{ color: isLightCanvas ? '#059669' : 'rgba(52,211,153,0.8)' }}>
-                        应用参数 <span style={{ color: themeColors.textMuted }}>({appInfo?.nodeInfoList?.length || 0})</span>
-                    </div>
-                    
-                    {appInfo?.nodeInfoList && appInfo.nodeInfoList.length > 0 ? (
-                        appInfo.nodeInfoList.map((info: any, idx: number) => {
-                            const key = `${info.nodeId}_${info.fieldName}`;
-                            const fieldType = info.fieldType?.toUpperCase() || 'STRING';
-                            const isFileType = ['IMAGE', 'VIDEO', 'AUDIO'].includes(fieldType);
-                            
-                            return (
-                                <div key={key} className="relative rounded-lg p-2 pl-6" style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.3)' }}>
-                                    {/* 左侧连接点 - 支持拉线输入 */}
-                                    <div 
-                                        className="absolute left-1 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-emerald-500 cursor-crosshair hover:bg-emerald-500 hover:scale-125 transition-all z-10"
-                                        style={{ backgroundColor: 'rgba(16,185,129,0.3)' }}
-                                        data-port-type="in"
-                                        data-port-key={key}
-                                        onMouseDown={(e) => {
-                                            e.stopPropagation();
-                                            const rect = e.currentTarget.getBoundingClientRect();
-                                            onStartConnection(node.id, 'in', { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-                                        }}
-                                        onMouseUp={(e) => {
-                                            e.stopPropagation();
-                                            // 传入 portKey 用于标识连接到哪个参数
-                                            onEndConnection(node.id, key);
-                                        }}
-                                        title={`连接到: ${info.description || info.fieldName}`}
-                                    />
-                                    
-                                    {/* 参数标题和类型 */}
-                                    <div className="flex items-center justify-between mb-1">
-                                        <label className="text-[9px] truncate max-w-[200px]" style={{ color: themeColors.textSecondary }}>
-                                            {info.description || info.fieldName}
-                                        </label>
-                                        <span className="text-[7px] px-1 py-0.5 rounded" style={{ color: isLightCanvas ? '#047857' : 'rgba(16,185,129,0.6)', backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.1)' }}>
-                                            {fieldType}
-                                        </span>
-                                    </div>
-                                    
-                                    {/* 输入控件 - 根据类型选择不同的UI */}
-                                    {(() => {
-                                        // 检查该参数是否有连线
-                                        const hasConnection = incomingConnections.some(c => c.toPortKey === key);
-                                        
-                                        // 如果有连接，显示“已连接”状态
-                                        if (hasConnection) {
-                                            return (
-                                                <div className="flex items-center gap-1.5 rounded px-2 py-1" style={{ backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.1)', border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: isLightCanvas ? '#10b981' : '#34d399' }}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                                    </svg>
-                                                    <span className="text-[10px] font-medium" style={{ color: isLightCanvas ? '#059669' : '#6ee7b7' }}>已连接</span>
-                                                    {nodeInputs[key] && (
-                                                        <span className="text-[9px] truncate max-w-[120px]" style={{ color: isLightCanvas ? '#047857' : 'rgba(52,211,153,0.6)' }}>
-                                                            {nodeInputs[key].length > 20 ? nodeInputs[key].slice(0, 20) + '...' : nodeInputs[key]}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            );
-                                        }
-                                        
-                                        // LIST 类型使用下拉框
-                                        const isListType = fieldType === 'LIST' || fieldType === 'COMBO';
-                                        
-                                        // 解析下拉选项（只对 LIST 类型）
-                                        let options: string[] = [];
-                                        let defaultValue = info.fieldValue || '';
-                                        
-                                        if (isListType && info.fieldData) {
-                                            try {
-                                                const parsed = JSON.parse(info.fieldData);
-                                                if (Array.isArray(parsed)) {
-                                                    // 检查是否是 [[options], {default}] 格式
-                                                    if (parsed.length === 2 && Array.isArray(parsed[0]) && typeof parsed[1] === 'object') {
-                                                        options = parsed[0].map((v: any) => String(v));
-                                                        if (parsed[1].default) defaultValue = String(parsed[1].default);
-                                                    } else {
-                                                        // 简单数组格式 ["opt1", "opt2"]
-                                                        options = parsed.map((v: any) => String(v));
-                                                    }
-                                                }
-                                            } catch {
-                                                // JSON 解析失败，使用逗号分隔
-                                                options = info.fieldData.split(',').map((s: string) => s.trim());
+                {/* Ticket 参数卡片区 - 每个60px + 8px间距 */}
+                <div className="flex-1 overflow-hidden rounded-b-xl" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}`, borderTop: 'none' }}>
+                    <div className="p-2 flex flex-col gap-2">
+                        {appInfo?.nodeInfoList && appInfo.nodeInfoList.length > 0 ? (
+                            appInfo.nodeInfoList.map((info: any, idx: number) => {
+                                const key = `${info.nodeId}_${info.fieldName}`;
+                                const fieldType = info.fieldType?.toUpperCase() || 'STRING';
+                                const isFileType = ['IMAGE', 'VIDEO', 'AUDIO'].includes(fieldType);
+                                const hasConnection = incomingConnections.some(c => c.toPortKey === key);
+                                
+                                // 类型颜色配置
+                                const typeConfigs: Record<string, { bg: string; border: string; text: string }> = {
+                                    'IMAGE': { bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.25)', text: '#3b82f6' },
+                                    'VIDEO': { bg: 'rgba(168, 85, 247, 0.08)', border: 'rgba(168, 85, 247, 0.25)', text: '#a855f7' },
+                                    'AUDIO': { bg: 'rgba(236, 72, 153, 0.08)', border: 'rgba(236, 72, 153, 0.25)', text: '#ec4899' },
+                                    'STRING': { bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.25)', text: '#10b981' },
+                                    'LIST': { bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.25)', text: '#f59e0b' },
+                                    'COMBO': { bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.25)', text: '#f59e0b' },
+                                };
+                                const typeConfig = typeConfigs[fieldType] || typeConfigs['STRING'];
+                                
+                                // 类型图标
+                                const renderTypeIcon = () => {
+                                    const iconClass = "w-3.5 h-3.5";
+                                    switch (fieldType) {
+                                        case 'IMAGE': return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+                                        case 'VIDEO': return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>;
+                                        case 'LIST': case 'COMBO': return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>;
+                                        default: return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
+                                    }
+                                };
+                                
+                                // LIST 选项解析
+                                let listOptions: string[] = [];
+                                let defaultValue = info.fieldValue || '';
+                                if ((fieldType === 'LIST' || fieldType === 'COMBO') && info.fieldData) {
+                                    try {
+                                        const parsed = JSON.parse(info.fieldData);
+                                        if (Array.isArray(parsed)) {
+                                            if (parsed.length === 2 && Array.isArray(parsed[0])) {
+                                                listOptions = parsed[0].map((v: any) => typeof v === 'object' ? (v.label || v.name || String(v)) : String(v));
+                                                if (parsed[1]?.default !== undefined) defaultValue = String(parsed[1].default);
+                                            } else {
+                                                listOptions = parsed.map((v: any) => typeof v === 'object' ? (v.label || v.name || String(v)) : String(v));
                                             }
                                         }
+                                    } catch { listOptions = info.fieldData.split(',').map((s: string) => s.trim()); }
+                                }
+                                
+                                return (
+                                    <div 
+                                        key={key}
+                                        className="relative rounded-lg transition-all"
+                                        style={{ 
+                                            height: '52px',
+                                            backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.03)',
+                                            border: `1px solid ${hasConnection ? 'rgba(16,185,129,0.4)' : (isLightCanvas ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)')}`,
+                                            boxShadow: hasConnection ? '0 0 8px rgba(16,185,129,0.15)' : undefined
+                                        }}
+                                        onMouseUp={() => onEndConnection(node.id, key)}
+                                    >
+                                        {/* 左侧连接点 */}
+                                        <div 
+                                            className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 cursor-crosshair hover:scale-125 transition-all z-10"
+                                            style={{ backgroundColor: hasConnection ? '#10b981' : (isLightCanvas ? '#d1d5db' : '#4b5563'), borderColor: '#10b981' }}
+                                            onMouseUp={() => onEndConnection(node.id, key)}
+                                            title={`连接: ${info.description || info.fieldName}`}
+                                        />
                                         
-                                        // IMAGE/VIDEO/AUDIO 类型 - 文件输入框
-                                        if (isFileType) {
-                                            return (
-                                                <div className="flex items-center gap-1">
+                                        <div className="h-full px-3 flex items-center gap-2">
+                                            {/* 类型图标 */}
+                                            <div className="w-6 h-6 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: typeConfig.bg }}>
+                                                {renderTypeIcon()}
+                                            </div>
+                                            
+                                            {/* 内容区 */}
+                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                <div className="flex items-center gap-1 mb-0.5">
+                                                    <span className="text-[9px] font-medium truncate" style={{ color: themeColors.textPrimary }}>
+                                                        {info.description || info.fieldName}
+                                                    </span>
+                                                    <span className="text-[7px] px-1 rounded shrink-0" style={{ backgroundColor: typeConfig.bg, color: typeConfig.text }}>
+                                                        {fieldType}
+                                                    </span>
+                                                </div>
+                                                
+                                                {/* 输入控件 */}
+                                                {hasConnection ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <svg className="w-2.5 h-2.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                        <span className="text-[8px] text-emerald-400">已连接</span>
+                                                    </div>
+                                                ) : isFileType ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <input
+                                                            type="text"
+                                                            className="flex-1 rounded px-1.5 py-0.5 text-[8px] outline-none"
+                                                            style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', color: themeColors.textSecondary }}
+                                                            placeholder="Key或拉线"
+                                                            value={nodeInputs[key] || ''}
+                                                            onChange={(e) => handleNodeInputChange(key, e.target.value)}
+                                                            onMouseDown={(e) => e.stopPropagation()}
+                                                        />
+                                                        <button
+                                                            className="p-0.5 rounded hover:scale-105 shrink-0"
+                                                            style={{ backgroundColor: typeConfig.bg }}
+                                                            onClick={() => handleFileUpload(key, fieldType)}
+                                                            onMouseDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <svg className="w-2.5 h-2.5" fill="none" stroke={typeConfig.text} viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                ) : (fieldType === 'LIST' || fieldType === 'COMBO') && listOptions.length > 0 ? (
+                                                    <CustomSelect
+                                                        options={listOptions}
+                                                        value={nodeInputs[key] || defaultValue || listOptions[0] || ''}
+                                                        onChange={(val) => handleNodeInputChange(key, val)}
+                                                        isLightCanvas={isLightCanvas}
+                                                        themeColors={themeColors}
+                                                    />
+                                                ) : (
                                                     <input
                                                         type="text"
-                                                        className="flex-1 rounded px-2 py-1 text-[10px] outline-none transition-colors"
-                                                        style={{ backgroundColor: themeColors.inputBg, border: `1px solid ${themeColors.inputBorder}`, color: themeColors.textPrimary }}
-                                                        placeholder="输入Key或拉线连接"
+                                                        className="w-full rounded px-1.5 py-0.5 text-[8px] outline-none"
+                                                        style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', color: themeColors.textSecondary }}
+                                                        placeholder={info.fieldValue || '输入...'}
                                                         value={nodeInputs[key] || ''}
                                                         onChange={(e) => handleNodeInputChange(key, e.target.value)}
                                                         onMouseDown={(e) => e.stopPropagation()}
                                                     />
-                                                    <button
-                                                        className="px-1.5 py-1 rounded text-[9px] transition-colors"
-                                                        style={{ backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)', border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}`, color: isLightCanvas ? '#059669' : '#6ee7b7' }}
-                                                        onClick={() => handleFileUpload(key, fieldType)}
-                                                        onMouseDown={(e) => e.stopPropagation()}
-                                                        title="上传文件"
-                                                    >
-                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            );
-                                        }
-                                        
-                                        // LIST 类型 - 自定义下拉框
-                                        if (isListType && options.length > 0) {
-                                            const currentValue = nodeInputs[key] || defaultValue || options[0] || '';
-                                            return (
-                                                <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
-                                                    <button
-                                                        className="w-full rounded px-2 py-1 text-[10px] outline-none flex items-center justify-between gap-1 transition-colors"
-                                                        style={{ backgroundColor: themeColors.inputBg, border: `1px solid ${themeColors.inputBorder}`, color: themeColors.textPrimary }}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setOpenSelectKey(openSelectKey === key ? null : key);
-                                                        }}
-                                                    >
-                                                        <span className="truncate">{currentValue || '选择...'}</span>
-                                                        <ChevronDown className={`w-3 h-3 transition-transform ${openSelectKey === key ? 'rotate-180' : ''}`} style={{ color: isLightCanvas ? '#10b981' : '#34d399' }} />
-                                                    </button>
-                                                    {openSelectKey === key && (
-                                                        <div className="absolute z-50 w-full mt-1 rounded-lg shadow-xl max-h-48 overflow-y-auto scrollbar-hide" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
-                                                            {options.map((opt: string, optIdx: number) => (
-                                                                <div
-                                                                    key={optIdx}
-                                                                    className="px-2 py-1.5 text-[10px] cursor-pointer transition-colors"
-                                                                    style={{ 
-                                                                        backgroundColor: currentValue === opt ? (isLightCanvas ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)') : 'transparent',
-                                                                        color: currentValue === opt ? (isLightCanvas ? '#059669' : '#6ee7b7') : themeColors.textSecondary
-                                                                    }}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleNodeInputChange(key, opt);
-                                                                        setOpenSelectKey(null);
-                                                                    }}
-                                                                >
-                                                                    {opt}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        }
-                                        
-                                        // STRING 类型和其他 - 文本输入框（支持直接编辑和连线输入）
-                                        return (
-                                            <input
-                                                type="text"
-                                                className="w-full rounded px-2 py-1 text-[10px] outline-none transition-colors"
-                                                style={{ backgroundColor: themeColors.inputBg, border: `1px solid ${themeColors.inputBorder}`, color: themeColors.textPrimary }}
-                                                placeholder={info.fieldValue || '输入文本或拉线连接...'}
-                                                value={nodeInputs[key] || ''}
-                                                onChange={(e) => handleNodeInputChange(key, e.target.value)}
-                                                onMouseDown={(e) => e.stopPropagation()}
-                                            />
-                                        );
-                                    })()}
-                                </div>
-                            );
-                        })
-                    ) : (
-                        <div className="text-center py-4">
-                            <div className="text-[10px]" style={{ color: themeColors.textMuted }}>无可配置参数</div>
-                        </div>
-                    )}
-                    
-                    {/* 错误显示 */}
-                    {errorMsg && (
-                        <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1.5 text-[9px] text-red-300">
-                            {errorMsg}
-                        </div>
-                    )}
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="text-center py-4 text-[9px]" style={{ color: themeColors.textMuted }}>无可配置参数</div>
+                        )}
+                    </div>
                 </div>
                 
-                {/* 底部状态 */}
-                <div className="h-6 px-2 flex items-center justify-between text-[9px]" style={{ backgroundColor: themeColors.footerBg, borderTop: `1px solid ${isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.1)'}`, color: themeColors.textMuted }}>
-                    <span>→ 输出图片</span>
-                </div>
+                {/* 错误提示 */}
+                {errorMsg && (
+                    <div className="absolute bottom-2 left-2 right-2 rounded-lg bg-red-500/10 border border-red-500/30 px-2 py-1.5 text-[8px] text-red-300 flex items-center gap-1.5">
+                        <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {errorMsg}
+                    </div>
+                )}
                 
                 {isRunning && (
-                    <div className="absolute inset-0 backdrop-blur-[2px] flex flex-col items-center justify-center z-30" style={{ backgroundColor: isLightCanvas ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }}>
+                    <div className="absolute inset-0 backdrop-blur-[2px] flex flex-col items-center justify-center z-30 rounded-xl" style={{ backgroundColor: isLightCanvas ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }}>
                         <div className="w-8 h-8 border-2 border-emerald-400/50 border-t-emerald-400 rounded-full animate-spin mb-2"></div>
                         <span className="text-[10px]" style={{ color: isLightCanvas ? '#059669' : '#6ee7b7' }}>正在执行...</span>
                     </div>
@@ -3752,17 +4169,26 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         onDragStart(e, node.id);
       }}
       onDoubleClick={() => setIsEditing(true)}
-      onMouseUp={() => onEndConnection(node.id)}
+      onMouseUp={() => {
+        // rh-config 节点只能通过具体的端口接收连接，不使用节点整体的 onMouseUp
+        if (node.type !== 'rh-config') {
+          onEndConnection(node.id);
+        }
+      }}
     >
-      {/* Ports */}
-      <div 
-        className={`absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-50 hover:scale-150 transition-all cursor-crosshair flex items-center justify-center border group/port ${inputPortColor}`}
-        onMouseDown={(e) => handlePortDown(e, 'in')}
-      />
-      <div 
-        className={`absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-50 hover:scale-150 transition-all cursor-crosshair flex items-center justify-center border ${outputPortColor}`}
-        onMouseDown={(e) => handlePortDown(e, 'out')}
-      />
+      {/* Ports - rh-config 节点使用自己的连接点，不显示全局端口 */}
+      {node.type !== 'rh-config' && (
+        <div 
+          className={`absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-50 hover:scale-150 transition-all cursor-crosshair flex items-center justify-center border group/port ${inputPortColor}`}
+          onMouseDown={(e) => handlePortDown(e, 'in')}
+        />
+      )}
+      {node.type !== 'rh-config' && (
+        <div 
+          className={`absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-50 hover:scale-150 transition-all cursor-crosshair flex items-center justify-center border ${outputPortColor}`}
+          onMouseDown={(e) => handlePortDown(e, 'out')}
+        />
+      )}
 
       {/* Content */}
       {renderContent()}
