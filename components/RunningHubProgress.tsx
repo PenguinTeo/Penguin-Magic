@@ -1,10 +1,12 @@
 /**
  * RunningHub 后台任务进度组件
  * 显示在左侧面板免责声明上方
+ * 支持旧的 RunningHubTaskContext 和新的 RHTaskQueueContext
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRunningHubTasks, RunningHubTask } from '../contexts/RunningHubTaskContext';
+import { useRHTaskQueue, RHQueuedTask } from '../contexts/RHTaskQueueContext';
 import { normalizeImageUrl } from '../utils/image';
 import { ChevronUp, ChevronDown, X, Maximize2 } from 'lucide-react';
 
@@ -33,6 +35,7 @@ const Toast: React.FC<{ message: string; type: 'success' | 'error'; onClose: () 
 
 export const RunningHubProgress: React.FC = () => {
     const { tasks, removeTask } = useRunningHubTasks();
+    const rhQueue = useRHTaskQueue();
     const [, forceUpdate] = useState(0);
     const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' }>>([]);
     const [notifiedTasks, setNotifiedTasks] = useState<Set<string>>(new Set());
@@ -119,6 +122,19 @@ export const RunningHubProgress: React.FC = () => {
                                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                                 <span className="text-xs font-medium text-blue-300">云端任务</span>
                                 <span className="text-[10px] text-blue-400">({visibleTasks.length})</span>
+                                {/* 队列状态显示 */}
+                                {(rhQueue.runningCount > 0 || rhQueue.queuedCount > 0) && (
+                                    <div className="flex items-center gap-1.5 ml-2">
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>
+                                            {rhQueue.runningCount}/3
+                                        </span>
+                                        {rhQueue.queuedCount > 0 && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
+                                                +{rhQueue.queuedCount}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex items-center gap-1">
                                 {/* 最小化/展开按钮 */}

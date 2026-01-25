@@ -11,6 +11,7 @@ import PresetInstantiationModal from './PresetInstantiationModal';
 import CanvasNameBadge from './CanvasNameBadge';
 import { editImageWithGemini, chatWithThirdPartyApi, getThirdPartyConfig, ImageEditConfig } from '../../services/geminiService';
 import { runAIApp, getAIAppInfo } from '../../services/api/runninghub';
+import { useRHTaskQueue } from '../../contexts/RHTaskQueueContext';
 import * as canvasApi from '../../services/api/canvas';
 import { downloadRemoteToOutput } from '../../services/api/files';
 import { Icons } from './Icons';
@@ -396,9 +397,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // 缩放结束后的重绘定时器
   const zoomEndTimerRef = useRef<number | null>(null);
   
-  // 🔧 强制重绘状态 - 用于解决缩放时节点模糊的问题
-  const [forceRenderKey, setForceRenderKey] = useState(0);
-  
   // Ref to handleExecuteNode for use in callbacks (避免依赖循环)
   const executeNodeRef = useRef<((nodeId: string, batchCount?: number) => Promise<void>) | null>(null);
   
@@ -415,6 +413,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
   // Generation Global Flag (Floating Input)
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // RH 任务队列
+  const rhTaskQueue = useRHTaskQueue();
 
   // Presets & Libraries - Load from localStorage
   const [userPresets, setUserPresets] = useState<CanvasPreset[]>(() => {
@@ -1229,16 +1230,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           setScale(newScale);
           setCanvasOffset({ x: newOffsetX, y: newOffsetY });
       });
-      
-      // 🔧 缩放结束后强制重绘，解决模糊问题
-      if (zoomEndTimerRef.current) {
-          clearTimeout(zoomEndTimerRef.current);
-      }
-      zoomEndTimerRef.current = window.setTimeout(() => {
-          // 触发一次强制重绘
-          setForceRenderKey(prev => prev + 1);
-          zoomEndTimerRef.current = null;
-      }, 150); // 150ms 防抖，缩放停止后触发重绘
   }, [scale, canvasOffset]);
 
   // 添加原生 wheel 事件监听器（非被动模式）
@@ -3597,12 +3588,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               }
           }
           else if (node.type === 'rh-config') {
-              // RunningHub 配置节点：执行 AI 应用并创建输出节点
+              // RunningHub 配置节点：通过队列执行 AI 应用
               const webappId = node.data?.webappId;
               const appInfo = node.data?.appInfo;
-              let nodeInputs = { ...(node.data?.nodeInputs || {}) };
+              const nodeInputs = { ...(node.data?.nodeInputs || {}) };
               
-              console.log('[RH-Config] 节点执行:', { webappId, hasAppInfo: !!appInfo, batchCount });
+              console.log('[RH-Config] 节点执行（入队）:', { webappId, hasAppInfo: !!appInfo, batchCount });
               
               if (!webappId || !appInfo) {
                   updateNode(nodeId, { status: 'error', data: { ...node.data, error: '缺少应用配置' } });
@@ -3611,19 +3602,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               
               try {
                   const appName = (appInfo as any).webappName || appInfo.title || webappId;
-                  console.log('[RH-Config] 开始执行 AI 应用:', appName, '批次:', batchCount);
                   
-                  // ============ RUN 时处理图片连接上传 ============
-                  // 查找所有连接到当前节点的图片连接
+                  // ============ 收集待上传的图片 ============
                   const currentConnections = connectionsRef.current;
                   const incomingImageConns = currentConnections.filter(c => 
                       c.toNode === nodeId && c.toPortKey && c.toPortKey !== 'cover'
                   );
                   
-                  // 导入上传函数
-                  const { uploadImage } = await import('../../services/api/runninghub');
+                  const pendingImageUploads: Array<{ portKey: string; imageData: string }> = [];
                   
-                  // 处理每个图片连接
                   for (const conn of incomingImageConns) {
                       const sourceNode = nodesRef.current.find(n => n.id === conn.fromNode);
                       if (!sourceNode?.content) continue;
@@ -3634,21 +3621,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       
                       if (!hasImageContent) continue;
                       
-                      // 检查是否已有 fileKey（避免重复上传）
                       const portKey = conn.toPortKey!;
-                      if (nodeInputs[portKey] && nodeInputs[portKey].length > 10) {
-                          console.log('[RH-Config] 参数已有值，跳过上传:', portKey);
-                          continue;
-                      }
+                      // 如果已有值，跳过
+                      if (nodeInputs[portKey] && nodeInputs[portKey].length > 10) continue;
                       
-                      console.log('[RH-Config] 开始上传图片:', portKey);
-                      
-                      try {
-                          // 转换为 base64
-                          let imageData = sourceNode.content;
-                          if (imageData.startsWith('/files/') || imageData.startsWith('http')) {
-                              const img = new Image();
-                              img.crossOrigin = 'anonymous';
+                      // 转换为 base64
+                      let imageData = sourceNode.content;
+                      if (imageData.startsWith('/files/') || imageData.startsWith('http')) {
+                          const img = new Image();
+                          img.crossOrigin = 'anonymous';
+                          try {
                               imageData = await new Promise<string>((resolve, reject) => {
                                   img.onload = () => {
                                       const canvas = document.createElement('canvas');
@@ -3661,59 +3643,40 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                   img.onerror = () => reject(new Error('图片加载失败'));
                                   img.src = imageData.startsWith('/files/') ? `http://localhost:8765${imageData}` : imageData;
                               });
+                          } catch (err) {
+                              console.error('[RH-Config] 图片转换失败:', portKey, err);
+                              continue;
                           }
-                          
-                          // 上传到 RunningHub
-                          const result = await uploadImage(imageData);
-                          if (result.success && result.data?.fileKey) {
-                              console.log('[RH-Config] 上传成功:', portKey, result.data.fileKey);
-                              nodeInputs[portKey] = result.data.fileKey;
-                          } else {
-                              console.error('[RH-Config] 上传失败:', portKey, result.error);
-                          }
-                      } catch (err) {
-                          console.error('[RH-Config] 上传异常:', portKey, err);
                       }
+                      
+                      pendingImageUploads.push({ portKey, imageData });
                   }
                   
-                  // 更新节点的 nodeInputs（保存上传结果）
-                  updateNode(nodeId, { data: { ...node.data, nodeInputs } });
-                  // ============ 图片上传完成 ============
-                  
-                  // 构建 nodeInfoList
-                  // 注意：如果用户显式清空了参数，应该传空字符串覆盖默认值
+                  // ============ 构建 nodeInfoList ============
                   const nodeInfoList = appInfo.nodeInfoList?.map((info: any) => {
                       const key = `${info.nodeId}_${info.fieldName}`;
-                      // 检查 nodeInputs 中是否有这个 key（包括空字符串）
                       const hasUserValue = key in nodeInputs;
                       return {
                           nodeId: info.nodeId,
                           fieldName: info.fieldName,
-                          // 用户设置的值优先（包括空值），否则用默认值
                           fieldValue: hasUserValue ? (nodeInputs[key] || '') : (info.fieldValue || '')
                       };
                   }) || [];
                   
-                  console.log('[RH-Config] nodeInfoList:', nodeInfoList);
-                  
-                  // 根据批次数多次执行任务
+                  // ============ 创建输出节点（提前创建，显示排队状态） ============
+                  const outputNodes: { id: string; batchIndex: number }[] = [];
                   for (let batchIdx = 0; batchIdx < batchCount; batchIdx++) {
-                      if (signal.aborted) return;
-                      
-                      console.log(`[RH-Config] 执行第 ${batchIdx + 1}/${batchCount} 次任务`);
-                      
-                      // 为每个任务创建输出节点（显示 loading）
                       const outputNodeId = uuid();
                       const outputNode: CanvasNode = {
                           id: outputNodeId,
                           type: 'image',
                           content: '',
                           x: node.x + node.width + 100,
-                          y: node.y + (batchIdx * 420), // 每个节点向下偏移
+                          y: node.y + (batchIdx * 420),
                           width: 400,
                           height: 400,
                           data: {},
-                          status: 'running'
+                          status: 'running' // 显示加载状态
                       };
                       
                       const newConnection = {
@@ -3726,51 +3689,100 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       connectionsRef.current = [...connectionsRef.current, newConnection];
                       setNodes(prev => [...prev, outputNode]);
                       setConnections(prev => [...prev, newConnection]);
-                      setHasUnsavedChanges(true);
-                      console.log(`[RH-Config] 已创建输出节点 ${batchIdx + 1}:`, outputNodeId.slice(0, 8));
                       
-                      // 调用 API
-                      const result = await runAIApp(webappId, nodeInfoList);
-                      
-                      if (signal.aborted) return;
-                      
-                      if (result.success && result.data?.outputs?.length) {
-                          const output = result.data.outputs[0];
-                          const outputUrl = output.fileUrl;
-                          const outputType = output.fileType === 'video' ? 'video' : 'image';
-                          
-                          console.log(`[RH-Config] 任务 ${batchIdx + 1} 执行成功:`, { outputUrl, outputType });
-                          
-                          // 更新输出节点
-                          const metadata = await extractImageMetadata(outputUrl);
-                          updateNode(outputNodeId, {
-                              content: outputUrl,
-                              data: { imageMetadata: metadata },
-                              status: 'completed'
-                          });
-                          
-                          // 同步到桌面
-                          if (outputType === 'image' && onImageGenerated) {
-                              onImageGenerated(outputUrl, `RunningHub: ${appName}`, currentCanvasId || undefined, canvasName);
-                          }
-                      } else {
-                          const errorMsg = result.error || '执行失败';
-                          console.error(`[RH-Config] 任务 ${batchIdx + 1} 执行失败:`, errorMsg);
-                          updateNode(outputNodeId, { status: 'error' });
-                      }
+                      outputNodes.push({ id: outputNodeId, batchIndex: batchIdx });
                   }
+                  setHasUnsavedChanges(true);
                   
-                  // 所有任务完成后更新配置节点状态
-                  updateNode(nodeId, { status: 'completed' });
+                  // ============ 入队执行 ============
+                  const taskIds = rhTaskQueue.enqueueTask({
+                      nodeId,
+                      canvasId: currentCanvasId || undefined,
+                      title: appName,
+                      webappId,
+                      nodeInfoList,
+                      batchCount,
+                      pendingImageUploads: pendingImageUploads.length > 0 ? pendingImageUploads : undefined,
+                      
+                      onNodeInputsUpdate: (nid, updates) => {
+                          // 更新节点的 nodeInputs
+                          const targetNode = nodesRef.current.find(n => n.id === nid);
+                          if (targetNode) {
+                              const currentInputs = targetNode.data?.nodeInputs || {};
+                              updateNode(nid, {
+                                  data: {
+                                      ...targetNode.data,
+                                      nodeInputs: { ...currentInputs, ...updates }
+                                  }
+                              });
+                          }
+                      },
+                      
+                      onTaskComplete: (taskId, batchIndex, result, status) => {
+                          // 直接使用传递的 batchIndex 找到对应的输出节点
+                          const outputNode = outputNodes.find(o => o.batchIndex === batchIndex);
+                          if (!outputNode) {
+                              console.error(`[RH-Config] 找不到 batchIndex=${batchIndex} 的输出节点`);
+                              return;
+                          }
+                          
+                          if (result.outputs?.length) {
+                              const output = result.outputs[0];
+                              const outputUrl = output.fileUrl;
+                              const outputType = output.fileType === 'video' ? 'video' : 'image';
+                              
+                              console.log(`[RH-Config] 任务完成:`, { batchIndex, outputUrl, status });
+                              
+                              // 先立即更新节点内容，不等 metadata
+                              updateNode(outputNode.id, {
+                                  content: outputUrl,
+                                  status: 'completed'
+                              });
+                              
+                              // 异步获取 metadata（不阻塞）
+                              extractImageMetadata(outputUrl).then(metadata => {
+                                  updateNode(outputNode.id, {
+                                      data: { imageMetadata: metadata }
+                                  });
+                              }).catch(err => {
+                                  console.warn(`[RH-Config] 获取图片元数据失败:`, err);
+                              });
+                              
+                              // 同步到桌面
+                              if (outputType === 'image' && onImageGenerated) {
+                                  onImageGenerated(outputUrl, `RunningHub: ${appName}`, currentCanvasId || undefined, canvasName);
+                              }
+                          }
+                      },
+                      
+                      onTaskError: (taskId, batchIndex, error, status) => {
+                          // 直接使用传递的 batchIndex 找到对应的输出节点
+                          const outputNode = outputNodes.find(o => o.batchIndex === batchIndex);
+                          if (outputNode) {
+                              updateNode(outputNode.id, { status: 'error' });
+                          }
+                          
+                          console.error(`[RH-Config] 任务失败:`, { batchIndex, error, status });
+                      },
+                      
+                      onAllTasksDone: (nid, status) => {
+                          console.log(`[RH-Config] 所有任务完成:`, status);
+                          // 更新节点状态
+                          updateNode(nid, { status: status.failedCount > 0 ? 'error' : 'completed' });
+                          saveCurrentCanvas();
+                      }
+                  });
                   
-                  // 保存画布
-                  saveCurrentCanvas();
+                  console.log('[RH-Config] 已入队:', taskIds.length, '个任务');
+                  
+                  // 更新节点状态为运行中
+                  updateNode(nodeId, { status: 'running' });
                   
               } catch (err: any) {
-                  console.error('[RH-Config] 执行异常:', err);
+                  console.error('[RH-Config] 入队异常:', err);
                   updateNode(nodeId, {
                       status: 'error',
-                      data: { ...node.data, error: err.message || '执行异常' }
+                      data: { ...node.data, error: err.message || '入队异常' }
                   });
               }
           }
@@ -4781,7 +4793,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
         {/* Canvas Content Container */}
         <div 
-            key={`canvas-content-${forceRenderKey}`}
             style={{ 
                 transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${scale})`,
                 transformOrigin: '0 0',
@@ -4790,8 +4801,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                 willChange: 'transform',
                 backfaceVisibility: 'hidden',
                 pointerEvents: 'none',
-                // 🔧 使用 filter 的微小变化触发重绘，解决缩放模糊问题
-                filter: forceRenderKey % 2 === 0 ? 'none' : 'brightness(1)',
             } as React.CSSProperties}
             className="absolute top-0 left-0"
         >

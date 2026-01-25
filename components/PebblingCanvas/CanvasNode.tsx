@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { CanvasNode, NodeType, getNodeTypeColor } from '../../types/pebblingTypes';
 import { Icons } from './Icons';
 import { ChevronDown } from 'lucide-react';
+import { useRHTaskQueue } from '../../contexts/RHTaskQueueContext';
 
 // 香蕉SVG图标组件
 const BananaIcon: React.FC<{ size?: number; className?: string }> = ({ size = 14, className = '' }) => (
@@ -133,6 +134,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   const [localPrompt, setLocalPrompt] = useState(node.data?.prompt || '');
   const [localSystem, setLocalSystem] = useState(node.data?.systemInstruction || '');
   const [batchCount, setBatchCount] = useState(1); // 批量生成数量
+  
+  // RH 任务队列状态
+  const rhTaskQueue = useRHTaskQueue();
+  const nodeTaskStatus = node.type === 'rh-config' ? rhTaskQueue.getNodeTaskStatus(node.id) : null;
 
   // 主题颜色变量
   const themeColors = {
@@ -1644,6 +1649,46 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </span>
                             </div>
                         </div>
+                        {/* 队列状态显示 */}
+                        {nodeTaskStatus && nodeTaskStatus.total > 0 && (
+                            <div className="flex items-center gap-1.5">
+                                {/* 排队状态 */}
+                                {nodeTaskStatus.queued > 0 && (
+                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium" style={{ backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
+                                        <span>排队 #{nodeTaskStatus.firstQueuePosition || nodeTaskStatus.queued}</span>
+                                        <button
+                                            className="ml-0.5 hover:opacity-70"
+                                            onClick={(e) => { e.stopPropagation(); rhTaskQueue.cancelNodeTasks(node.id); }}
+                                            title="取消排队"
+                                        >
+                                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                )}
+                                {/* 执行中状态 */}
+                                {(nodeTaskStatus.running > 0 || nodeTaskStatus.uploading > 0) && (
+                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium" style={{ backgroundColor: 'rgba(59,130,246,0.15)', color: '#3b82f6' }}>
+                                        <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                                        <span>
+                                            {nodeTaskStatus.uploading > 0 ? '上传中' : `执行中 ${nodeTaskStatus.completed + 1}/${nodeTaskStatus.total}`}
+                                        </span>
+                                    </div>
+                                )}
+                                {/* 已完成状态（全部完成时显示） */}
+                                {nodeTaskStatus.completed + nodeTaskStatus.failed >= nodeTaskStatus.total && nodeTaskStatus.queued === 0 && nodeTaskStatus.running === 0 && nodeTaskStatus.uploading === 0 && (
+                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium" style={{ backgroundColor: nodeTaskStatus.failed > 0 ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)', color: nodeTaskStatus.failed > 0 ? '#ef4444' : '#22c55e' }}>
+                                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={nodeTaskStatus.failed > 0 ? "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" : "M5 13l4 4L19 7"} />
+                                        </svg>
+                                        <span>
+                                            {nodeTaskStatus.failed > 0 ? `${nodeTaskStatus.completed}/${nodeTaskStatus.total} (${nodeTaskStatus.failed}失败)` : `完成 ${nodeTaskStatus.completed}/${nodeTaskStatus.total}`}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                     
                     {/* 封面图 - 固定200px高度 */}
@@ -4166,9 +4211,6 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         backgroundColor: isRelay ? 'transparent' : themeColors.nodeBg,
         pointerEvents: 'auto',
         boxShadow: isLightCanvas ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
-        // 🔧 CSS 渲染优化：提升缩放时的清晰度
-        transformStyle: 'preserve-3d',
-        perspective: 1000,
       } as React.CSSProperties}
       onMouseDown={(e) => {
         // Prevent drag start if clicking interactive elements, BUT allow if it's the text display div

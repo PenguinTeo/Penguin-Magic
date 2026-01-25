@@ -20,6 +20,7 @@ import * as desktopApi from './services/api/desktop';
 import { saveToOutput, saveToInput, downloadRemoteToOutput, saveVideoToOutput, saveThumbnail } from './services/api/files';
 import { downloadImage } from './services/export';
 import { ThemeProvider, useTheme, SnowfallEffect } from './contexts/ThemeContext';
+import { RHTaskQueueProvider } from './contexts/RHTaskQueueContext';
 import { Desktop, createDesktopItemFromHistory, TOP_OFFSET } from './components/Desktop';
 import { HistoryDock } from './components/HistoryDock';
 import PebblingCanvas from './components/PebblingCanvas';
@@ -4020,7 +4021,9 @@ const App: React.FC = () => {
 const AppWithTheme: React.FC = () => {
   return (
     <ThemeProvider>
-      <App />
+      <RHTaskQueueProvider>
+        <App />
+      </RHTaskQueueProvider>
     </ThemeProvider>
   );
 };
