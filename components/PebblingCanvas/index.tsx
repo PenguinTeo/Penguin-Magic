@@ -351,6 +351,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const [dragStart, setDragStart] = useState<Vec2>({ x: 0, y: 0 });
   const [isSpacePressed, setIsSpacePressed] = useState(false); // 空格键状态，用于拖拽画布
+  const [isPanMode, setIsPanMode] = useState(false); // 平移模式开关
 
   // Node Selection & Dragging
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set<string>());
@@ -4034,17 +4035,18 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
   const onMouseDownCanvas = (e: React.MouseEvent) => {
       // Logic:
-      // Space + Left Click = Pan Canvas
-      // Ctrl/Meta + Left Click = Box Selection
-      // Middle Click = Pan
-      // Left Click on BG (no space) = Deselect All only
+      // 平移模式 + 左键 = Pan Canvas
+      // Space + 左键 = Pan Canvas
+      // Ctrl/Meta + 左键 = Box Selection
+      // 中键 = Pan
+      // 左键点击空白 = 取消选择
       
       if (e.button === 0) {
           if (e.ctrlKey || e.metaKey) {
              // START SELECTION BOX
              setSelectionBox({ start: { x: e.clientX, y: e.clientY }, current: { x: e.clientX, y: e.clientY } });
-          } else if (isSpacePressed) {
-             // Space + Left Click = Pan Canvas
+          } else if (isSpacePressed || isPanMode) {
+             // Space/平移模式 + 左键 = Pan Canvas
              setIsDraggingCanvas(true);
              setDragStart({ x: e.clientX - canvasOffset.x, y: e.clientY - canvasOffset.y });
           } else {
@@ -4770,9 +4772,38 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         hasUnsavedChanges={hasUnsavedChanges}
       />
       
+      {/* 平移模式切换按钮 */}
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+        <button
+          onClick={() => setIsPanMode(!isPanMode)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            isPanMode 
+              ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg' 
+              : 'bg-gray-700/50 hover:bg-gray-600/70 text-gray-300'
+          }`}
+          style={{
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+          title={isPanMode ? '退出平移模式（左键拖拽移动画布）' : '进入平移模式（左键拖拽移动画布）'}
+        >
+          {isPanMode ? '平移中' : '平移'}
+        </button>
+        
+        {/* 状态提示 */}
+        {isPanMode && (
+          <div 
+            className="px-2 py-1 rounded text-xs text-blue-300 bg-blue-900/30 backdrop-blur-sm"
+            style={{ border: '1px solid rgba(59, 130, 246, 0.3)' }}
+          >
+            左键拖拽移动画布
+          </div>
+        )}
+      </div>
+      
       <div
         ref={containerRef}
-        className={`w-full h-full relative ${isSpacePressed ? 'cursor-grab' : 'cursor-default'} ${isDraggingCanvas ? '!cursor-grabbing' : ''}`}
+        className={`w-full h-full relative ${(isSpacePressed || isPanMode) ? 'cursor-grab' : 'cursor-default'} ${isDraggingCanvas ? '!cursor-grabbing' : ''}`}
         onMouseDown={onMouseDownCanvas}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
