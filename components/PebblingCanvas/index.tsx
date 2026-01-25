@@ -396,6 +396,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // 缩放结束后的重绘定时器
   const zoomEndTimerRef = useRef<number | null>(null);
   
+  // 🔧 强制重绘状态 - 用于解决缩放时节点模糊的问题
+  const [forceRenderKey, setForceRenderKey] = useState(0);
+  
   // Ref to handleExecuteNode for use in callbacks (避免依赖循环)
   const executeNodeRef = useRef<((nodeId: string, batchCount?: number) => Promise<void>) | null>(null);
   
@@ -1227,7 +1230,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           setCanvasOffset({ x: newOffsetX, y: newOffsetY });
       });
       
-      // 缩放结束后的处理已移除（优先保证流畅性）
+      // 🔧 缩放结束后强制重绘，解决模糊问题
+      if (zoomEndTimerRef.current) {
+          clearTimeout(zoomEndTimerRef.current);
+      }
+      zoomEndTimerRef.current = window.setTimeout(() => {
+          // 触发一次强制重绘
+          setForceRenderKey(prev => prev + 1);
+          zoomEndTimerRef.current = null;
+      }, 150); // 150ms 防抖，缩放停止后触发重绘
   }, [scale, canvasOffset]);
 
   // 添加原生 wheel 事件监听器（非被动模式）
@@ -4770,6 +4781,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
         {/* Canvas Content Container */}
         <div 
+            key={`canvas-content-${forceRenderKey}`}
             style={{ 
                 transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${scale})`,
                 transformOrigin: '0 0',
@@ -4777,7 +4789,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                 height: '100%',
                 willChange: 'transform',
                 backfaceVisibility: 'hidden',
-                pointerEvents: 'none'
+                pointerEvents: 'none',
+                // 🔧 使用 filter 的微小变化触发重绘，解决缩放模糊问题
+                filter: forceRenderKey % 2 === 0 ? 'none' : 'brightness(1)',
             } as React.CSSProperties}
             className="absolute top-0 left-0"
         >
@@ -4857,11 +4871,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                         if (conn.toPortOffsetY !== undefined) {
                             // ✅ 直接使用存储的偏移量，不需要任何计算
                             endY = to.y + conn.toPortOffsetY;
+                        } else if (conn.toPortKey === 'cover') {
+                            // 🔧 兼容旧数据：cover 端口固定连接到封面图中心（headerHeight + coverHeight/2 = 32 + 100 = 132）
+                            endY = to.y + 132;
                         }
-                        // 向后兼容：如果没有存储偏移量，使用节点中心
+                        // 向后兼容：其他端口如果没有存储偏移量，使用节点中心
                         
-                        // 检查是否是图片类型参数
-                        if (to.data?.appInfo?.nodeInfoList) {
+                        // 检查是否是图片类型参数（cover 也算）
+                        if (conn.toPortKey === 'cover') {
+                            isImageToImagePort = isSourceImageNode;
+                        } else if (to.data?.appInfo?.nodeInfoList) {
                             const portInfo = to.data.appInfo.nodeInfoList.find((info: any) => 
                                 `${info.nodeId}_${info.fieldName}` === conn.toPortKey
                             );

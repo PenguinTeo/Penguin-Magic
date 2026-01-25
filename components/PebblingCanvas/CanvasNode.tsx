@@ -1128,6 +1128,12 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             alt="Result" 
                             className="w-full h-full object-contain" 
                             draggable={false}
+                            style={{
+                                imageRendering: 'auto',
+                                transform: 'translateZ(0)',
+                                willChange: 'transform',
+                                backfaceVisibility: 'hidden',
+                            } as React.CSSProperties}
                         />
                     </div>
                 ) : (
@@ -4160,6 +4166,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         backgroundColor: isRelay ? 'transparent' : themeColors.nodeBg,
         pointerEvents: 'auto',
         boxShadow: isLightCanvas ? '0 2px 8px rgba(0,0,0,0.1)' : 'none',
+        // 🔧 CSS 渲染优化：提升缩放时的清晰度
+        transformStyle: 'preserve-3d',
+        perspective: 1000,
       } as React.CSSProperties}
       onMouseDown={(e) => {
         // Prevent drag start if clicking interactive elements, BUT allow if it's the text display div
