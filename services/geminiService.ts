@@ -237,7 +237,9 @@ export const editImageWithThirdPartyApi = async (
 export const chatWithThirdPartyApi = async (
   systemPrompt: string,
   userMessage: string,
-  imageFile?: File
+  imageFile?: File,
+  model?: string,
+  videoUrl?: string
 ): Promise<string> => {
   if (!thirdPartyConfig || !thirdPartyConfig.enabled) {
     throw new Error("贞贞API未启用");
@@ -252,29 +254,38 @@ export const chatWithThirdPartyApi = async (
   }
   
   // 构建用户消息内容 - 根据API文档格式
-  type ContentItem = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
+  type ContentItem = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } } | { type: 'video_url'; video_url: { url: string } };
   let userContent: string | ContentItem[];
   
-  if (imageFile) {
-    // 分析图片时，content需要是数组格式
-    const imageBase64 = await fileToBase64(imageFile);
-    const imageDataUrl = `data:${imageFile.type};base64,${imageBase64}`;
+  if (imageFile || videoUrl) {
+    // 有多媒体输入时，content需要是数组格式
     userContent = [
-      { type: 'text', text: userMessage },
-      { type: 'image_url', image_url: { url: imageDataUrl } }
+      { type: 'text', text: userMessage }
     ];
+    
+    if (imageFile) {
+      const imageBase64 = await fileToBase64(imageFile);
+      const imageDataUrl = `data:${imageFile.type};base64,${imageBase64}`;
+      userContent.push({ type: 'image_url', image_url: { url: imageDataUrl } });
+    }
+    
+    if (videoUrl) {
+      // 视频URL
+      console.log('[chatWithThirdPartyApi] sending video_url:', videoUrl.slice(0, 100));
+      userContent.push({ type: 'video_url', video_url: { url: videoUrl } });
+    }
   } else {
     userContent = userMessage;
   }
   
-  // 使用配置的chatModel，默认使用 gemini-2.5-pro
-  const chatModel = thirdPartyConfig.chatModel || 'gemini-2.5-pro';
+  // 使用传入的model，否则使用配置的chatModel，默认使用 gemini-2.5-pro
+  const chatModel = model || thirdPartyConfig.chatModel || 'gemini-2.5-pro';
   
   const requestBody: OpenAIChatRequest = {
     model: chatModel,
     messages: [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userContent }
+      { role: 'user', content: userContent as any }
     ],
     max_tokens: 2000,
     temperature: 0.7,

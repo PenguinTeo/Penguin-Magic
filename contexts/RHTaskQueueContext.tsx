@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react';
-import { runAIApp, uploadImage, RHTaskOutput } from '../services/api/runninghub';
+import { runAIApp, uploadImage, uploadToRunningHub, RHTaskOutput } from '../services/api/runninghub';
 
 // 简单的 uuid 生成
 const uuid = () => Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -46,6 +46,11 @@ export interface RHQueuedTask {
     portKey: string;
     imageData: string;
   }>;
+  // 视频上传相关
+  pendingVideoUploads?: Array<{
+    portKey: string;
+    videoUrl: string;
+  }>;
 }
 
 export interface EnqueueParams {
@@ -58,6 +63,10 @@ export interface EnqueueParams {
   pendingImageUploads?: Array<{
     portKey: string;
     imageData: string;
+  }>;
+  pendingVideoUploads?: Array<{
+    portKey: string;
+    videoUrl: string;
   }>;
   // 回调
   onOutputNodeCreated?: (taskId: string, batchIndex: number, outputNodeId: string) => void;
@@ -205,7 +214,49 @@ export const RHTaskQueueProvider: React.FC<{ children: ReactNode }> = ({ childre
         // 等待上传完成
         uploadedFiles = await uploadPromise;
         console.log('[RHQueue] 上传完成，uploadedFiles:', uploadedFiles);
-      } else {
+      }
+      
+      // 1.5 处理视频上传
+      if (task.pendingVideoUploads && task.pendingVideoUploads.length > 0) {
+        setTasks(prev => prev.map(t => 
+          t.id === task.id ? { ...t, status: 'uploading' as const, progress: '上传视频...' } : t
+        ));
+        
+        for (const upload of task.pendingVideoUploads) {
+          try {
+            console.log('[RHQueue] 上传视频:', upload.portKey, upload.videoUrl.slice(0, 100));
+            // 从 URL 获取视频文件
+            const response = await fetch(upload.videoUrl);
+            const blob = await response.blob();
+            const fileName = upload.videoUrl.split('/').pop() || 'video.mp4';
+            const file = new File([blob], fileName, { type: blob.type || 'video/mp4' });
+            
+            // 上传到 RH
+            const result = await uploadToRunningHub(file);
+            if (result.success && result.fileName) {
+              console.log('[RHQueue] 视频上传成功:', upload.portKey, result.fileName);
+              uploadedFiles[upload.portKey] = result.fileName;
+              
+              // 保存到缓存
+              const existing = uploadedFilesRef.current.get(task.nodeId) || {};
+              existing[upload.portKey] = result.fileName;
+              uploadedFilesRef.current.set(task.nodeId, existing);
+              
+              // 通知更新
+              if (callbacks?.onNodeInputsUpdate) {
+                callbacks.onNodeInputsUpdate(task.nodeId, { [upload.portKey]: result.fileName });
+              }
+            } else {
+              console.error('[RHQueue] 视频上传失败:', upload.portKey, result.error);
+            }
+          } catch (err) {
+            console.error('[RHQueue] 视频上传异常:', upload.portKey, err);
+          }
+        }
+      }
+      
+      // 不需要上传的任务，检查是否需要等待上传完成
+      if (!task.pendingImageUploads && !task.pendingVideoUploads) {
         // 不需要上传的任务，检查是否需要等待上传完成
         const existingPromise = uploadPromisesRef.current.get(task.nodeId);
         if (existingPromise) {
@@ -453,7 +504,8 @@ export const RHTaskQueueProvider: React.FC<{ children: ReactNode }> = ({ childre
         status: 'queued',
         startTime: now + i, // 确保顺序
         progress: '排队中...',
-        pendingImageUploads: i === 0 ? params.pendingImageUploads : undefined // 只有第一个任务需要上传
+        pendingImageUploads: i === 0 ? params.pendingImageUploads : undefined, // 只有第一个任务需要上传
+        pendingVideoUploads: i === 0 ? params.pendingVideoUploads : undefined
       });
     }
     

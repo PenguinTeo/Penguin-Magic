@@ -133,6 +133,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   const [localContent, setLocalContent] = useState(node.content);
   const [localPrompt, setLocalPrompt] = useState(node.data?.prompt || '');
   const [localSystem, setLocalSystem] = useState(node.data?.systemInstruction || '');
+  const [localModel, setLocalModel] = useState(node.data?.model || 'gemini-2.5-flash-preview-05-20');
   const [batchCount, setBatchCount] = useState(1); // 批量生成数量
   
   // RH 任务队列状态
@@ -308,6 +309,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             ...node.data, 
             prompt: localPrompt, 
             systemInstruction: localSystem,
+            model: localModel,
             resizeMode: resizeMode,
             resizeWidth: resizeWidth,
             resizeHeight: resizeHeight
@@ -471,6 +473,26 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 className="flex-1 flex flex-col p-2 gap-2 overflow-hidden"
                 onWheel={handleWheel}
             >
+                {/* Model Selection */}
+                <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-bold uppercase px-1" style={{ color: themeColors.textMuted }}>Model</label>
+                    <select
+                        className={inputBaseClass + " h-7 text-xs"}
+                        value={localModel}
+                        onChange={(e) => { setLocalModel(e.target.value); onUpdate(node.id, { data: { ...node.data, model: e.target.value } }); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <option value="gemini-2.5-flash-preview-05-20">Gemini-2.5-Flash</option>
+                        <option value="gemini-3-flash-preview">Gemini-3-Flash</option>
+                        <option value="gemini-3-pro-preview">Gemini-3-Pro</option>
+                        <option value="gemini-2.5-pro-thinking">Gemini-2.5-Thinking</option>
+                        <option value="qwen3-vl-235b-a22b">Qwen3-VL-235B</option>
+                        <option value="gpt-5.2-pro">GPT-5.2-Pro</option>
+                        <option value="gpt-5.2-all">GPT-5.2-All</option>
+                        <option value="gpt-5.2">GPT-5.2</option>
+                    </select>
+                </div>
+
                 {/* System Prompt (Optional) */}
                 <div className="flex flex-col gap-1 min-h-[30%]">
                     <label className="text-[9px] font-bold uppercase px-1" style={{ color: themeColors.textMuted }}>System Instruction (Optional)</label>

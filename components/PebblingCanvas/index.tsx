@@ -195,17 +195,33 @@ const generateCreativeText = async (content: string): Promise<{ title: string; c
 const generateAdvancedLLM = async (
   userPrompt: string,
   systemPrompt?: string,
-  images?: string[]
+  images?: string[],
+  model?: string,
+  videos?: string[]
 ): Promise<string> => {
   try {
+    console.log('[LLM] generateAdvancedLLM called, videos:', videos?.length, videos?.[0]?.slice(0, 100));
     const system = systemPrompt || 'You are a helpful assistant.';
     // 如果有图片，取第一张转换为File
     let imageFile: File | undefined;
     if (images && images.length > 0) {
       imageFile = await base64ToFile(images[0], 'input.png');
     }
-    // 使用通用的chat接口（不带图片时传undefined）
-    const result = await chatWithThirdPartyApi(system, userPrompt, imageFile);
+    // 如果有视频，转换为完整URL
+    let videoUrl: string | undefined;
+    if (videos && videos.length > 0) {
+      const videoPath = videos[0];
+      console.log('[LLM] videoPath:', videoPath);
+      // 如果是相对路径，转换为完整URL
+      if (videoPath.startsWith('/files/')) {
+        videoUrl = `http://localhost:8765${videoPath}`;
+      } else {
+        videoUrl = videoPath;
+      }
+      console.log('[LLM] videoUrl:', videoUrl);
+    }
+    // 使用通用的chat接口
+    const result = await chatWithThirdPartyApi(system, userPrompt, imageFile, model, videoUrl);
     return result;
   } catch (e) {
     console.error('LLM处理失败:', e);
@@ -1581,8 +1597,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // Helper: Recursive Input Resolution - 向上追溯获取输入
   // 就近原则：收集沿途的文本，一旦找到图片就停止这条路径的回溯
   // 例如：图1→文1→图2→文2→图3(RUN) → 结果: images=[图2], texts=[文2]
-  const resolveInputs = (nodeId: string, visited = new Set<string>()): { images: string[], texts: string[] } => {
-      if (visited.has(nodeId)) return { images: [], texts: [] };
+  const resolveInputs = (nodeId: string, visited = new Set<string>()): { images: string[], texts: string[], videos: string[] } => {
+      if (visited.has(nodeId)) return { images: [], texts: [], videos: [] };
       visited.add(nodeId);
 
       // Find connections pointing to this node
@@ -1597,6 +1613,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
       let images: string[] = [];
       let texts: string[] = [];
+      let videos: string[] = [];
 
       for (const node of inputNodes) {
           let foundImageInThisPath = false;
@@ -1653,7 +1670,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               // 不停止，继续向上追溯
           } else if (node.type === 'video' || node.type === 'video-output' || node.type === 'frame-extractor') {
               // 视频节点/帧提取器：输入=视频，输出=视频/图片
-              // 不提供图片或文本输出（图片在下游Image节点），停止追溯
+              // 收集视频内容供LLM分析
+              if (node.content) {
+                  console.log('[resolveInputs] 视频节点 content:', node.content.slice(0, 100));
+                  videos.push(node.content);
+              }
               foundImageInThisPath = true;
           } else if (node.type === 'edit') {
               // Magic节点：输入=图片或文字，输出=图片
@@ -1689,9 +1710,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               const child = resolveInputs(node.id, new Set(visited));
               images.push(...child.images);
               texts.push(...child.texts);
+              videos.push(...child.videos);
           }
       }
-      return { images, texts };
+      return { images, texts, videos };
   };
 
   // --- 批量生成：创建多个结果节点并并发执行 ---
@@ -3197,7 +3219,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                }
           }
           else if (node.type === 'llm') {
-              // LLM节点：可以处理图片+文本输入
+              // LLM节点：可以处理图片+文本+视频输入
               // 执行后创建文字节点展示结果
               const nodePrompt = node.data?.prompt || '';
               const inputTexts = inputs.texts.join('\n');
@@ -3205,8 +3227,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               const userPrompt = inputTexts || nodePrompt;
               const systemPrompt = node.data?.systemInstruction;
               const inputImages = inputs.images;
+              const inputVideos = inputs.videos;
               
-              if (!userPrompt && inputImages.length === 0) {
+              if (!userPrompt && inputImages.length === 0 && inputVideos.length === 0) {
                   updateNode(nodeId, { status: 'error' });
                   console.warn('LLM节点执行失败：无输入');
               } else {
@@ -3237,7 +3260,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   console.log(`[LLM] 已创建输出文字节点 ${outputNodeId.slice(0,8)}`);
                   
                   // 调用 LLM API
-                  const result = await generateAdvancedLLM(userPrompt, systemPrompt, inputImages);
+                  const selectedModel = node.data?.model;
+                  const result = await generateAdvancedLLM(userPrompt, systemPrompt, inputImages, selectedModel, inputVideos);
                   if (!signal.aborted) {
                       // 更新LLM节点自身的输出（供下游节点获取）
                       updateNode(nodeId, { 
@@ -3718,53 +3742,64 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               try {
                   const appName = (appInfo as any).webappName || appInfo.title || webappId;
                   
-                  // ============ 收集待上传的图片 ============
+                  // ============ 收集待上传的图片/视频 ============
                   const currentConnections = connectionsRef.current;
-                  const incomingImageConns = currentConnections.filter(c => 
+                  const incomingMediaConns = currentConnections.filter(c => 
                       c.toNode === nodeId && c.toPortKey && c.toPortKey !== 'cover'
                   );
                   
                   const pendingImageUploads: Array<{ portKey: string; imageData: string }> = [];
+                  const pendingVideoUploads: Array<{ portKey: string; videoUrl: string }> = [];
                   
-                  for (const conn of incomingImageConns) {
+                  for (const conn of incomingMediaConns) {
                       const sourceNode = nodesRef.current.find(n => n.id === conn.fromNode);
                       if (!sourceNode?.content) continue;
-                      
-                      const hasImageContent = sourceNode.content.startsWith('data:image') ||
-                          sourceNode.content.startsWith('http') ||
-                          sourceNode.content.startsWith('/files/');
-                      
-                      if (!hasImageContent) continue;
                       
                       const portKey = conn.toPortKey!;
                       // 如果已有值，跳过
                       if (nodeInputs[portKey] && nodeInputs[portKey].length > 10) continue;
                       
-                      // 转换为 base64
-                      let imageData = sourceNode.content;
-                      if (imageData.startsWith('/files/') || imageData.startsWith('http')) {
-                          const img = new Image();
-                          img.crossOrigin = 'anonymous';
-                          try {
-                              imageData = await new Promise<string>((resolve, reject) => {
-                                  img.onload = () => {
-                                      const canvas = document.createElement('canvas');
-                                      canvas.width = img.naturalWidth;
-                                      canvas.height = img.naturalHeight;
-                                      const ctx = canvas.getContext('2d');
-                                      ctx?.drawImage(img, 0, 0);
-                                      resolve(canvas.toDataURL('image/png'));
-                                  };
-                                  img.onerror = () => reject(new Error('图片加载失败'));
-                                  img.src = imageData.startsWith('/files/') ? `http://localhost:8765${imageData}` : imageData;
-                              });
-                          } catch (err) {
-                              console.error('[RH-Config] 图片转换失败:', portKey, err);
-                              continue;
-                          }
-                      }
+                      // 检测内容类型
+                      const content = sourceNode.content;
+                      const isVideo = sourceNode.type === 'video' || sourceNode.type === 'video-output' ||
+                          content.startsWith('data:video') || /\.(mp4|webm|mov|avi)($|\?)/i.test(content);
+                      const isImage = content.startsWith('data:image') ||
+                          (!isVideo && (content.startsWith('http') || content.startsWith('/files/')));
                       
-                      pendingImageUploads.push({ portKey, imageData });
+                      if (isVideo) {
+                          // 视频：转换为完整URL后上传
+                          let videoUrl = content;
+                          if (content.startsWith('/files/')) {
+                              videoUrl = `http://localhost:8765${content}`;
+                          }
+                          console.log('[RH-Config] 收集视频上传:', portKey, videoUrl.slice(0, 100));
+                          pendingVideoUploads.push({ portKey, videoUrl });
+                      } else if (isImage) {
+                          // 图片：转换为 base64
+                          let imageData = content;
+                          if (imageData.startsWith('/files/') || imageData.startsWith('http')) {
+                              const img = new Image();
+                              img.crossOrigin = 'anonymous';
+                              try {
+                                  imageData = await new Promise<string>((resolve, reject) => {
+                                      img.onload = () => {
+                                          const canvas = document.createElement('canvas');
+                                          canvas.width = img.naturalWidth;
+                                          canvas.height = img.naturalHeight;
+                                          const ctx = canvas.getContext('2d');
+                                          ctx?.drawImage(img, 0, 0);
+                                          resolve(canvas.toDataURL('image/png'));
+                                      };
+                                      img.onerror = () => reject(new Error('图片加载失败'));
+                                      img.src = imageData.startsWith('/files/') ? `http://localhost:8765${imageData}` : imageData;
+                                  });
+                              } catch (err) {
+                                  console.error('[RH-Config] 图片转换失败:', portKey, err);
+                                  continue;
+                              }
+                          }
+                          pendingImageUploads.push({ portKey, imageData });
+                      }
                   }
                   
                   // ============ 构建 nodeInfoList ============
@@ -3822,6 +3857,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       nodeInfoList,
                       batchCount,
                       pendingImageUploads: pendingImageUploads.length > 0 ? pendingImageUploads : undefined,
+                      pendingVideoUploads: pendingVideoUploads.length > 0 ? pendingVideoUploads : undefined,
                       
                       onNodeInputsUpdate: (nid, updates) => {
                           // 更新节点的 nodeInputs
