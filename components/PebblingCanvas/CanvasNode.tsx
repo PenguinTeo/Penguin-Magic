@@ -3357,25 +3357,25 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 )}
                             </div>
                             
-                            {/* Row 2: 宽高比 + 增强提示词 */}
-                            {veoMode !== 'multi-reference' && (
-                                <div className="flex gap-1.5">
-                                    <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
-                                        <button
-                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '16:9' ? (isLightCanvas ? 'bg-gray-200 text-gray-800' : 'bg-white/20 text-white') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
-                                            onClick={() => handleVideoSettingChange('veoAspectRatio', '16:9')}
-                                            onMouseDown={(e) => e.stopPropagation()}
-                                        >
-                                            16:9
-                                        </button>
-                                        <button
-                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '9:16' ? (isLightCanvas ? 'bg-gray-200 text-gray-800' : 'bg-white/20 text-white') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
-                                            onClick={() => handleVideoSettingChange('veoAspectRatio', '9:16')}
-                                            onMouseDown={(e) => e.stopPropagation()}
-                                        >
-                                            9:16
-                                        </button>
-                                    </div>
+                            {/* Row 2: 宽高比 + 增强提示词（所有模式都显示） */}
+                            <div className="flex gap-1.5">
+                                <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '16:9' ? (isLightCanvas ? 'bg-gray-200 text-gray-800' : 'bg-white/20 text-white') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
+                                        onClick={() => handleVideoSettingChange('veoAspectRatio', '16:9')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        16:9
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${veoAspectRatio === '9:16' ? (isLightCanvas ? 'bg-gray-200 text-gray-800' : 'bg-white/20 text-white') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
+                                        onClick={() => handleVideoSettingChange('veoAspectRatio', '9:16')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        9:16
+                                    </button>
+                                </div>
+                                {veoMode !== 'multi-reference' && (
                                     <button
                                         className={`px-2 py-1 text-[8px] font-medium rounded transition-all ${veoEnhancePrompt ? (isLightCanvas ? 'bg-purple-100 text-purple-700' : 'bg-purple-500/30 text-purple-300') : `${controlBg} ${isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200'}`}`}
                                         onClick={() => handleVideoSettingChange('veoEnhancePrompt', !veoEnhancePrompt)}
@@ -3384,8 +3384,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                     >
                                         {veoEnhancePrompt ? '✓ 增强' : '增强'}
                                     </button>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     )}
                     
