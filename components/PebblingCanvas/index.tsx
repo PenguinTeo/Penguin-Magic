@@ -1428,6 +1428,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // Helper: 下载视频并保存（通过后端代理，绕过CORS，节省浏览器内存）
   const downloadAndSaveVideo = async (videoUrl: string, nodeId: string, signal: AbortSignal) => {
       console.log('[Video节点] 视频生成成功, 开始后端代理下载:', videoUrl);
+      console.log('[Video节点] 目标节点ID:', nodeId);
       
       try {
           // 通过后端代理下载视频（绕过CORS，节省浏览器内存）
@@ -1437,12 +1438,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               body: JSON.stringify({ videoUrl })
           });
           
+          console.log('[Video节点] 后端响应状态:', response.status, response.ok);
+          
           if (!response.ok) {
               const errorData = await response.json().catch(() => ({}));
               throw new Error(errorData.error || `后端下载失败: ${response.status}`);
           }
           
           const result = await response.json();
+          console.log('[Video节点] 后端返回结果:', JSON.stringify(result));
           
           if (!result.success || !result.data?.url) {
               throw new Error(result.error || '后端返回数据异常');
@@ -1455,21 +1459,26 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           }
           
           const localVideoUrl = result.data.url; // 本地文件路径，如 /files/output/video_xxx.mp4
-          console.log('[Video节点] 视频已保存到本地:', result.data.filename);
+          console.log('[Video节点] 视频已保存到本地:', result.data.filename, '路径:', localVideoUrl);
           
           // 更新节点内容为本地URL（不是base64，节省内存）
           // 重要：清除 videoTaskId 和 videoTaskStatus，否则UI会一直显示生成中
+          const currentNodeData = nodesRef.current.find(n => n.id === nodeId)?.data;
+          console.log('[Video节点] 当前节点数据:', currentNodeData);
+          
           updateNode(nodeId, { 
               content: localVideoUrl, 
               status: 'completed',
               data: { 
-                  ...nodesRef.current.find(n => n.id === nodeId)?.data, 
+                  ...currentNodeData, 
                   videoTaskId: undefined,
                   videoTaskStatus: undefined, // 清除任务状态
                   videoProgress: undefined,   // 清除进度
                   videoFailReason: undefined  // 清除错误信息
               }
           });
+          
+          console.log('[Video节点] 节点已更新，content:', localVideoUrl);
           
           // 保存画布
           saveCurrentCanvas();
@@ -2234,6 +2243,43 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   updateNode(outputNodeId, { data: { videoTaskId: taskId } });
                   
                   const videoUrl = await waitForVeoCompletion(taskId, (progress, status) => {
+                      updateNode(outputNodeId, { data: { ...nodesRef.current.find(n => n.id === outputNodeId)?.data, videoProgress: progress, videoTaskStatus: status } });
+                  });
+                  
+                  if (signal.aborted) return;
+                  
+                  if (videoUrl) {
+                      await downloadAndSaveVideo(videoUrl, outputNodeId, signal);
+                  } else {
+                      throw new Error('未返回视频URL');
+                  }
+              } else if (videoService === 'grok') {
+                  // ===== Grok 视频生成 =====
+                  const { createGrokTask, waitForGrokCompletion } = await import('../../services/grokService');
+                  
+                  const grokRatio = sourceNode.data?.grokRatio || '3:2';
+                  const grokResolution = sourceNode.data?.grokResolution || '720P';
+                  
+                  console.log(`[视频批量] Grok 开始生成 ${index + 1}:`, {
+                      ratio: grokRatio,
+                      resolution: grokResolution,
+                      imagesCount: processedImages.length,
+                      prompt: combinedPrompt.slice(0, 100)
+                  });
+                  
+                  const taskId = await createGrokTask({
+                      prompt: combinedPrompt,
+                      model: 'grok-video-3',
+                      ratio: grokRatio as any,
+                      resolution: grokResolution as any,
+                      images: processedImages.length > 0 ? processedImages.slice(0, 1) : undefined  // 只支持一张参考图
+                  });
+                  
+                  console.log(`[视频批量] Grok 任务已创建 ${index + 1}, taskId:`, taskId);
+                  
+                  updateNode(outputNodeId, { data: { videoTaskId: taskId } });
+                  
+                  const videoUrl = await waitForGrokCompletion(taskId, (progress, status) => {
                       updateNode(outputNodeId, { data: { ...nodesRef.current.find(n => n.id === outputNodeId)?.data, videoProgress: progress, videoTaskStatus: status } });
                   });
                   

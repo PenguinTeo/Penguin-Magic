@@ -3046,7 +3046,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
     if (node.type === 'video') {
         // 视频配置节点 - 始终显示配置界面，视频输出到独立的 video-output 节点
         
-        // 视频服务类型: 'sora' | 'veo'
+        // 视频服务类型: 'sora' | 'veo' | 'grok'
         const videoService = node.data?.videoService || 'sora';
         
         // Sora settings
@@ -3061,6 +3061,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         const veoAspectRatio = node.data?.veoAspectRatio || '16:9';
         const veoEnhancePrompt = node.data?.veoEnhancePrompt ?? false;
         const veoEnableUpsample = node.data?.veoEnableUpsample ?? false;
+        
+        // Grok settings
+        const grokRatio = node.data?.grokRatio || '3:2';       // 2:3 | 3:2 | 1:1
+        const grokResolution = node.data?.grokResolution || '720P';  // 720P | 1080P
         
         const handleVideoSettingChange = (key: string, value: any) => {
             onUpdate(node.id, { data: { ...node.data, [key]: value } });
@@ -3097,10 +3101,22 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             >
                                 Veo3.1
                             </button>
+                            <button
+                                className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded transition-all ${
+                                    videoService === 'grok' 
+                                        ? 'bg-orange-500/30 text-orange-300' 
+                                        : 'text-zinc-500 hover:text-zinc-300'
+                                }`}
+                                onClick={() => handleVideoSettingChange('videoService', 'grok')}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            >
+                                Grok
+                            </button>
                         </div>
                     </div>
                     <span className="text-[7px] text-white/40 uppercase">
-                        {videoService === 'sora' ? 'IMG+TXT → VIDEO' : (
+                        {videoService === 'sora' ? 'IMG+TXT → VIDEO' : 
+                         videoService === 'grok' ? 'IMG+TXT → VIDEO' : (
                             veoMode === 'text2video' ? 'TXT → VIDEO' :
                             veoMode === 'image2video' ? 'IMG → VIDEO' :
                             veoMode === 'keyframes' ? '首尾帧 → VIDEO' :
@@ -3349,6 +3365,68 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             )}
                         </div>
                     )}
+                    
+                    {/* Grok Settings */}
+                    {videoService === 'grok' && (
+                        <div className="flex flex-col gap-1.5 shrink-0">
+                            {/* Row 1: 宽高比 */}
+                            <div className="flex flex-col gap-1">
+                                <span className={`text-[8px] ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'}`}>宽高比</span>
+                                <div className={`flex ${controlBg} rounded p-0.5`}>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${grokRatio === '3:2' ? (isLightCanvas ? 'bg-orange-100 text-orange-700' : 'bg-orange-500/30 text-orange-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
+                                        onClick={() => handleVideoSettingChange('grokRatio', '3:2')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title="横屏 3:2"
+                                    >
+                                        3:2
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${grokRatio === '2:3' ? (isLightCanvas ? 'bg-orange-100 text-orange-700' : 'bg-orange-500/30 text-orange-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
+                                        onClick={() => handleVideoSettingChange('grokRatio', '2:3')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title="竖屏 2:3"
+                                    >
+                                        2:3
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${grokRatio === '1:1' ? (isLightCanvas ? 'bg-orange-100 text-orange-700' : 'bg-orange-500/30 text-orange-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
+                                        onClick={() => handleVideoSettingChange('grokRatio', '1:1')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title="方形 1:1"
+                                    >
+                                        1:1
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* Row 2: 分辨率 */}
+                            <div className="flex flex-col gap-1">
+                                <span className={`text-[8px] ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'}`}>分辨率</span>
+                                <div className={`flex ${controlBg} rounded p-0.5`}>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${grokResolution === '720P' ? (isLightCanvas ? 'bg-orange-100 text-orange-700' : 'bg-orange-500/30 text-orange-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
+                                        onClick={() => handleVideoSettingChange('grokResolution', '720P')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        720P
+                                    </button>
+                                    <button
+                                        className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${grokResolution === '1080P' ? (isLightCanvas ? 'bg-orange-100 text-orange-700' : 'bg-orange-500/30 text-orange-300') : (isLightCanvas ? 'text-gray-500 hover:text-gray-700' : 'text-zinc-400 hover:text-zinc-200')}`}
+                                        onClick={() => handleVideoSettingChange('grokResolution', '1080P')}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        1080P
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* 提示：支持参考图 */}
+                            <div className={`text-[8px] ${isLightCanvas ? 'text-gray-400' : 'text-zinc-600'} text-center`}>
+                                支持一张参考图
+                            </div>
+                        </div>
+                    )}
                 </div>
                 
                 {isRunning && (
@@ -3594,6 +3672,28 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                 </button>
                             )}
                         </div>
+                    </div>
+                ) : node.status === 'completed' && !hasVideo ? (
+                    // 已完成但没有视频 - 可能是下载失败或内容丢失
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-yellow-950/30 border-2 border-yellow-500/50 rounded-xl p-4">
+                        <Icons.Info size={24} className="text-yellow-400" />
+                        <span className="text-[11px] text-yellow-400 font-medium">视频内容异常</span>
+                        <span className="text-[9px] text-yellow-400/70 text-center px-2">
+                            视频已生成但内容为空，请重试
+                        </span>
+                        {node.data?.videoUrl && onRetryVideoDownload && (
+                            <button
+                                className="px-3 py-1.5 text-[10px] font-medium bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400 rounded-lg transition-colors flex items-center gap-1.5"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onRetryVideoDownload(node.id);
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            >
+                                <Icons.Refresh size={12} />
+                                重试下载
+                            </button>
+                        )}
                     </div>
                 ) : (
                     // Loading 状态

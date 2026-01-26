@@ -3,6 +3,7 @@ import { ThirdPartyApiConfig } from '../types';
 import { useTheme, ThemeName } from '../contexts/ThemeContext';
 import { SoraConfig, getSoraConfig, saveSoraConfig } from '../services/soraService';
 import { VeoConfig, getVeoConfig, saveVeoConfig } from '../services/veoService';
+import { GrokConfig, getGrokConfig, saveGrokConfig } from '../services/grokService';
 import { getRunningHubConfig, saveRunningHubConfig } from '../services/api/runninghub';
 import { Eye as EyeIcon, EyeOff as EyeOffIcon, Check, X, RefreshCw, Moon as MoonIcon, Sun as SunIcon, Save as SaveIcon, Cpu as CpuIcon, Folder as FolderIcon, ExternalLink as ExternalLinkIcon } from 'lucide-react';
 
@@ -80,6 +81,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showSoraKey, setShowSoraKey] = useState(false);
   const [showVeoKey, setShowVeoKey] = useState(false);
+  const [showGrokKey, setShowGrokKey] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   
   const [soraConfig, setSoraConfig] = useState<SoraConfig>({
@@ -88,6 +90,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
   
   const [veoConfig, setVeoConfig] = useState<VeoConfig>({
+    apiKey: '',
+    baseUrl: 'https://ai.t8star.cn'
+  });
+
+  const [grokConfig, setGrokConfig] = useState<GrokConfig>({
     apiKey: '',
     baseUrl: 'https://ai.t8star.cn'
   });
@@ -123,6 +130,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSoraConfig({ ...savedSoraConfig, baseUrl: savedSoraConfig.baseUrl || 'https://ai.t8star.cn' });
       const savedVeoConfig = getVeoConfig();
       setVeoConfig({ ...savedVeoConfig, baseUrl: savedVeoConfig.baseUrl || 'https://ai.t8star.cn' });
+      const savedGrokConfig = getGrokConfig();
+      setGrokConfig({ ...savedGrokConfig, baseUrl: savedGrokConfig.baseUrl || 'https://ai.t8star.cn' });
       
       // 获取 RunningHub 配置
       const fetchRunningHubConfig = async () => {
@@ -196,6 +205,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSaveVeoConfig = () => {
     saveVeoConfig(veoConfig);
     setSaveSuccessMessage('Veo3.1 视频 API 已保存');
+    setTimeout(() => setSaveSuccessMessage(null), 2000);
+  };
+
+  const handleSaveGrokConfig = () => {
+    saveGrokConfig(grokConfig);
+    setSaveSuccessMessage('Grok 视频 API 已保存');
     setTimeout(() => setSaveSuccessMessage(null), 2000);
   };
 
@@ -587,6 +602,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <button className="btn btn-primary w-full" onClick={handleSaveVeoConfig}>
               保存 Veo3.1 配置
+            </button>
+          </div>
+
+          {/* Grok */}
+          <div className="config-card">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="option-icon" style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <polygon points="23 7 16 12 23 17 23 7"/>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>Grok 视频生成</h4>
+                <p className="text-xs" style={{ color: styles.textSecondary }}>Grok Video API (grok-video-3)</p>
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">API 地址</label>
+              <input
+                type="text"
+                className="form-input"
+                value={grokConfig.baseUrl}
+                onChange={(e) => setGrokConfig({ ...grokConfig, baseUrl: e.target.value })}
+                placeholder="https://ai.t8star.cn"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Grok API Key</label>
+              <div className="input-with-btn">
+                <input
+                  type={showGrokKey ? 'text' : 'password'}
+                  className="form-input"
+                  value={grokConfig.apiKey}
+                  onChange={(e) => setGrokConfig({ ...grokConfig, apiKey: e.target.value })}
+                  placeholder="sk-..."
+                />
+                <button className="input-btn" onClick={() => setShowGrokKey(!showGrokKey)}>
+                  {showGrokKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <button className="btn btn-primary w-full" onClick={handleSaveGrokConfig}>
+              保存 Grok 配置
             </button>
           </div>
         </div>

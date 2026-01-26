@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ThirdPartyApiConfig, getApiConfig, saveApiConfig, checkBalance } from '../../services/pebblingGeminiService';
 import { SoraConfig, getSoraConfig, saveSoraConfig } from '../../services/soraService';
+import { GrokConfig, getGrokConfig, saveGrokConfig } from '../../services/grokService';
 import { Icons } from './Icons';
 
 // RunningHub 配置
@@ -36,7 +37,7 @@ interface ApiSettingsProps {
 }
 
 const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'gemini' | 'sora' | 'runninghub'>('gemini');
+  const [activeTab, setActiveTab] = useState<'gemini' | 'sora' | 'grok' | 'runninghub'>('gemini');
   
   const [config, setConfig] = useState<ThirdPartyApiConfig>({
     enabled: true,
@@ -51,12 +52,18 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
     baseUrl: 'https://api.openai.com'
   });
   
+  const [grokConfig, setGrokConfig] = useState<GrokConfig>({
+    apiKey: '',
+    baseUrl: 'https://ai.t8star.cn'
+  });
+  
   const [rhConfig, setRhConfig] = useState<RHConfig>({
     apiKey: ''
   });
   
   const [showApiKey, setShowApiKey] = useState(false);
   const [showSoraKey, setShowSoraKey] = useState(false);
+  const [showGrokKey, setShowGrokKey] = useState(false);
   const [showRHKey, setShowRHKey] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -68,6 +75,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
       setConfig(savedConfig);
       const savedSoraConfig = getSoraConfig();
       setSoraConfig(savedSoraConfig);
+      const savedGrokConfig = getGrokConfig();
+      setGrokConfig(savedGrokConfig);
       const savedRHConfig = getRHConfig();
       setRhConfig(savedRHConfig);
       setSaveStatus('idle');
@@ -79,6 +88,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
     try {
       saveApiConfig(config);
       saveSoraConfig(soraConfig);
+      saveGrokConfig(grokConfig);
       saveRHConfig(rhConfig);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
@@ -140,21 +150,27 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
         <div className="flex border-b border-white/10">
           <button 
             onClick={() => setActiveTab('gemini')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'gemini' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-white/50 hover:text-white/70'}`}
+            className={`flex-1 px-3 py-3 text-xs font-medium transition-colors ${activeTab === 'gemini' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-white/50 hover:text-white/70'}`}
           >
-            T8star / Gemini
+            T8star
           </button>
           <button 
             onClick={() => setActiveTab('sora')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'sora' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-white/50 hover:text-white/70'}`}
+            className={`flex-1 px-3 py-3 text-xs font-medium transition-colors ${activeTab === 'sora' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-white/50 hover:text-white/70'}`}
           >
-            Sora 视频
+            Sora
+          </button>
+          <button 
+            onClick={() => setActiveTab('grok')}
+            className={`flex-1 px-3 py-3 text-xs font-medium transition-colors ${activeTab === 'grok' ? 'text-orange-400 border-b-2 border-orange-400' : 'text-white/50 hover:text-white/70'}`}
+          >
+            Grok
           </button>
           <button 
             onClick={() => setActiveTab('runninghub')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'runninghub' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-white/50 hover:text-white/70'}`}
+            className={`flex-1 px-3 py-3 text-xs font-medium transition-colors ${activeTab === 'runninghub' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-white/50 hover:text-white/70'}`}
           >
-            RunningHub
+            RH
           </button>
         </div>
 
@@ -254,6 +270,39 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50"
                 />
                 <p className="mt-1 text-xs text-white/40">支持第三方代理地址，如 T8star 等</p>
+              </div>
+            </>
+          ) : activeTab === 'grok' ? (
+            /* Grok 视频配置 */
+            <>
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-3 mb-2">
+                <p className="text-xs text-orange-300">ℹ️ Grok Video 视频生成服务 (grok-video-3)，支持参考图生成</p>
+              </div>
+              <div>
+                <label className="block text-sm text-white/70 mb-2">Grok API Key</label>
+                <div className="relative">
+                  <input
+                    type={showGrokKey ? 'text' : 'password'}
+                    value={grokConfig.apiKey}
+                    onChange={(e) => setGrokConfig({ ...grokConfig, apiKey: e.target.value })}
+                    placeholder="sk-xxxxxxxxxxxxxxxx"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-orange-500/50 pr-12"
+                  />
+                  <button onClick={() => setShowGrokKey(!showGrokKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 text-xs">
+                    {showGrokKey ? '隐藏' : '显示'}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-white/70 mb-2">Grok API 地址</label>
+                <input
+                  type="text"
+                  value={grokConfig.baseUrl}
+                  onChange={(e) => setGrokConfig({ ...grokConfig, baseUrl: e.target.value })}
+                  placeholder="https://ai.t8star.cn"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-orange-500/50"
+                />
+                <p className="mt-1 text-xs text-white/40">默认使用 T8star 代理服务</p>
               </div>
             </>
           ) : (

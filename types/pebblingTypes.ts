@@ -39,7 +39,7 @@ export interface NodeData {
   previewImage?: string; // 预览图片
   
   // Video Node Specifics
-  videoService?: 'sora' | 'veo';
+  videoService?: 'sora' | 'veo' | 'grok';
   videoModel?: string;
   videoSize?: string;
   videoSeconds?: string;
@@ -48,6 +48,8 @@ export interface NodeData {
   veoAspectRatio?: string;
   veoEnhancePrompt?: boolean;
   veoEnableUpsample?: boolean;
+  grokRatio?: '2:3' | '3:2' | '1:1';        // Grok 视频宽高比
+  grokResolution?: '720P' | '1080P';         // Grok 视频分辨率
   videoTaskId?: string;
   videoProgress?: number;
   videoTaskStatus?: string;
