@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-param' | 'rh-main' | 'drawing-board';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-param' | 'rh-main' | 'rh-magic' | 'drawing-board';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -143,6 +143,13 @@ export interface NodeData {
   boardHeight?: number;
   receivedImages?: string[]; // 接收到的上游图片URL列表
   outputImageUrl?: string; // 画板输出的PNG图片URL
+  
+  // RH Magic 节点（香蕉 - 全能图片PRO）
+  bananaMode?: 'text2image' | 'image2image'; // 文生图/图生图
+  bananaResolution?: '1K' | '2K' | '4K'; // 分辨率
+  bananaAspectRatio?: '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '16:9' | '9:16' | '21:9'; // 宽高比
+  bananaTaskId?: string; // 任务ID
+  bananaProgress?: string; // 进度信息
 }
 
 export interface CanvasNode {
@@ -250,6 +257,7 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
     
     case 'runninghub':
     case 'rh-config':
+    case 'rh-magic':
       return { primary: ARCTIC_COLORS.rhGreen, light: ARCTIC_COLORS.rhGreenLight };
     
     case 'drawing-board':

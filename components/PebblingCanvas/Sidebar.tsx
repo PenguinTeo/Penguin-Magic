@@ -192,9 +192,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex flex-col gap-1.5">
                 <span className={`text-[9px] font-bold ${labelText} text-center uppercase tracking-wider`}>Logic</span>
                 <DraggableButton type="llm" icon={<Icons.Sparkles />} label="LLM / Vision" onDragStart={onDragStart} onClick={() => onAdd('llm')} isLight={isLight} />
-                <DraggableButton type="idea" icon={<Icons.Magic />} label="Idea Gen" onDragStart={onDragStart} onClick={() => onAdd('idea')} isLight={isLight} />
                 <DraggableButton type="relay" icon={<Icons.Relay />} label="Relay" onDragStart={onDragStart} onClick={() => onAdd('relay')} isLight={isLight} />
                 <DraggableButton type="edit" icon={<BananaIcon />} label="Magic" onDragStart={onDragStart} onClick={() => onAdd('edit')} isLight={isLight} />
+                <DraggableButton 
+                    type="rh-magic" 
+                    icon={<span className="text-[10px]">🍌</span>} 
+                    label="RH Magic" 
+                    onDragStart={onDragStart} 
+                    onClick={() => onAdd('rh-magic')} 
+                    isLight={isLight}
+                />
                 <DraggableButton 
                     type="runninghub" 
                     icon={<span className="text-[10px] font-black">R</span>} 

@@ -2881,6 +2881,131 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         );
     }
 
+    // RH Magic节点 - 香蕉（全能图片PRO）
+    if (node.type === 'rh-magic') {
+        const bananaAspectRatio = node.data?.settings?.aspectRatio || 'AUTO';
+        const bananaResolution = node.data?.settings?.resolution || '2K';
+        const bananaOfficial = node.data?.bananaOfficial !== false; // 默认官方
+        const bananaProgress = node.data?.bananaProgress || '';
+        const aspectRatios1 = ['AUTO', '1:1', '2:3', '3:2', '3:4', '4:3'];
+        const aspectRatios2 = ['3:5', '5:3', '9:16', '16:9', '21:9'];
+        const resolutions = ['1K', '2K', '4K'];
+        
+        // 绿色主题色
+        const greenBg = isLightCanvas ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.1)';
+        const greenBorder = isLightCanvas ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)';
+        const greenText = isLightCanvas ? '#047857' : '#6ee7b7';
+        const greenTextMuted = isLightCanvas ? '#059669' : '#34d399';
+        
+        const handleBananaSettingChange = (key: string, value: any) => {
+            onUpdate(node.id, { 
+                data: { ...node.data, settings: { ...node.data?.settings, [key]: value } },
+                status: 'idle'
+            });
+        };
+        
+        return (
+            <div className="w-full h-full flex flex-col overflow-hidden rounded-xl shadow-lg relative" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${greenBorder}` }}>
+                {/* 头部 - 对标Magic */}
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${greenBorder}`, backgroundColor: greenBg }}>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm">🍌</span>
+                        <span className="text-[10px] font-bold truncate max-w-[200px]" style={{ color: greenText }}>RH Magic</span>
+                    </div>
+                    <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: greenTextMuted, backgroundColor: greenBg }}>全能图片</span>
+                </div>
+                <div className="flex-1 p-3 flex flex-col gap-2 overflow-hidden">
+                    {/* Prompt */}
+                    <div className="flex-1 min-h-0 flex flex-col">
+                        <label className="text-[10px] text-zinc-400 uppercase tracking-wider font-medium block mb-1.5 flex-shrink-0">编辑指令</label>
+                        <textarea 
+                            className={`flex-1 w-full ${controlBg} border rounded-lg px-3 py-2 text-xs outline-none resize-none overflow-y-auto scrollbar-hide transition-colors ${isLightCanvas ? 'border-gray-200 text-gray-800 focus:border-emerald-500 placeholder-gray-400' : 'border-white/10 text-zinc-200 focus:border-emerald-500/50 placeholder-zinc-600'}`}
+                            placeholder="输入编辑指令..."
+                            value={localPrompt}
+                            onChange={(e) => setLocalPrompt(e.target.value)}
+                            onBlur={handleUpdate}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        />
+                    </div>
+                </div>
+                    
+                {/* 设置区 - 对标Magic */}
+                <div className="px-3 pb-3 space-y-1.5 flex-shrink-0">
+                    {/* 官方/非官方切换 */}
+                    <div className={`flex ${controlBg} rounded-lg p-0.5`}>
+                        <button
+                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded-md transition-all ${bananaOfficial ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                            onClick={() => onUpdate(node.id, { data: { ...node.data, bananaOfficial: true } })}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            官方
+                        </button>
+                        <button
+                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded-md transition-all ${!bananaOfficial ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                            onClick={() => onUpdate(node.id, { data: { ...node.data, bananaOfficial: false } })}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            非官方
+                        </button>
+                    </div>
+                    {/* Aspect Ratio Row 1 */}
+                    <div className={`flex ${controlBg} rounded-lg p-0.5`}>
+                        {aspectRatios1.map(r => (
+                            <button
+                                key={r}
+                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${bananaAspectRatio === r ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                onClick={() => handleBananaSettingChange('aspectRatio', r)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            >
+                                {r}
+                            </button>
+                        ))}
+                    </div>
+                    {/* Aspect Ratio Row 2 */}
+                    <div className={`flex ${controlBg} rounded-lg p-0.5`}>
+                        {aspectRatios2.map(r => (
+                            <button
+                                key={r}
+                                className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${bananaAspectRatio === r ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                onClick={() => handleBananaSettingChange('aspectRatio', r)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            >
+                                {r}
+                            </button>
+                        ))}
+                    </div>
+                    {/* Resolution */}
+                    <div className={`flex ${controlBg} rounded-lg p-0.5`}>
+                        {resolutions.map(r => (
+                            <button
+                                key={r}
+                                className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${bananaResolution === r ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                onClick={() => handleBananaSettingChange('resolution', r)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                            >
+                                {r}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                
+                {/* 底部状态 - 对标Magic */}
+                <div className={`h-6 ${footerBarBg} border-t px-3 flex items-center justify-between text-[10px]`} style={{ borderColor: themeColors.headerBorder, color: themeColors.textMuted }}>
+                    <span>输入: 1/1</span>
+                    <span>{bananaAspectRatio} · {bananaResolution}</span>
+                </div>
+                
+                {/* 进度/加载覆盖层 */}
+                {isRunning && (
+                    <div className="absolute inset-0 backdrop-blur-[2px] flex flex-col items-center justify-center z-30" style={{ backgroundColor: isLightCanvas ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)' }}>
+                        <div className="w-8 h-8 border-2 border-emerald-400/50 border-t-emerald-400 rounded-full animate-spin mb-2"></div>
+                        {bananaProgress && <span className="text-xs" style={{ color: greenText }}>{bananaProgress}</span>}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     if (node.type === 'image') {
       // 检查是否有有效图片（支持 data: 、http URL 和 相对路径）
       const hasImage = node.content && (
@@ -4395,10 +4520,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
              )}
 
              {/* Execute Button with Batch Count */}
-             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config'].includes(node.type) && (
+             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config', 'rh-magic'].includes(node.type) && (
                  <div className="flex items-center gap-0.5">
                    {/* 批量数量选择器 - 对图片生成类型节点显示 */}
-                   {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config'].includes(node.type) && !isRunning && (
+                   {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config', 'rh-magic'].includes(node.type) && !isRunning && (
                      <div 
                        className="flex items-center h-8 rounded-l-lg border border-r-0 overflow-hidden"
                        style={{ 
@@ -4436,7 +4561,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                       }}
                       disabled={!isRunning && node.status === 'running'}
                       className={`h-8 px-2.5 border shadow-lg transition-colors flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed
-                          ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
+                          ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config', 'rh-magic'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
                           ${isRunning ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : ''}
                       `}
                       style={!isRunning ? {

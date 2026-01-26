@@ -1300,6 +1300,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (type === 'rh-main') { width = 280; height = 280; }
       // RH-Param 节点（独立参数 Ticket）
       if (type === 'rh-param') { width = 280; height = 56; }
+      // RH Magic 节点（香蕉 - 全能图片PRO）
+      if (type === 'rh-magic') { width = 280; height = 320; }
       // 画板节点需要更大的尺寸（约4个图片节点大小）
       if (type === 'drawing-board') { width = 800; height = 700; }
 
@@ -3619,6 +3621,140 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       console.error('BP节点执行失败:', err);
                       updateNode(nodeId, { status: 'error' });
                   }
+              }
+          }
+          // RH Magic节点（香蕉 - 全能图片PRO）
+          else if (node.type === 'rh-magic') {
+              const { executeBananaTask, uploadImageForBanana } = await import('../../services/rhBananaService');
+              
+              const nodePrompt = node.data?.prompt || '';
+              const inputTexts = inputs.texts.join('\n');
+              const combinedPrompt = inputTexts || nodePrompt;
+              const inputImages = inputs.images;
+              
+              // 获取节点设置（对标Magic结构）
+              const bananaResolution = node.data?.settings?.resolution || '2K';
+              const bananaAspectRatio = node.data?.settings?.aspectRatio || 'AUTO';
+              const bananaOfficial = node.data?.bananaOfficial !== false; // 默认官方
+              
+              // 自动判断模式：有图片连接=图生图，无图片=文生图
+              const effectiveMode = inputImages.length > 0 ? 'image2image' : 'text2image';
+              
+              console.log('[RH Magic] 执行参数:', {
+                  prompt: combinedPrompt.slice(0, 50),
+                  mode: effectiveMode,
+                  resolution: bananaResolution,
+                  aspectRatio: bananaAspectRatio,
+                  official: bananaOfficial,
+                  inputImagesCount: inputImages.length
+              });
+              
+              // 验证输入
+              if (!combinedPrompt) {
+                  console.error('[RH Magic] 无提示词');
+                  updateNode(nodeId, { status: 'error', data: { ...node.data, bananaProgress: '请输入提示词' } });
+                  return;
+              }
+              
+              try {
+                  // 更新进度
+                  updateNode(nodeId, { data: { ...node.data, bananaProgress: '准备中...' } });
+                  
+                  // 如果是图生图，需要上传图片到RH获取URL
+                  let imageUrls: string[] = [];
+                  if (effectiveMode === 'image2image' && inputImages.length > 0) {
+                      updateNode(nodeId, { data: { ...node.data, bananaProgress: '上传图片中...' } });
+                      for (const img of inputImages) {
+                          try {
+                              const url = await uploadImageForBanana(img);
+                              imageUrls.push(url);
+                              console.log('[RH Magic] 图片上传成功:', url.slice(0, 80));
+                          } catch (uploadErr) {
+                              console.error('[RH Magic] 图片上传失败:', uploadErr);
+                              throw new Error('图片上传失败');
+                          }
+                      }
+                  }
+                  
+                  // 调用API
+                  const result = await executeBananaTask(
+                      combinedPrompt,
+                      {
+                          mode: effectiveMode,
+                          resolution: bananaResolution,
+                          aspectRatio: bananaAspectRatio,
+                          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+                          official: bananaOfficial
+                      },
+                      (status, message) => {
+                          // 更新进度显示
+                          let progressText = '';
+                          switch (status) {
+                              case 'QUEUED': progressText = '排队中...'; break;
+                              case 'RUNNING': progressText = '生成中...'; break;
+                              case 'SUCCESS': progressText = '完成!'; break;
+                              default: progressText = message || status;
+                          }
+                          updateNode(nodeId, { data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, bananaProgress: progressText } });
+                      }
+                  );
+                  
+                  console.log('[RH Magic] 任务完成, 结果:', result.url.slice(0, 80));
+                  
+                  if (!signal.aborted && result.url) {
+                      // 下载图片并保存到本地
+                      let finalImageUrl = result.url;
+                      try {
+                          const { saveToOutput } = await import('../../services/api/files');
+                          const saveResult = await saveToOutput(result.url, `rh-magic-${Date.now()}.${result.outputType || 'png'}`);
+                          if (saveResult.success && saveResult.data?.url) {
+                              finalImageUrl = saveResult.data.url;
+                              console.log('[RH Magic] 图片已保存:', finalImageUrl);
+                          }
+                      } catch (saveErr) {
+                          console.warn('[RH Magic] 保存图片失败，使用远程URL:', saveErr);
+                      }
+                      
+                      // 创建输出图片节点
+                      const outputNodeId = uuid();
+                      const outputNode: CanvasNode = {
+                          id: outputNodeId,
+                          type: 'image',
+                          title: 'RH Magic 输出',
+                          content: finalImageUrl,
+                          x: node.x + node.width + 100,
+                          y: node.y,
+                          width: 300,
+                          height: 300,
+                          data: {},
+                          status: 'completed'
+                      };
+                      
+                      const newConnection: Connection = {
+                          id: uuid(),
+                          fromNode: nodeId,
+                          toNode: outputNodeId
+                      };
+                      
+                      setNodes(prev => [...prev, outputNode]);
+                      setConnections(prev => [...prev, newConnection]);
+                      nodesRef.current = [...nodesRef.current, outputNode];
+                      connectionsRef.current = [...connectionsRef.current, newConnection];
+                      
+                      updateNode(nodeId, { status: 'completed', data: { ...node.data, bananaProgress: '' } });
+                      saveCurrentCanvas();
+                      
+                      // 同步到桌面
+                      if (onImageGenerated) {
+                          onImageGenerated(finalImageUrl, combinedPrompt, currentCanvasId || undefined, canvasName);
+                      }
+                  }
+              } catch (err) {
+                  console.error('[RH Magic] 执行失败:', err);
+                  updateNode(nodeId, { 
+                      status: 'error', 
+                      data: { ...node.data, bananaProgress: err instanceof Error ? err.message : '执行失败' }
+                  });
               }
           }
           else if (node.type === 'runninghub') {

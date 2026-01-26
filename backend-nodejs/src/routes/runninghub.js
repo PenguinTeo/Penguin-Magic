@@ -521,4 +521,121 @@ router.post('/generate', async (req, res) => {
     }
 });
 
+// ============================================
+// 香蕉 (全能图片PRO) API 代理
+// ============================================
+
+/**
+ * POST /banana/text-to-image - 文生图
+ */
+router.post('/banana/text-to-image', async (req, res) => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) {
+            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+        }
+        
+        const { prompt, resolution, aspectRatio, official } = req.body;
+        if (!prompt) {
+            return res.status(400).json({ success: false, error: '缺少 prompt 参数' });
+        }
+        
+        // 根据 official 选择 API 端点
+        const endpoint = official !== false 
+            ? '/openapi/v2/rhart-image-n-pro-official/text-to-image'
+            : '/openapi/v2/rhart-image-n-pro/text-to-image';
+        
+        const body = { prompt, resolution: resolution || '2K' };
+        if (aspectRatio) body.aspectRatio = aspectRatio;
+        
+        const response = await fetch(`${RH_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(body)
+        });
+        
+        const result = await response.json();
+        res.json(result);
+    } catch (error) {
+        console.error('香蕉文生图失败:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /banana/image-to-image - 图生图
+ */
+router.post('/banana/image-to-image', async (req, res) => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) {
+            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+        }
+        
+        const { prompt, resolution, aspectRatio, imageUrls, official } = req.body;
+        if (!prompt || !imageUrls || imageUrls.length === 0) {
+            return res.status(400).json({ success: false, error: '缺少 prompt 或 imageUrls 参数' });
+        }
+        
+        // 根据 official 选择 API 端点
+        const endpoint = official !== false 
+            ? '/openapi/v2/rhart-image-n-pro-official/edit'
+            : '/openapi/v2/rhart-image-n-pro/edit';
+        
+        const body = { prompt, imageUrls };
+        if (resolution) body.resolution = resolution;
+        if (aspectRatio) body.aspectRatio = aspectRatio;
+        
+        const response = await fetch(`${RH_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(body)
+        });
+        
+        const result = await response.json();
+        res.json(result);
+    } catch (error) {
+        console.error('香蕉图生图失败:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /banana/query - 查询任务状态
+ */
+router.post('/banana/query', async (req, res) => {
+    try {
+        const apiKey = getApiKey();
+        if (!apiKey) {
+            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+        }
+        
+        const { taskId } = req.body;
+        if (!taskId) {
+            return res.status(400).json({ success: false, error: '缺少 taskId 参数' });
+        }
+        
+        const response = await fetch(`${RH_BASE_URL}/openapi/v2/query`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({ taskId })
+        });
+        
+        const result = await response.json();
+        res.json(result);
+    } catch (error) {
+        console.error('香蕉查询任务失败:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
