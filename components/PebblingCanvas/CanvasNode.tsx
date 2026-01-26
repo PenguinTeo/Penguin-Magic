@@ -170,6 +170,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   const [showToolbox, setShowToolbox] = useState(false);
   const [mediaMetadata, setMediaMetadata] = useState<{width: number, height: number, size: string, format: string, duration?: string} | null>(null);
   const [customFrameTime, setCustomFrameTime] = useState<string>(''); // 任意帧提取时间（秒）
+  const [videoFallbackToImage, setVideoFallbackToImage] = useState(false); // 视频加载失败时回退到图片
 
   const [isResizing, setIsResizing] = useState(false);
   const [openSelectKey, setOpenSelectKey] = useState<string | null>(null); // 自定义下拉框状态
@@ -3469,7 +3470,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
 
     // Video Output 节点 - 显示生成的视频 + 工具栏
     if (node.type === 'video-output') {
-        const hasVideo = node.content && (node.content.startsWith('data:video') || node.content.includes('.mp4') || node.content.includes('.webm') || node.content.startsWith('/files/'));
+        // video-output节点：只要有内容就尝试播放，不限制后缀格式
+        const hasVideo = !!node.content;
         const videoNodeColor = getNodeTypeColor(node.type);
         
         // 处理视频 URL，为 /files/ 路径添加完整 URL
@@ -3477,19 +3479,14 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         if (videoSrc.startsWith('/files/')) {
             videoSrc = `http://localhost:8765${videoSrc}`;
         }
+        // 处理可能的图片URL（RunningHub可能返回.png后缀的视频）
+        // 如果是http/https URL，直接使用
         
         return (
             <div className="w-full h-full bg-black rounded-xl overflow-hidden relative">
                 {hasVideo ? (
                     <>
-                        <video 
-                            src={videoSrc} 
-                            controls
-                            loop
-                            autoPlay
-                            muted
-                            className="w-full h-full object-contain" 
-                        />
+                        {videoFallbackToImage ? (<img src={videoSrc} alt="Output" className="w-full h-full object-contain" />) : (<video src={videoSrc} controls loop autoPlay muted className="w-full h-full object-contain" onError={() => setVideoFallbackToImage(true)} />)}
                         
                         {/* 状态标签 */}
                         <div className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded text-[9px] font-bold uppercase backdrop-blur-md bg-white/20 text-white">

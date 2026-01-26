@@ -395,6 +395,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // 上次鼠标位置，用于计算画布平移时的增量
   const lastMousePosRef = useRef<Vec2>({ x: 0, y: 0 });
   
+  // 当前鼠标在画布上的位置（用于粘贴时定位）
+  const currentMousePosRef = useRef<Vec2>({ x: 0, y: 0 });
+  
   // 缩放结束后的重绘定时器
   const zoomEndTimerRef = useRef<number | null>(null);
   
@@ -446,6 +449,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
   // API Settings Modal
   const [showApiSettings, setShowApiSettings] = useState(false);
+  const [showHelpPanel, setShowHelpPanel] = useState(false); // 使用说明面板
   const [apiConfigured, setApiConfigured] = useState(false);
 
   // 画布主题（深色/浅色）
@@ -687,7 +691,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
     // 本地化图片内容：将base64/临时URL转换为本地文件（保存到画布专属文件夹）
     const localizedNodes = await Promise.all(nodesRef.current.map(async (node) => {
       // 只处理有图片内容的节点
-      if (!node.content) return node;
+      if (!node.content) return node; if (node.type === 'video-output' || node.type === 'video') return node; // 跳过视频节点
       
       // 检查是否是需要本地化的内容
       const isBase64 = node.content.startsWith('data:image');
@@ -1087,16 +1091,25 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       
       const newNodes: CanvasNode[] = [];
       const idMap = new Map<string, string>(); // Old ID -> New ID
+      
+      // 获取当前鼠标位置作为粘贴基准点
+      const pasteBaseX = currentMousePosRef.current.x;
+      const pasteBaseY = currentMousePosRef.current.y;
+      
+      // 计算剪贴板节点的边界（用于定位到鼠标位置）
+      const clipboardNodes = clipboardRef.current;
+      const minX = Math.min(...clipboardNodes.map(n => n.x));
+      const minY = Math.min(...clipboardNodes.map(n => n.y));
 
-      // Create new nodes
+      // Create new nodes - 根据鼠标位置偏移
       clipboardRef.current.forEach(node => {
           const newId = uuid();
           idMap.set(node.id, newId);
           newNodes.push({
               ...node,
               id: newId,
-              x: node.x + 50, // Offset
-              y: node.y + 50,
+              x: pasteBaseX + (node.x - minX),
+              y: pasteBaseY + (node.y - minY),
               status: 'idle' // Reset status
           });
       });
@@ -1409,6 +1422,61 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           n.id === id ? { ...n, ...updates } : n
       ));
   }, []);
+
+  // 辅助函数：更新节点内容并根据图片实际尺寸调整节点尺寸
+  const updateNodeWithImageSize = useCallback((nodeId: string, imageUrl: string, status: 'completed' | 'error') => {
+      if (!imageUrl) {
+          updateNode(nodeId, { content: '', status });
+          return;
+      }
+      
+      // 先更新内容
+      updateNode(nodeId, { content: imageUrl, status });
+      
+      // 异步获取图片尺寸并更新节点尺寸
+      const img = new Image();
+      img.onload = () => {
+          const aspectRatio = img.width / img.height;
+          const DEFAULT_NODE_WIDTH = 300;
+          const nodeWidth = DEFAULT_NODE_WIDTH;
+          const nodeHeight = nodeWidth / aspectRatio;
+          
+          // 更新节点尺寸
+          setNodes(prev => prev.map(n => 
+              n.id === nodeId ? { 
+                  ...n, 
+                  width: nodeWidth, 
+                  height: nodeHeight,
+                  data: {
+                      ...n.data,
+                      settings: {
+                          ...(n.data?.settings || {}),
+                          originalWidth: img.width,
+                          originalHeight: img.height,
+                          aspectRatio: `${img.width}:${img.height}`
+                      }
+                  }
+              } : n
+          ));
+          nodesRef.current = nodesRef.current.map(n => 
+              n.id === nodeId ? { 
+                  ...n, 
+                  width: nodeWidth, 
+                  height: nodeHeight,
+                  data: {
+                      ...n.data,
+                      settings: {
+                          ...(n.data?.settings || {}),
+                          originalWidth: img.width,
+                          originalHeight: img.height,
+                          aspectRatio: `${img.width}:${img.height}`
+                      }
+                  }
+              } : n
+          );
+      };
+      img.src = imageUrl;
+  }, [updateNode]);
 
   // --- EXECUTION LOGIC ---
 
@@ -2629,7 +2697,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   
                   const result = await generateCreativeImage(combinedPrompt, imgConfig, signal);
                   if (!signal.aborted) {
-                      updateNode(nodeId, { content: result || '', status: result ? 'completed' : 'error' });
+                      updateNodeWithImageSize(nodeId, result || '', result ? 'completed' : 'error');
                       // 立即保存画布（避免切换TAB时数据丢失）
                       saveCurrentCanvas();
                       // 同步到桌面
@@ -2665,7 +2733,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   console.log('[Image节点] 图生图配置:', { imgAspectRatio, imgResolution, imgConfig });
                   const result = await editCreativeImage(imageSource, combinedPrompt, imgConfig, signal);
                   if (!signal.aborted) {
-                      updateNode(nodeId, { content: result || '', status: result ? 'completed' : 'error' });
+                      updateNodeWithImageSize(nodeId, result || '', result ? 'completed' : 'error');
                       // 立即保存画布（避免切换TAB时数据丢失）
                       saveCurrentCanvas();
                       // 同步到桌面
@@ -3711,6 +3779,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   }) || [];
                   
                   // ============ 创建输出节点（提前创建，显示排队状态） ============
+                  // 根据应用名称预判是否是视频输出
+                  const isVideoApp = /video|视频|动画|animation/i.test(appName);
+                  const outputNodeType = 'image'; // 先创建image类型，任务完成后根据实际fileType决定
+                  
                   const outputNodes: { id: string; batchIndex: number }[] = [];
                   for (let batchIdx = 0; batchIdx < batchCount; batchIdx++) {
                       const outputNodeId = uuid();
@@ -3720,8 +3792,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           content: '',
                           x: node.x + node.width + 100,
                           y: node.y + (batchIdx * 420),
-                          width: 400,
-                          height: 400,
+                          width: isVideoApp ? 400 : 400,
+                          height: isVideoApp ? 300 : 400,
                           data: {},
                           status: 'running' // 显示加载状态
                       };
@@ -3776,24 +3848,49 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           if (result.outputs?.length) {
                               const output = result.outputs[0];
                               const outputUrl = output.fileUrl;
-                              const outputType = output.fileType === 'video' ? 'video' : 'image';
+                              // 判断是否是视频：优先用应用名称判断，其次检查fileType或URL扩展名
+                              const fileTypeLower = output.fileType?.toLowerCase() || ''; const isImageFile = /^(png|jpg|jpeg|gif|webp|bmp|image)$/i.test(fileTypeLower); const isVideoFile = /^(mp4|webm|mov|avi|mkv|video)$/i.test(fileTypeLower); const isVideo = !isImageFile && (isVideoFile || isVideoApp || 
+                                              output.fileType?.toLowerCase() === 'video' || 
+                                              /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(outputUrl));
+                              const outputType = isVideo ? 'video' : 'image';
                               
-                              console.log(`[RH-Config] 任务完成:`, { batchIndex, outputUrl, status });
+                              console.log(`[RH-Config] 任务完成:`, { batchIndex, outputUrl, outputType, isVideoApp, fileType: output.fileType, status });
                               
-                              // 先立即更新节点内容，不等 metadata
-                              updateNode(outputNode.id, {
-                                  content: outputUrl,
-                                  status: 'completed'
-                              });
+                              // 根据输出类型更新节点
+                              if (outputType === 'video') {
+                                  // 视频输出：更新为video-output类型，并获取视频尺寸
+                                  updateNode(outputNode.id, {
+                                      type: 'video-output',
+                                      content: outputUrl,
+                                      status: 'completed'
+                                  });
+                                  // 获取视频尺寸并更新节点
+                                  const video = document.createElement('video');
+                                  video.onloadedmetadata = () => {
+                                      const aspectRatio = video.videoWidth / video.videoHeight;
+                                      const DEFAULT_NODE_WIDTH = 300;
+                                      const nodeWidth = DEFAULT_NODE_WIDTH;
+                                      const nodeHeight = nodeWidth / aspectRatio;
+                                      setNodes(prev => prev.map(n =>
+                                          n.id === outputNode.id ? { ...n, width: nodeWidth, height: nodeHeight } : n
+                                      ));
+                                  };
+                                  video.src = outputUrl;
+                              } else {
+                                  // 图片输出：先立即更新节点内容，然后获取尺寸
+                                  updateNodeWithImageSize(outputNode.id, outputUrl, 'completed');
+                              }
                               
                               // 异步获取 metadata（不阻塞）
-                              extractImageMetadata(outputUrl).then(metadata => {
-                                  updateNode(outputNode.id, {
-                                      data: { imageMetadata: metadata }
+                              if (outputType === 'image') {
+                                  extractImageMetadata(outputUrl).then(metadata => {
+                                      updateNode(outputNode.id, {
+                                          data: { imageMetadata: metadata }
+                                      });
+                                  }).catch(err => {
+                                      console.warn(`[RH-Config] 获取图片元数据失败:`, err);
                                   });
-                              }).catch(err => {
-                                  console.warn(`[RH-Config] 获取图片元数据失败:`, err);
-                              });
+                              }
                               
                               // 同步到桌面
                               if (outputType === 'image' && onImageGenerated) {
@@ -4036,43 +4133,77 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
     // 2. Handle File Drop (OS Files)
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        Array.from(e.dataTransfer.files).forEach((item, index) => {
-            const file = item as File;
-            const offsetX = x + (index * 20); // Stagger multiple files slightly
-            const offsetY = y + (index * 20);
-
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    if (ev.target?.result) {
-                        addNode('image', ev.target.result as string, { x: offsetX, y: offsetY });
-                    }
-                };
-                reader.readAsDataURL(file);
-            } else if (file.type.startsWith('video/')) {
-                // 🆕 视频拖入：创建 video-output 节点直接展示视频
-                const reader = new FileReader();
-                reader.onload = async (ev) => {
-                    if (ev.target?.result) {
-                        // 保存视频到 output 目录
-                        const base64Data = ev.target.result as string;
-                        try {
-                            const { saveVideoToOutput } = await import('@/services/api/files');
-                            const result = await saveVideoToOutput(base64Data, `video_${Date.now()}.mp4`);
-                            if (result.success && result.data?.url) {
-                                addNode('video-output', result.data.url, { x: offsetX, y: offsetY }, file.name);
-                            } else {
-                                // 保存失败，直接使用 base64
-                                addNode('video-output', base64Data, { x: offsetX, y: offsetY }, file.name);
+        const allFiles = Array.from(e.dataTransfer.files) as File[];
+        const imageFiles = allFiles.filter((f: File) => f.type.startsWith('image/'));
+        const videoFiles = allFiles.filter((f: File) => f.type.startsWith('video/'));
+        
+        // 处理多图拖拽 - 水平铺开排列
+        const NODE_GAP = 30; // 节点间距
+        const DEFAULT_NODE_WIDTH = 300;
+        let currentX = x;
+        
+        imageFiles.forEach((file: File, index: number) => {
+            const reader = new FileReader();
+            const nodeX = currentX + index * (DEFAULT_NODE_WIDTH + NODE_GAP);
+            reader.onload = (ev) => {
+                if (ev.target?.result) {
+                    const imageData = ev.target.result as string;
+                    // 获取图片实际尺寸后创建节点
+                    const img = new Image();
+                    img.onload = () => {
+                        const aspectRatio = img.width / img.height;
+                        const nodeWidth = DEFAULT_NODE_WIDTH;
+                        const nodeHeight = nodeWidth / aspectRatio;
+                        addNode('image', imageData, { x: nodeX, y }, file.name, {
+                            settings: { 
+                                originalWidth: img.width, 
+                                originalHeight: img.height,
+                                aspectRatio: `${img.width}:${img.height}`
                             }
-                        } catch (err) {
+                        });
+                        // 更新节点尺寸
+                        setTimeout(() => {
+                            setNodes(prev => prev.map(n => 
+                                n.content === imageData ? { ...n, width: nodeWidth, height: nodeHeight } : n
+                            ));
+                        }, 50);
+                    };
+                    img.onerror = () => {
+                        // 图片加载失败，使用默认尺寸
+                        addNode('image', imageData, { x: nodeX, y }, file.name);
+                    };
+                    img.src = imageData;
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        // 处理视频文件
+        videoFiles.forEach((file: File, index: number) => {
+            const offsetX = x + index * (400 + NODE_GAP);
+            const offsetY = y;
+            // 🆕 视频拖入：创建 video-output 节点直接展示视频
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                if (ev.target?.result) {
+                    // 保存视频到 output 目录
+                    const base64Data = ev.target.result as string;
+                    try {
+                        const { saveVideoToOutput } = await import('@/services/api/files');
+                        const result = await saveVideoToOutput(base64Data, `video_${Date.now()}.mp4`);
+                        if (result.success && result.data?.url) {
+                            addNode('video-output', result.data.url, { x: offsetX, y: offsetY }, file.name);
+                        } else {
                             // 保存失败，直接使用 base64
                             addNode('video-output', base64Data, { x: offsetX, y: offsetY }, file.name);
                         }
+                    } catch (err) {
+                        // 保存失败，直接使用 base64
+                        addNode('video-output', base64Data, { x: offsetX, y: offsetY }, file.name);
                     }
-                };
-                reader.readAsDataURL(file);
-            }
+                }
+            };
+            reader.readAsDataURL(file);
         });
     }
   };
@@ -4110,6 +4241,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   const onMouseMove = (e: React.MouseEvent) => {
       const clientX = e.clientX;
       const clientY = e.clientY;
+      
+      // 更新当前鼠标在画布坐标系中的位置（用于粘贴定位）
+      const container = containerRef.current;
+      if (container) {
+          const rect = container.getBoundingClientRect();
+          currentMousePosRef.current = {
+              x: (clientX - rect.left - canvasOffset.x) / scale,
+              y: (clientY - rect.top - canvasOffset.y) / scale
+          };
+      }
       
       // 1. Pan Canvas - 使用 RAF 批量更新
       if (isDraggingCanvas) {
@@ -4818,8 +4959,25 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         hasUnsavedChanges={hasUnsavedChanges}
       />
       
-      {/* 平移模式切换按钮 */}
+      {/* 平移模式切换按钮和帮助按钮 */}
       <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+        {/* 帮助按钮 */}
+        <button
+          onClick={() => setShowHelpPanel(!showHelpPanel)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            showHelpPanel 
+              ? 'bg-purple-500 hover:bg-purple-600 text-white shadow-lg' 
+              : 'bg-gray-700/50 hover:bg-gray-600/70 text-gray-300'
+          }`}
+          style={{
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+          title="使用说明"
+        >
+          ?
+        </button>
+        
         <button
           onClick={() => setIsPanMode(!isPanMode)}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
@@ -4846,6 +5004,105 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           </div>
         )}
       </div>
+      
+      {/* 使用说明面板 */}
+      {showHelpPanel && (
+        <div 
+          className="absolute top-14 right-4 z-50 w-80 rounded-xl shadow-2xl overflow-hidden"
+          style={{
+            backgroundColor: 'rgba(20, 20, 25, 0.95)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
+          <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+            <span className="text-sm font-bold text-white">画布使用说明</span>
+            <button 
+              onClick={() => setShowHelpPanel(false)}
+              className="w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="p-4 space-y-3 text-xs text-gray-300 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-2">
+              <div className="font-bold text-white text-sm mb-2">🎯 画布操作</div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-300 font-mono text-[10px] shrink-0">Space + 拖拽</span>
+                <span className="text-gray-400">平移画布</span>
+              </div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-300 font-mono text-[10px] shrink-0">滚轮</span>
+                <span className="text-gray-400">缩放画布</span>
+              </div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-300 font-mono text-[10px] shrink-0">Ctrl/⌘ + 拖拽</span>
+                <span className="text-gray-400">框选多个节点</span>
+              </div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-blue-500/30 text-blue-300 font-mono text-[10px] shrink-0">中键拖拽</span>
+                <span className="text-gray-400">平移画布</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2 pt-2 border-t border-white/10">
+              <div className="font-bold text-white text-sm mb-2">🔗 节点操作</div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-green-500/30 text-green-300 font-mono text-[10px] shrink-0">拖拽连接点</span>
+                <span className="text-gray-400">连接节点</span>
+              </div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-green-500/30 text-green-300 font-mono text-[10px] shrink-0">Delete / Backspace</span>
+                <span className="text-gray-400">删除选中节点</span>
+              </div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-green-500/30 text-green-300 font-mono text-[10px] shrink-0">Ctrl/⌘ + C</span>
+                <span className="text-gray-400">复制节点</span>
+              </div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-green-500/30 text-green-300 font-mono text-[10px] shrink-0">Ctrl/⌘ + V</span>
+                <span className="text-gray-400">粘贴到光标位置</span>
+              </div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-green-500/30 text-green-300 font-mono text-[10px] shrink-0">Ctrl/⌘ + A</span>
+                <span className="text-gray-400">全选节点</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2 pt-2 border-t border-white/10">
+              <div className="font-bold text-white text-sm mb-2">📷 图片操作</div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300 font-mono text-[10px] shrink-0">拖入图片</span>
+                <span className="text-gray-400">支持多图拖拽，自动水平铺开</span>
+              </div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300 font-mono text-[10px] shrink-0">点击执行按钮</span>
+                <span className="text-gray-400">执行节点任务（生成图片/视频）</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2 pt-2 border-t border-white/10">
+              <div className="font-bold text-white text-sm mb-2">💡 拖拽时技巧</div>
+              
+              <div className="flex items-start gap-2 p-2 rounded-lg bg-white/5">
+                <span className="px-1.5 py-0.5 rounded bg-yellow-500/30 text-yellow-300 font-mono text-[10px] shrink-0">Space + 拖拽节点</span>
+                <span className="text-gray-400">同时平移画布和节点</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       <div
         ref={containerRef}
