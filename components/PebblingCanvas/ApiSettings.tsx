@@ -64,7 +64,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
         if (result.success && result.data) {
           setRhConfig({
             apiKey: '', // 不显示真实 key，只用于输入新的
-            configured: result.data.configured
+            configured: result.data.appConfigured // 这里用会员消费API的状态
           });
         }
       }).catch(console.error);
@@ -80,9 +80,9 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
       saveSoraConfig(soraConfig);
       saveGrokConfig(grokConfig);
       
-      // 只有输入了新的 API Key 才保存到后端
+      // 只有输入了新的 API Key 才保存到后端（这里统一配置会员消费API）
       if (rhConfig.apiKey.trim()) {
-        const result = await saveRunningHubConfig(rhConfig.apiKey.trim());
+        const result = await saveRunningHubConfig({ appApiKey: rhConfig.apiKey.trim() });
         if (result.success) {
           setRhConfig({ apiKey: '', configured: true });
         }
