@@ -100,7 +100,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   });
 
   const [runningHubConfig, setRunningHubConfig] = useState({
-    apiKey: '',
+    appApiKey: '',
+    magicApiKey: '',
     baseUrl: 'https://api.runninghub.fun'
   });
 
@@ -113,8 +114,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isMigrating, setIsMigrating] = useState(false);
   
   // RunningHub 相关状态
-  const [showRunningHubKey, setShowRunningHubKey] = useState(false);
-  const [isRhConfigured, setIsRhConfigured] = useState(false);
+  const [showRunningHubAppKey, setShowRunningHubAppKey] = useState(false);
+  const [showRunningHubMagicKey, setShowRunningHubMagicKey] = useState(false);
+  const [isRhAppConfigured, setIsRhAppConfigured] = useState(false);
+  const [isRhMagicConfigured, setIsRhMagicConfigured] = useState(false);
 
   useEffect(() => {
     setLocalThirdPartyUrl(thirdPartyConfig.baseUrl || 'https://ai.t8star.cn');
@@ -139,23 +142,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         try {
           const result = await getRunningHubConfig();
           if (result.success && result.data) {
-            setIsRhConfigured(result.data.configured);
+            setIsRhAppConfigured(result.data.appConfigured || false);
+            setIsRhMagicConfigured(result.data.magicConfigured || false);
             setRunningHubConfig({
-              apiKey: '', // 不显示真实密钥，只用于输入新的
+              appApiKey: '', // 不显示真实密钥，只用于输入新的
+              magicApiKey: '',
               baseUrl: result.data.baseUrl || 'https://api.runninghub.fun'
             });
           } else {
-            setIsRhConfigured(false);
+            setIsRhAppConfigured(false);
+            setIsRhMagicConfigured(false);
             setRunningHubConfig({
-              apiKey: '',
+              appApiKey: '',
+              magicApiKey: '',
               baseUrl: 'https://api.runninghub.fun'
             });
           }
         } catch (error) {
           console.error('获取 RunningHub 配置失败:', error);
-          setIsRhConfigured(false);
+          setIsRhAppConfigured(false);
+          setIsRhMagicConfigured(false);
           setRunningHubConfig({
-            apiKey: '',
+            appApiKey: '',
+            magicApiKey: '',
             baseUrl: 'https://api.runninghub.fun'
           });
         }
@@ -218,27 +227,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTimeout(() => setSaveSuccessMessage(null), 2000);
   };
 
-  const handleSaveRunningHubConfig = async () => {
-    if (!runningHubConfig.apiKey.trim()) {
-      setSaveSuccessMessage('请输入 API Key');
+  const handleSaveRunningHubAppConfig = async () => {
+    if (!runningHubConfig.appApiKey.trim()) {
+      setSaveSuccessMessage('请输入会员消费 API Key');
       setTimeout(() => setSaveSuccessMessage(null), 2000);
       return;
     }
     try {
-      const result = await saveRunningHubConfig(runningHubConfig.apiKey.trim());
+      const result = await saveRunningHubConfig({ appApiKey: runningHubConfig.appApiKey.trim() });
       if (result.success) {
-        setSaveSuccessMessage('RunningHub API 已保存');
-        setIsRhConfigured(true);
-        // 重置输入框
+        setSaveSuccessMessage('会员消费 API 已保存');
+        setIsRhAppConfigured(true);
         setRunningHubConfig(prev => ({
           ...prev,
-          apiKey: ''
+          appApiKey: ''
         }));
       } else {
         setSaveSuccessMessage(result.error || '保存失败');
       }
     } catch (error) {
-      console.error('保存 RunningHub 配置失败:', error);
+      console.error('保存配置失败:', error);
+      setSaveSuccessMessage('保存失败');
+    }
+    setTimeout(() => setSaveSuccessMessage(null), 2000);
+  };
+
+  const handleSaveRunningHubMagicConfig = async () => {
+    if (!runningHubConfig.magicApiKey.trim()) {
+      setSaveSuccessMessage('请输入企业共享 API Key');
+      setTimeout(() => setSaveSuccessMessage(null), 2000);
+      return;
+    }
+    try {
+      const result = await saveRunningHubConfig({ magicApiKey: runningHubConfig.magicApiKey.trim() });
+      if (result.success) {
+        setSaveSuccessMessage('企业共享 API 已保存');
+        setIsRhMagicConfigured(true);
+        setRunningHubConfig(prev => ({
+          ...prev,
+          magicApiKey: ''
+        }));
+      } else {
+        setSaveSuccessMessage(result.error || '保存失败');
+      }
+    } catch (error) {
+      console.error('保存配置失败:', error);
       setSaveSuccessMessage('保存失败');
     }
     setTimeout(() => setSaveSuccessMessage(null), 2000);
@@ -345,12 +378,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       
       {/* 弹窗 */}
       <div 
-        className="settings-modal relative w-full max-w-[480px] rounded-[20px] overflow-hidden animate-fade-in flex flex-col"
+        className="settings-modal relative w-full max-w-[900px] rounded-[20px] overflow-hidden animate-fade-in flex flex-col"
         style={{
           background: styles.modalBg,
           border: `1px solid ${styles.border}`,
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-          maxHeight: '85vh'
+          maxHeight: '85vh',
+          width: '70vw',
+          minWidth: '600px'
         }}
       >
         {/* 保存成功提示 */}
@@ -389,7 +424,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* 内容区 */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-8 py-5 space-y-5 custom-scrollbar">
           
           {/* API CONNECTION */}
           <div>
@@ -526,7 +561,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* VIDEO API */}
           <div>
             <div className="section-title">VIDEO API</div>
-            
+            <div className="grid grid-cols-3 gap-4">
             {/* Sora */}
             <div className="config-card">
               <div className="flex items-center gap-3 mb-4">
@@ -537,8 +572,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </svg>
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>Sora 视频生成</h4>
-                  <p className="text-xs" style={{ color: styles.textSecondary }}>OpenAI Sora API 或兼容服务</p>
+                  <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>Sora</h4>
+                  <p className="text-xs" style={{ color: styles.textSecondary }}>OpenAI Sora API</p>
                 </div>
               </div>
               <div className="form-group">
@@ -552,7 +587,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Sora API Key</label>
+                <label className="form-label">API Key</label>
                 <div className="input-with-btn">
                   <input
                     type={showSoraKey ? 'text' : 'password'}
@@ -567,7 +602,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
               <button className="btn btn-primary w-full" onClick={handleSaveSoraConfig}>
-                保存 Sora 配置
+                保存
               </button>
             </div>
 
@@ -581,8 +616,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </svg>
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>Veo 3.1 视频生成</h4>
-                  <p className="text-xs" style={{ color: styles.textSecondary }}>Google Veo3.1 API，支持文生/图生</p>
+                  <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>Veo 3.1</h4>
+                  <p className="text-xs" style={{ color: styles.textSecondary }}>Google Veo API</p>
                 </div>
               </div>
               <div className="form-group">
@@ -596,7 +631,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Veo API Key</label>
+                <label className="form-label">API Key</label>
                 <div className="input-with-btn">
                   <input
                     type={showVeoKey ? 'text' : 'password'}
@@ -611,60 +646,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
               <button className="btn btn-primary w-full" onClick={handleSaveVeoConfig}>
-              保存 Veo3.1 配置
-            </button>
-          </div>
+                保存
+              </button>
+            </div>
 
-          {/* Grok */}
-          <div className="config-card">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="option-icon" style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                  <polygon points="23 7 16 12 23 17 23 7"/>
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                </svg>
+            {/* Grok */}
+            <div className="config-card">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="option-icon" style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <polygon points="23 7 16 12 23 17 23 7"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>Grok</h4>
+                  <p className="text-xs" style={{ color: styles.textSecondary }}>Grok Video API</p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>Grok 视频生成</h4>
-                <p className="text-xs" style={{ color: styles.textSecondary }}>Grok Video API (grok-video-3)</p>
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">API 地址</label>
-              <input
-                type="text"
-                className="form-input"
-                value={grokConfig.baseUrl}
-                onChange={(e) => setGrokConfig({ ...grokConfig, baseUrl: e.target.value })}
-                placeholder="https://ai.t8star.cn"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Grok API Key</label>
-              <div className="input-with-btn">
+              <div className="form-group">
+                <label className="form-label">API 地址</label>
                 <input
-                  type={showGrokKey ? 'text' : 'password'}
+                  type="text"
                   className="form-input"
-                  value={grokConfig.apiKey}
-                  onChange={(e) => setGrokConfig({ ...grokConfig, apiKey: e.target.value })}
-                  placeholder="sk-..."
+                  value={grokConfig.baseUrl}
+                  onChange={(e) => setGrokConfig({ ...grokConfig, baseUrl: e.target.value })}
+                  placeholder="https://ai.t8star.cn"
                 />
-                <button className="input-btn" onClick={() => setShowGrokKey(!showGrokKey)}>
-                  {showGrokKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-                </button>
               </div>
+              <div className="form-group">
+                <label className="form-label">API Key</label>
+                <div className="input-with-btn">
+                  <input
+                    type={showGrokKey ? 'text' : 'password'}
+                    className="form-input"
+                    value={grokConfig.apiKey}
+                    onChange={(e) => setGrokConfig({ ...grokConfig, apiKey: e.target.value })}
+                    placeholder="sk-..."
+                  />
+                  <button className="input-btn" onClick={() => setShowGrokKey(!showGrokKey)}>
+                    {showGrokKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <button className="btn btn-primary w-full" onClick={handleSaveGrokConfig}>
+                保存
+              </button>
             </div>
-            <button className="btn btn-primary w-full" onClick={handleSaveGrokConfig}>
-              保存 Grok 配置
-            </button>
+            </div>
           </div>
-        </div>
 
         {/* RUNNINGHUB API */}
         <div>
           <div className="section-title">RUNNINGHUB API</div>
-          
-          {/* RunningHub */}
+          <div className="grid grid-cols-2 gap-4">
+          {/* 会员消费 API (AI 应用) */}
           <div className="config-card">
             <div className="flex items-center gap-3 mb-4">
               <div className="option-icon" style={{ background: `linear-gradient(135deg, #10b981, #059669)` }}>
@@ -674,10 +710,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </svg>
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>RunningHub AI应用</h4>
-                <p className="text-xs" style={{ color: styles.textSecondary }}>配置RunningHub API Key以使用AI应用</p>
+                <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>会员消费 API</h4>
+                <p className="text-xs" style={{ color: styles.textSecondary }}>用于 AI 应用节点</p>
               </div>
-              {isRhConfigured && (
+              {isRhAppConfigured && (
                 <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
                   <Check className="w-3 h-3" />
                   <span>已配置</span>
@@ -685,35 +721,67 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
             </div>
             <div className="form-group">
-              <label className="form-label">API 地址</label>
-              <input
-                type="text"
-                className="form-input"
-                value={runningHubConfig.baseUrl}
-                onChange={(e) => setRunningHubConfig({ ...runningHubConfig, baseUrl: e.target.value })}
-                placeholder="https://api.runninghub.fun"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">RunningHub API Key</label>
+              <label className="form-label">API Key</label>
               <div className="input-with-btn">
                 <input
-                  type={showRunningHubKey ? 'text' : 'password'}
+                  type={showRunningHubAppKey ? 'text' : 'password'}
                   className="form-input"
-                  value={runningHubConfig.apiKey}
-                  onChange={(e) => setRunningHubConfig({ ...runningHubConfig, apiKey: e.target.value })}
-                  placeholder={isRhConfigured ? '输入新 Key 更新' : '输入你的 RunningHub API Key'}
+                  value={runningHubConfig.appApiKey}
+                  onChange={(e) => setRunningHubConfig({ ...runningHubConfig, appApiKey: e.target.value })}
+                  placeholder={isRhAppConfigured ? '输入新 Key 更新' : '输入会员消费 API Key'}
                 />
-                <button className="input-btn" onClick={() => setShowRunningHubKey(!showRunningHubKey)}>
-                  {showRunningHubKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                <button className="input-btn" onClick={() => setShowRunningHubAppKey(!showRunningHubAppKey)}>
+                  {showRunningHubAppKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                 </button>
               </div>
             </div>
-            <button className="btn btn-primary w-full" onClick={handleSaveRunningHubConfig}>
-              保存 RunningHub 配置
+            <button className="btn btn-primary w-full" onClick={handleSaveRunningHubAppConfig}>
+              保存
             </button>
           </div>
+
+          {/* 企业共享 API (RH Magic) */}
+          <div className="config-card">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="option-icon" style={{ background: `linear-gradient(135deg, #8b5cf6, #7c3aed)` }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>企业共享 API</h4>
+                <p className="text-xs" style={{ color: styles.textSecondary }}>用于 RH Magic 节点</p>
+              </div>
+              {isRhMagicConfigured && (
+                <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>
+                  <Check className="w-3 h-3" />
+                  <span>已配置</span>
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label">API Key</label>
+              <div className="input-with-btn">
+                <input
+                  type={showRunningHubMagicKey ? 'text' : 'password'}
+                  className="form-input"
+                  value={runningHubConfig.magicApiKey}
+                  onChange={(e) => setRunningHubConfig({ ...runningHubConfig, magicApiKey: e.target.value })}
+                  placeholder={isRhMagicConfigured ? '输入新 Key 更新' : '输入企业共享 API Key'}
+                />
+                <button className="input-btn" onClick={() => setShowRunningHubMagicKey(!showRunningHubMagicKey)}>
+                  {showRunningHubMagicKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <button className="btn btn-primary w-full" onClick={handleSaveRunningHubMagicConfig}>
+              保存
+            </button>
+          </div>
+          </div>
         </div>
+
 
         {/* THEME */}
           <div>

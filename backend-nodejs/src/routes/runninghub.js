@@ -27,19 +27,36 @@ const upload = multer({
 // ============================================
 
 /**
- * 获取存储的 RunningHub API Key
+ * 获取存储的 RunningHub 会员消费 API Key (用于 AI 应用)
  */
-function getApiKey() {
+function getAppApiKey() {
     const settings = JsonStorage.load(config.SETTINGS_FILE, {});
-    return settings.runningHubApiKey || '';
+    return settings.runningHubAppApiKey || '';
 }
 
 /**
- * 设置 RunningHub API Key
+ * 获取存储的 RunningHub 企业共享 API Key (用于 RH Magic)
  */
-function setApiKey(apiKey) {
+function getMagicApiKey() {
     const settings = JsonStorage.load(config.SETTINGS_FILE, {});
-    settings.runningHubApiKey = apiKey;
+    return settings.runningHubMagicApiKey || '';
+}
+
+/**
+ * 设置 RunningHub 会员消费 API Key
+ */
+function setAppApiKey(apiKey) {
+    const settings = JsonStorage.load(config.SETTINGS_FILE, {});
+    settings.runningHubAppApiKey = apiKey;
+    JsonStorage.save(config.SETTINGS_FILE, settings);
+}
+
+/**
+ * 设置 RunningHub 企业共享 API Key
+ */
+function setMagicApiKey(apiKey) {
+    const settings = JsonStorage.load(config.SETTINGS_FILE, {});
+    settings.runningHubMagicApiKey = apiKey;
     JsonStorage.save(config.SETTINGS_FILE, settings);
 }
 
@@ -79,13 +96,18 @@ async function proxyToRH(endpoint, method, body, headers = {}) {
  */
 router.get('/config', (req, res) => {
     try {
-        const apiKey = getApiKey();
+        const appApiKey = getAppApiKey();
+        const magicApiKey = getMagicApiKey();
         res.json({
             success: true,
             data: {
-                configured: !!apiKey,
-                baseUrl: RH_BASE_URL,
-                apiKeyPreview: apiKey ? `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}` : null
+                // 会员消费 API (AI 应用)
+                appConfigured: !!appApiKey,
+                appApiKeyPreview: appApiKey ? `${appApiKey.slice(0, 8)}...${appApiKey.slice(-4)}` : null,
+                // 企业共享 API (RH Magic)
+                magicConfigured: !!magicApiKey,
+                magicApiKeyPreview: magicApiKey ? `${magicApiKey.slice(0, 8)}...${magicApiKey.slice(-4)}` : null,
+                baseUrl: RH_BASE_URL
             }
         });
     } catch (error) {
@@ -95,19 +117,46 @@ router.get('/config', (req, res) => {
 
 /**
  * POST /config - 保存 RunningHub API Key
+ * 支持保存 appApiKey (会员消费) 或 magicApiKey (企业共享)
  */
 router.post('/config', (req, res) => {
     try {
-        const { apiKey } = req.body;
-        if (!apiKey) {
-            return res.status(400).json({ success: false, error: '缺少 apiKey 参数' });
+        const { apiKey, appApiKey, magicApiKey } = req.body;
+        
+        // 兼容旧的单 key 模式
+        if (apiKey && !appApiKey && !magicApiKey) {
+            // 旧模式：同时设置两个 key
+            setAppApiKey(apiKey);
+            setMagicApiKey(apiKey);
+            return res.json({
+                success: true,
+                data: {
+                    appConfigured: true,
+                    magicConfigured: true,
+                    appApiKeyPreview: `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`,
+                    magicApiKeyPreview: `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`
+                }
+            });
         }
-        setApiKey(apiKey);
+        
+        // 新模式：分别保存
+        if (appApiKey) {
+            setAppApiKey(appApiKey);
+        }
+        if (magicApiKey) {
+            setMagicApiKey(magicApiKey);
+        }
+        
+        const currentAppKey = getAppApiKey();
+        const currentMagicKey = getMagicApiKey();
+        
         res.json({
             success: true,
             data: {
-                configured: true,
-                apiKeyPreview: `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`
+                appConfigured: !!currentAppKey,
+                magicConfigured: !!currentMagicKey,
+                appApiKeyPreview: currentAppKey ? `${currentAppKey.slice(0, 8)}...${currentAppKey.slice(-4)}` : null,
+                magicApiKeyPreview: currentMagicKey ? `${currentMagicKey.slice(0, 8)}...${currentMagicKey.slice(-4)}` : null
             }
         });
     } catch (error) {
@@ -118,6 +167,7 @@ router.post('/config', (req, res) => {
 /**
  * POST /ai-app/info - 获取 AI 应用信息
  * 获取 nodeInfoList、应用名称、封面等
+ * 使用会员消费 API Key
  */
 router.post('/ai-app/info', async (req, res) => {
     try {
@@ -126,9 +176,9 @@ router.post('/ai-app/info', async (req, res) => {
             return res.status(400).json({ success: false, error: '缺少 webappId 参数' });
         }
         
-        const apiKey = getApiKey();
+        const apiKey = getAppApiKey();
         if (!apiKey) {
-            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 会员消费 API Key' });
         }
         
         // 使用 GET 请求获取 AI 应用信息
@@ -162,12 +212,13 @@ router.post('/ai-app/info', async (req, res) => {
 
 /**
  * POST /upload - 上传文件到 RunningHub
+ * 使用会员消费 API Key
  */
 router.post('/upload', upload.single('file'), async (req, res) => {
     try {
-        const apiKey = getApiKey();
+        const apiKey = getAppApiKey();
         if (!apiKey) {
-            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 会员消费 API Key' });
         }
         
         if (!req.file) {
@@ -223,12 +274,13 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 /**
  * POST /upload-image - 上传 base64 图片到 RunningHub
  * 使用标准模型 API 的上传接口: /openapi/v2/media/upload/binary
+ * 使用企业共享 API Key (RH Magic)
  */
 router.post('/upload-image', async (req, res) => {
     try {
-        const apiKey = getApiKey();
+        const apiKey = getMagicApiKey();
         if (!apiKey) {
-            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 企业共享 API Key' });
         }
         
         const { image } = req.body;
@@ -315,6 +367,7 @@ router.post('/upload-image', async (req, res) => {
 
 /**
  * POST /ai-app/run - 发起 AI 应用任务
+ * 使用会员消费 API Key
  */
 router.post('/ai-app/run', async (req, res) => {
     try {
@@ -324,9 +377,9 @@ router.post('/ai-app/run', async (req, res) => {
             return res.status(400).json({ success: false, error: '缺少 webappId 参数' });
         }
         
-        const apiKey = getApiKey();
+        const apiKey = getAppApiKey();
         if (!apiKey) {
-            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 会员消费 API Key' });
         }
         
         const requestBody = {
@@ -369,6 +422,7 @@ router.post('/ai-app/run', async (req, res) => {
 
 /**
  * POST /outputs - 查询任务输出结果
+ * 使用会员消费 API Key
  */
 router.post('/outputs', async (req, res) => {
     try {
@@ -378,9 +432,9 @@ router.post('/outputs', async (req, res) => {
             return res.status(400).json({ success: false, error: '缺少 taskId 参数' });
         }
         
-        const apiKey = getApiKey();
+        const apiKey = getAppApiKey();
         if (!apiKey) {
-            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 会员消费 API Key' });
         }
         
         const response = await fetch(`${RH_BASE_URL}/task/openapi/outputs`, {
@@ -436,6 +490,7 @@ router.post('/outputs', async (req, res) => {
 
 /**
  * POST /generate - 一站式生成：发起任务并轮询等待结果
+ * 使用会员消费 API Key
  */
 router.post('/generate', async (req, res) => {
     try {
@@ -445,9 +500,9 @@ router.post('/generate', async (req, res) => {
             return res.status(400).json({ success: false, error: '缺少 webappId 参数' });
         }
         
-        const apiKey = getApiKey();
+        const apiKey = getAppApiKey();
         if (!apiKey) {
-            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 会员消费 API Key' });
         }
         
         // 1. 发起任务
@@ -531,16 +586,18 @@ router.post('/generate', async (req, res) => {
 
 // ============================================
 // 香蕉 (全能图片PRO) API 代理
+// 使用企业共享 API Key (RH Magic)
 // ============================================
 
 /**
  * POST /banana/text-to-image - 文生图
+ * 使用企业共享 API Key
  */
 router.post('/banana/text-to-image', async (req, res) => {
     try {
-        const apiKey = getApiKey();
+        const apiKey = getMagicApiKey();
         if (!apiKey) {
-            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 企业共享 API Key' });
         }
         
         const { prompt, resolution, aspectRatio, official } = req.body;
@@ -581,12 +638,13 @@ router.post('/banana/text-to-image', async (req, res) => {
 
 /**
  * POST /banana/image-to-image - 图生图
+ * 使用企业共享 API Key
  */
 router.post('/banana/image-to-image', async (req, res) => {
     try {
-        const apiKey = getApiKey();
+        const apiKey = getMagicApiKey();
         if (!apiKey) {
-            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 企业共享 API Key' });
         }
         
         const { prompt, resolution, aspectRatio, imageUrls, official } = req.body;
@@ -635,12 +693,13 @@ router.post('/banana/image-to-image', async (req, res) => {
 
 /**
  * POST /banana/query - 查询任务状态
+ * 使用企业共享 API Key
  */
 router.post('/banana/query', async (req, res) => {
     try {
-        const apiKey = getApiKey();
+        const apiKey = getMagicApiKey();
         if (!apiKey) {
-            return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 企业共享 API Key' });
         }
         
         const { taskId } = req.body;

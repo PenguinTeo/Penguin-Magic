@@ -32,9 +32,13 @@ export interface RHTaskOutput {
 
 // RunningHub 配置
 export interface RHConfig {
-    configured: boolean;
+    // 会员消费 API (AI 应用)
+    appConfigured: boolean;
+    appApiKeyPreview: string | null;
+    // 企业共享 API (RH Magic)
+    magicConfigured: boolean;
+    magicApiKeyPreview: string | null;
     baseUrl: string;
-    apiKeyPreview: string | null;
 }
 
 // ============================================
@@ -54,16 +58,22 @@ export const getRunningHubConfig = async (): Promise<{
 
 /**
  * 保存 RunningHub API Key
+ * 支持分别保存 appApiKey (会员消费) 和 magicApiKey (企业共享)
  */
-export const saveRunningHubConfig = async (apiKey: string): Promise<{
+export const saveRunningHubConfig = async (options: {
+    appApiKey?: string;
+    magicApiKey?: string;
+}): Promise<{
     success: boolean;
     data?: {
-        configured: boolean;
-        apiKeyPreview: string;
+        appConfigured: boolean;
+        magicConfigured: boolean;
+        appApiKeyPreview: string | null;
+        magicApiKeyPreview: string | null;
     };
     error?: string;
 }> => {
-    return post('/runninghub/config', { apiKey });
+    return post('/runninghub/config', options);
 };
 
 /**
