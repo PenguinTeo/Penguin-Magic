@@ -3211,6 +3211,176 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         );
     }
 
+    // 图像对比节点 - 滑块对比两张图片
+    if (node.type === 'image-compare') {
+        const image1 = node.data?.compareImage1;
+        const image2 = node.data?.compareImage2;
+        const [sliderPos, setSliderPos] = React.useState(node.data?.comparePosition ?? 50);
+        const [isDragging, setIsDragging] = React.useState(false);
+        const containerRef = React.useRef<HTMLDivElement>(null);
+        
+        // 紫色主题
+        const purpleBg = isLightCanvas ? 'rgba(168,85,247,0.08)' : 'rgba(168,85,247,0.1)';
+        const purpleBorder = isLightCanvas ? 'rgba(168,85,247,0.3)' : 'rgba(168,85,247,0.3)';
+        const purpleText = isLightCanvas ? '#7c3aed' : '#c4b5fd';
+        
+        const hasImages = image1 && image2;
+        const isRunning = node.status === 'running';
+        
+        // 处理滑块拖拽
+        const handleSliderMove = (e: React.MouseEvent | MouseEvent) => {
+            if (!containerRef.current) return;
+            const rect = containerRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+            setSliderPos(percentage);
+        };
+        
+        const handleMouseDown = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setIsDragging(true);
+            handleSliderMove(e);
+        };
+        
+        React.useEffect(() => {
+            if (!isDragging) return;
+            
+            const handleMove = (e: MouseEvent) => {
+                handleSliderMove(e);
+            };
+            
+            const handleUp = () => {
+                setIsDragging(false);
+                // 保存位置
+                onUpdate(node.id, { data: { ...node.data, comparePosition: sliderPos } });
+            };
+            
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleUp);
+            
+            return () => {
+                window.removeEventListener('mousemove', handleMove);
+                window.removeEventListener('mouseup', handleUp);
+            };
+        }, [isDragging, sliderPos]);
+        
+        return (
+            <div className="w-full h-full flex flex-col overflow-hidden rounded-xl shadow-lg relative" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${purpleBorder}` }}>
+                {/* 头部 */}
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${purpleBorder}`, backgroundColor: purpleBg }}>
+                    <div className="flex items-center gap-2">
+                        <Icons.Columns size={14} style={{ color: purpleText }} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: purpleText }}>图像对比</span>
+                    </div>
+                    <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: purpleText, backgroundColor: isLightCanvas ? 'rgba(168,85,247,0.15)' : 'rgba(168,85,247,0.2)' }}>
+                        {hasImages ? `${Math.round(sliderPos)}%` : '待加载'}
+                    </span>
+                </div>
+                
+                {/* 对比区域 */}
+                <div 
+                    ref={containerRef}
+                    className={`flex-1 relative bg-black overflow-hidden ${hasImages ? 'cursor-col-resize' : ''}`}
+                    onMouseDown={hasImages ? handleMouseDown : undefined}
+                >
+                    {!hasImages ? (
+                        // 空状态：提示连接两张图片
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3" style={{ color: themeColors.textMuted }}>
+                            <div className="flex items-center gap-4">
+                                <div className="flex flex-col items-center gap-1">
+                                    <div className={`w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center ${isLightCanvas ? 'border-gray-300 bg-gray-50' : 'border-zinc-600 bg-zinc-800/50'}`}>
+                                        <span className="text-2xl">1️⃣</span>
+                                    </div>
+                                    <span className="text-[9px]">图1 (上)</span>
+                                </div>
+                                <Icons.ArrowRight size={20} className={isLightCanvas ? 'text-gray-400' : 'text-zinc-600'} />
+                                <div className="flex flex-col items-center gap-1">
+                                    <div className={`w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center ${isLightCanvas ? 'border-gray-300 bg-gray-50' : 'border-zinc-600 bg-zinc-800/50'}`}>
+                                        <span className="text-2xl">2️⃣</span>
+                                    </div>
+                                    <span className="text-[9px]">图2 (下)</span>
+                                </div>
+                            </div>
+                            <div className={`text-[10px] text-center ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'}`}>
+                                连接两张图片后点击执行<br/>
+                                <span className="text-[9px]">(上方=图1, 下方=图2)</span>
+                            </div>
+                        </div>
+                    ) : (
+                        // 有图片：显示对比效果
+                        <>
+                            {/* 底层图片：图1（完整显示） */}
+                            <img 
+                                src={image1}
+                                alt="Image 1"
+                                className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none"
+                                draggable={false}
+                                style={{ transform: 'translateZ(0)' } as React.CSSProperties}
+                            />
+                            
+                            {/* 上层图片：图2（被裁剪显示） */}
+                            <div 
+                                className="absolute inset-0 overflow-hidden"
+                                style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
+                            >
+                                <img 
+                                    src={image2}
+                                    alt="Image 2"
+                                    className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none"
+                                    draggable={false}
+                                    style={{ transform: 'translateZ(0)' } as React.CSSProperties}
+                                />
+                            </div>
+                            
+                            {/* 分割线 */}
+                            <div 
+                                className="absolute top-0 bottom-0 w-1 bg-white shadow-lg z-10 pointer-events-none"
+                                style={{ 
+                                    left: `${sliderPos}%`, 
+                                    transform: 'translateX(-50%)',
+                                    boxShadow: '0 0 10px rgba(0,0,0,0.5)'
+                                }}
+                            >
+                                {/* 拖拽手柄 */}
+                                <div 
+                                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center"
+                                    style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}
+                                >
+                                    <div className="flex items-center gap-0.5">
+                                        <div className="w-0.5 h-3 bg-gray-400 rounded-full" />
+                                        <div className="w-0.5 h-3 bg-gray-400 rounded-full" />
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* 图片标签 */}
+                            <div className="absolute top-2 left-2 px-2 py-1 bg-black/70 rounded text-[9px] text-white z-20">
+                                图1
+                            </div>
+                            <div className="absolute top-2 right-2 px-2 py-1 bg-black/70 rounded text-[9px] text-white z-20">
+                                图2
+                            </div>
+                        </>
+                    )}
+                </div>
+                
+                {/* 底部提示 */}
+                <div className={`h-5 ${footerBarBg} border-t px-3 flex items-center justify-between text-[9px]`} style={{ borderColor: themeColors.headerBorder, color: themeColors.textMuted }}>
+                    <span>← 图1 | 图2 →</span>
+                    <span>拖拽滑块对比</span>
+                </div>
+                
+                {/* 加载状态 */}
+                {isRunning && (
+                    <div className="absolute inset-0 backdrop-blur-[2px] flex items-center justify-center z-30" style={{ backgroundColor: isLightCanvas ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)' }}>
+                        <div className="w-8 h-8 border-2 border-purple-400/50 border-t-purple-400 rounded-full animate-spin"></div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     if (node.type === 'image') {
       // 检查是否有有效图片（支持 data: 、http URL 和 相对路径）
       const hasImage = node.content && (
@@ -4725,7 +4895,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
              )}
 
              {/* Execute Button with Batch Count */}
-             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config', 'rh-magic'].includes(node.type) && (
+             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config', 'rh-magic', 'image-compare'].includes(node.type) && (
                  <div className="flex items-center gap-0.5">
                    {/* 批量数量选择器 - 对图片生成类型节点显示 */}
                    {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config', 'rh-magic'].includes(node.type) && !isRunning && (

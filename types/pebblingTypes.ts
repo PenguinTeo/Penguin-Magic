@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-param' | 'rh-main' | 'rh-magic' | 'drawing-board' | 'browser';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-param' | 'rh-main' | 'rh-magic' | 'drawing-board' | 'browser' | 'image-compare';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -155,6 +155,11 @@ export interface NodeData {
   browserUrl?: string; // 当前浏览URL
   browserTitle?: string; // 页面标题
   browserExpanded?: boolean; // 是否展开
+  
+  // Image Compare Node Specifics
+  compareImage1?: string; // 图1（上方连接的图片）
+  compareImage2?: string; // 图2（下方连接的图片）
+  comparePosition?: number; // 滑块位置（0-100）
 }
 
 export interface CanvasNode {
@@ -237,6 +242,10 @@ export const ARCTIC_COLORS = {
   // 浏览器橙红 - Browser节点
   browserOrange: 'rgb(249, 115, 22)',
   browserOrangeLight: 'rgb(251, 146, 60)',
+  
+  // 对比紫 - ImageCompare节点
+  comparePurple: 'rgb(168, 85, 247)',
+  comparePurpleLight: 'rgb(192, 132, 252)',
 } as const;
 
 // 节点类型颜色映射
@@ -274,6 +283,9 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
     
     case 'browser':
       return { primary: ARCTIC_COLORS.browserOrange, light: ARCTIC_COLORS.browserOrangeLight };
+    
+    case 'image-compare':
+      return { primary: ARCTIC_COLORS.comparePurple, light: ARCTIC_COLORS.comparePurpleLight };
     
     default:
       return { primary: ARCTIC_COLORS.arcticGray, light: ARCTIC_COLORS.arcticGrayLight };

@@ -1306,6 +1306,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (type === 'drawing-board') { width = 800; height = 700; }
       // 浏览器节点 - 需要足够的空间显示网页
       if (type === 'browser') { width = 500; height = 420; }
+      // 图像对比节点 - 正方形用于对比显示
+      if (type === 'image-compare') { width = 400; height = 400; }
 
       if (position) {
           x = position.x;
@@ -3469,6 +3471,39 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           updateNode(nodeId, { status: 'error' });
                       }
                   }
+              }
+          }
+          else if (node.type === 'image-compare') {
+              // 图像对比节点：获取上游两张图片，存储到data中供渲染
+              const inputImages = inputs.images;
+              
+              console.log(`[ImageCompare] 收集到的输入图片数量: ${inputImages.length}`);
+              
+              if (inputImages.length < 2) {
+                  updateNode(nodeId, { status: 'error' });
+                  console.warn('图像对比节点需要连接2张图片（上=图1，下=图2）');
+              } else {
+                  // 图片按Y坐标排序，inputImages[0]是上面的图1，inputImages[1]是下面的图2
+                  const image1 = inputImages[0];
+                  const image2 = inputImages[1];
+                  
+                  console.log(`[ImageCompare] 图1: ${image1?.slice(0, 50)}...`);
+                  console.log(`[ImageCompare] 图2: ${image2?.slice(0, 50)}...`);
+                  
+                  // 更新节点数据
+                  updateNode(nodeId, { 
+                      data: { 
+                          ...node.data, 
+                          compareImage1: image1, 
+                          compareImage2: image2,
+                          comparePosition: node.data?.comparePosition ?? 50 // 默认50%位置
+                      },
+                      status: 'completed' 
+                  });
+                  
+                  // 保存画布
+                  saveCurrentCanvas();
+                  console.log(`[ImageCompare] 图片加载完成`);
               }
           }
           else if (node.type === 'bp') {

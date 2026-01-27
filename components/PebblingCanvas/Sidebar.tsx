@@ -226,6 +226,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => onAdd('browser')} 
                     isLight={isLight}
                 />
+                <DraggableButton 
+                    type="image-compare" 
+                    icon={<Icons.Columns />} 
+                    label="图像对比" 
+                    onDragStart={onDragStart} 
+                    onClick={() => onAdd('image-compare')} 
+                    isLight={isLight}
+                />
             </div>
 
         </div>

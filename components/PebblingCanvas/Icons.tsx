@@ -35,12 +35,14 @@ import {
   Palette,
   ArrowUp,
   ArrowDown,
+  ArrowRight,
   ChevronUp,
   ChevronDown,
   Trash2,
   RefreshCw,
   ExternalLink,
-  Globe
+  Globe,
+  Columns
 } from 'lucide-react';
 
 export const Icons = {
@@ -78,10 +80,12 @@ export const Icons = {
   Palette,
   ArrowUp,
   ArrowDown,
+  ArrowRight,
   ChevronUp,
   ChevronDown,
   Trash: Trash2,
   Refresh: RefreshCw,
   ExternalLink,
-  Globe
+  Globe,
+  Columns
 };
