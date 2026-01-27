@@ -11,7 +11,17 @@ node_modules
 dist
 dist-ssr
 *.local
-doc
+docs/
+doc/
+
+# 版本发布相关文档（本地保留）
+CHANGELOG_*.txt
+ANNOUNCEMENT_*.md
+RELEASE_NOTES_*.txt
+ELECTRON_GUIDE.md
+CONTRIBUTING.md
+temp_old_sidebar.txt
+.backend.pid
 
 # 用户数据（不上传内容，保留目录结构）
 data/*.json
