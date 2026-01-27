@@ -3006,6 +3006,211 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
         );
     }
 
+    // 浏览器节点 - 内嵌 webview
+    if (node.type === 'browser') {
+        const browserUrl = node.data?.browserUrl || 'https://www.google.com';
+        const browserTitle = node.data?.browserTitle || '新标签页';
+        const browserExpanded = node.data?.browserExpanded || false;
+        const webviewRef = React.useRef<Electron.WebviewTag | null>(null);
+        const [localUrl, setLocalUrl] = React.useState(browserUrl);
+        const [inputUrl, setInputUrl] = React.useState(browserUrl);
+        const [pageTitle, setPageTitle] = React.useState(browserTitle);
+        const [isLoading, setIsLoading] = React.useState(false);
+        const [canGoBack, setCanGoBack] = React.useState(false);
+        const [canGoForward, setCanGoForward] = React.useState(false);
+        const [pendingImage, setPendingImage] = React.useState<{url: string, name: string} | null>(null);
+        
+        // 橙色主题
+        const orangeBg = isLightCanvas ? 'rgba(249,115,22,0.08)' : 'rgba(249,115,22,0.1)';
+        const orangeBorder = isLightCanvas ? 'rgba(249,115,22,0.3)' : 'rgba(249,115,22,0.3)';
+        const orangeText = isLightCanvas ? '#c2410c' : '#fdba74';
+        
+        // 处理 webview 事件
+        React.useEffect(() => {
+            const webview = webviewRef.current;
+            if (!webview) return;
+
+            const handleDidStartLoading = () => setIsLoading(true);
+            const handleDidStopLoading = () => {
+                setIsLoading(false);
+                setCanGoBack(webview.canGoBack());
+                setCanGoForward(webview.canGoForward());
+            };
+            const handleDidNavigate = (event: any) => {
+                setLocalUrl(event.url);
+                setInputUrl(event.url);
+                onUpdate(node.id, { data: { ...node.data, browserUrl: event.url } });
+            };
+            const handlePageTitleUpdated = (event: any) => {
+                setPageTitle(event.title || '新标签页');
+                onUpdate(node.id, { data: { ...node.data, browserTitle: event.title } });
+            };
+            const handleIpcMessage = (event: any) => {
+                if (event.channel === 'image-clicked') {
+                    const { src, alt } = event.args[0];
+                    setPendingImage({ url: src, name: alt || 'browser-image' });
+                }
+            };
+
+            webview.addEventListener('did-start-loading', handleDidStartLoading);
+            webview.addEventListener('did-stop-loading', handleDidStopLoading);
+            webview.addEventListener('did-navigate', handleDidNavigate);
+            webview.addEventListener('did-navigate-in-page', handleDidNavigate);
+            webview.addEventListener('page-title-updated', handlePageTitleUpdated);
+            webview.addEventListener('ipc-message', handleIpcMessage);
+
+            return () => {
+                webview.removeEventListener('did-start-loading', handleDidStartLoading);
+                webview.removeEventListener('did-stop-loading', handleDidStopLoading);
+                webview.removeEventListener('did-navigate', handleDidNavigate);
+                webview.removeEventListener('did-navigate-in-page', handleDidNavigate);
+                webview.removeEventListener('page-title-updated', handlePageTitleUpdated);
+                webview.removeEventListener('ipc-message', handleIpcMessage);
+            };
+        }, [node.id]);
+
+        // 注入图片交互脚本
+        React.useEffect(() => {
+            const webview = webviewRef.current;
+            if (!webview) return;
+
+            const injectScript = () => {
+                webview.executeJavaScript(`
+                    (function() {
+                        if (window.__browserNodeInjected) return;
+                        window.__browserNodeInjected = true;
+                        const style = document.createElement('style');
+                        style.textContent = 'img { cursor: pointer !important; transition: outline 0.2s ease !important; } img:hover { outline: 3px solid #f97316 !important; outline-offset: 2px !important; }';
+                        document.head.appendChild(style);
+                        document.addEventListener('dblclick', function(e) {
+                            const img = e.target;
+                            if (img.tagName === 'IMG' && img.src) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const { ipcRenderer } = require('electron');
+                                ipcRenderer.sendToHost('image-clicked', { src: img.src, alt: img.alt || 'image' });
+                                img.style.outline = '3px solid #22c55e';
+                                setTimeout(() => { img.style.outline = ''; }, 500);
+                            }
+                        }, true);
+                    })();
+                `).catch(() => {});
+            };
+
+            webview.addEventListener('did-finish-load', injectScript);
+            webview.addEventListener('dom-ready', injectScript);
+
+            return () => {
+                webview.removeEventListener('did-finish-load', injectScript);
+                webview.removeEventListener('dom-ready', injectScript);
+            };
+        }, []);
+
+        const goBack = () => webviewRef.current?.goBack();
+        const goForward = () => webviewRef.current?.goForward();
+        const reload = () => webviewRef.current?.reload();
+        const goHome = () => {
+            setInputUrl('https://www.google.com');
+            if (webviewRef.current) webviewRef.current.src = 'https://www.google.com';
+        };
+
+        const handleNavigate = () => {
+            let targetUrl = inputUrl.trim();
+            if (!targetUrl) return;
+            if (!targetUrl.match(/^https?:\/\//i)) {
+                if (targetUrl.includes('.') && !targetUrl.includes(' ')) {
+                    targetUrl = 'https://' + targetUrl;
+                } else {
+                    targetUrl = `https://www.google.com/search?q=${encodeURIComponent(targetUrl)}`;
+                }
+            }
+            setInputUrl(targetUrl);
+            if (webviewRef.current) webviewRef.current.src = targetUrl;
+        };
+
+        const handleAddImage = () => {
+            if (pendingImage && onCreateToolNode) {
+                // 创建图片节点
+                onCreateToolNode(node.id, 'image', { x: node.x + node.width + 50, y: node.y });
+                // 这里需要通过其他方式设置图片内容，暂时只创建节点
+            }
+            setPendingImage(null);
+        };
+
+        return (
+            <div className="w-full h-full flex flex-col overflow-hidden rounded-xl shadow-lg relative" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${orangeBorder}` }}>
+                {/* 头部 */}
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${orangeBorder}`, backgroundColor: orangeBg }}>
+                    <div className="flex items-center gap-2">
+                        <Icons.Globe size={14} style={{ color: orangeText }} />
+                        <span className="text-[10px] font-bold truncate max-w-[200px]" style={{ color: orangeText }}>{pageTitle}</span>
+                    </div>
+                    {isLoading && <div className="w-3 h-3 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />}
+                </div>
+                
+                {/* 地址栏 */}
+                <div className="h-8 flex items-center gap-1 px-2 shrink-0" style={{ borderBottom: `1px solid ${themeColors.headerBorder}`, backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)' }}>
+                    <button onClick={goBack} disabled={!canGoBack} className="p-1 rounded hover:bg-white/10 disabled:opacity-30" onMouseDown={(e) => e.stopPropagation()}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: themeColors.textMuted }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <button onClick={goForward} disabled={!canGoForward} className="p-1 rounded hover:bg-white/10 disabled:opacity-30" onMouseDown={(e) => e.stopPropagation()}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: themeColors.textMuted }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                    <button onClick={reload} className={`p-1 rounded hover:bg-white/10 ${isLoading ? 'animate-spin' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
+                        <Icons.Refresh size={12} style={{ color: themeColors.textMuted }} />
+                    </button>
+                    <button onClick={goHome} className="p-1 rounded hover:bg-white/10" onMouseDown={(e) => e.stopPropagation()}>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: themeColors.textMuted }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+                    </button>
+                    <input
+                        type="text"
+                        value={inputUrl}
+                        onChange={(e) => setInputUrl(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleNavigate()}
+                        placeholder="输入网址或搜索..."
+                        className={`flex-1 px-2 py-1 text-[10px] rounded ${isLightCanvas ? 'bg-gray-100 text-gray-800' : 'bg-white/5 text-white'} outline-none`}
+                        onMouseDown={(e) => e.stopPropagation()}
+                    />
+                </div>
+                
+                {/* WebView 容器 */}
+                <div className="flex-1 relative" onMouseDown={(e) => e.stopPropagation()}>
+                    <webview
+                        ref={webviewRef as any}
+                        src={localUrl}
+                        style={{ width: '100%', height: '100%', border: 'none' }}
+                        // @ts-ignore
+                        allowpopups="true"
+                        // @ts-ignore
+                        webpreferences="contextIsolation=no"
+                    />
+                    
+                    {/* 待添加图片弹窗 */}
+                    {pendingImage && (
+                        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-20">
+                            <div className={`${isLightCanvas ? 'bg-white' : 'bg-gray-900'} rounded-xl p-4 border max-w-[240px] shadow-2xl`} style={{ borderColor: orangeBorder }}>
+                                <div className="text-sm font-medium mb-2 text-center" style={{ color: themeColors.textPrimary }}>添加图片到画布？</div>
+                                <div className="mb-2 rounded-lg overflow-hidden border" style={{ borderColor: themeColors.inputBorder }}>
+                                    <img src={pendingImage.url} alt="" className="w-full h-24 object-contain" style={{ backgroundColor: isLightCanvas ? '#f5f5f5' : '#000' }} />
+                                </div>
+                                <div className="text-[10px] truncate mb-2 px-1" style={{ color: themeColors.textMuted }}>{pendingImage.name}</div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setPendingImage(null)} className={`flex-1 px-3 py-1.5 text-xs rounded-lg ${isLightCanvas ? 'bg-gray-100 text-gray-600' : 'bg-white/10 text-gray-300'}`} onMouseDown={(e) => e.stopPropagation()}>取消</button>
+                                    <button onClick={handleAddImage} className="flex-1 px-3 py-1.5 text-xs bg-orange-500 text-white rounded-lg font-medium" onMouseDown={(e) => e.stopPropagation()}>添加</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                {/* 底部提示 */}
+                <div className={`h-5 ${footerBarBg} border-t px-3 flex items-center text-[9px]`} style={{ borderColor: themeColors.headerBorder, color: themeColors.textMuted }}>
+                    <Icons.Image size={10} className="mr-1" /> 双击网页图片添加到画布
+                </div>
+            </div>
+        );
+    }
+
     if (node.type === 'image') {
       // 检查是否有有效图片（支持 data: 、http URL 和 相对路径）
       const hasImage = node.content && (

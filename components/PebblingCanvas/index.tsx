@@ -1304,6 +1304,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (type === 'rh-magic') { width = 280; height = 320; }
       // 画板节点需要更大的尺寸（约4个图片节点大小）
       if (type === 'drawing-board') { width = 800; height = 700; }
+      // 浏览器节点 - 需要足够的空间显示网页
+      if (type === 'browser') { width = 500; height = 420; }
 
       if (position) {
           x = position.x;

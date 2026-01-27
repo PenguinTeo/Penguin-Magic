@@ -39,7 +39,8 @@ import {
   ChevronDown,
   Trash2,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Globe
 } from 'lucide-react';
 
 export const Icons = {
@@ -81,5 +82,6 @@ export const Icons = {
   ChevronDown,
   Trash: Trash2,
   Refresh: RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Globe
 };

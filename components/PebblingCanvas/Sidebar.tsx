@@ -218,6 +218,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => onAdd('drawing-board')} 
                     isLight={isLight}
                 />
+                <DraggableButton 
+                    type="browser" 
+                    icon={<Icons.Globe />} 
+                    label="浏览器" 
+                    onDragStart={onDragStart} 
+                    onClick={() => onAdd('browser')} 
+                    isLight={isLight}
+                />
             </div>
 
         </div>

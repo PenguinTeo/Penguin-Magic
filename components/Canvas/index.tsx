@@ -36,9 +36,10 @@ import SaveImageNode from './nodes/SaveImageNode';
 import MultiAngleNode from './nodes/MultiAngleNode';
 import RHNode from './nodes/RHNode';
 import DrawingBoardNode from './nodes/DrawingBoardNode';
+import BrowserNode from './nodes/BrowserNode';
 
 // 节点类型定义
-export type CanvasNodeType = 'creative' | 'image' | 'prompt' | 'text' | 'saveImage' | 'multiAngle' | 'runninghub' | 'drawingBoard';
+export type CanvasNodeType = 'creative' | 'image' | 'prompt' | 'text' | 'saveImage' | 'multiAngle' | 'runninghub' | 'drawingBoard' | 'browser';
 
 export interface CanvasNodeData {
   [key: string]: unknown; // 索引签名，满足 Record<string, unknown> 约束
@@ -69,6 +70,7 @@ const nodeTypes: NodeTypes = {
   multiAngle: MultiAngleNode,
   runninghub: RHNode,
   drawingBoard: DrawingBoardNode,
+  browser: BrowserNode,
 };
 
 // 自定义可删除边组件
@@ -468,6 +470,62 @@ export const Canvas: React.FC<CanvasProps> = ({
     };
     setNodes((nds) => [...nds, newNode]);
   }, [setNodes, handleDeleteNode, handleEditNode]);
+
+  // 添加浏览器节点
+  const addBrowserNode = useCallback(() => {
+    const nodeId = `browser-${Date.now()}`;
+    const newNode: Node<CanvasNodeData> = {
+      id: nodeId,
+      type: 'browser',
+      position: { x: 300 + Math.random() * 100, y: 100 + Math.random() * 100 },
+      data: {
+        label: '浏览器',
+        type: 'browser',
+        url: 'https://www.google.com',
+        onDelete: handleDeleteNode,
+        onEdit: handleEditNode,
+        onImageDrop: (imageUrl: string, imageName: string) => {
+          // 从浏览器拖拽图片时创建新的图片节点
+          handleBrowserImageDrop(nodeId, imageUrl, imageName);
+        },
+      },
+    };
+    setNodes((nds) => [...nds, newNode]);
+  }, [setNodes, handleDeleteNode, handleEditNode]);
+
+  // 处理从浏览器拖拽图片到画布
+  const handleBrowserImageDrop = useCallback((browserNodeId: string, imageUrl: string, imageName: string) => {
+    const browserNode = nodes.find(n => n.id === browserNodeId);
+    const newImageNode: Node<CanvasNodeData> = {
+      id: `image-browser-${Date.now()}`,
+      type: 'image',
+      position: { 
+        x: (browserNode?.position.x || 300) + 520, 
+        y: (browserNode?.position.y || 100) + Math.random() * 50 
+      },
+      data: {
+        label: imageName || '网页图片',
+        type: 'image',
+        imageUrl: imageUrl,
+        onDelete: handleDeleteNode,
+        onEdit: handleEditNode,
+        onUpload: () => {},
+      },
+    };
+    setNodes((nds) => [...nds, newImageNode]);
+    
+    // 自动创建连接
+    setEdges(eds => addEdge({
+      id: `edge-${browserNodeId}-${newImageNode.id}`,
+      source: browserNodeId,
+      target: newImageNode.id,
+      type: 'deletable',
+      animated: false,
+      data: { onDelete: handleDeleteEdge },
+    }, eds));
+    
+    console.log('[BrowserNode] 从浏览器拖拽创建图片节点:', imageUrl);
+  }, [nodes, setNodes, setEdges, handleDeleteNode, handleEditNode, handleDeleteEdge]);
 
   // 画板节点 - 接收上游图片
   const handleDrawingBoardReceive = useCallback(async (nodeId: string) => {
@@ -1178,6 +1236,14 @@ export const Canvas: React.FC<CanvasProps> = ({
               <span>画板</span>
             </button>
 
+            <button
+              onClick={addBrowserNode}
+              className="w-full px-4 py-2.5 text-sm font-medium rounded-xl bg-orange-500/20 border border-orange-500/30 text-orange-300 hover:bg-orange-500/30 transition-all flex items-center gap-3"
+            >
+              <span className="text-lg">🌐</span>
+              <span>浏览器</span>
+            </button>
+
             <div className="h-px bg-white/10 my-2" />
 
             {/* 进度显示 */}
@@ -1293,6 +1359,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               case 'multiAngle': return '#a855f7';
               case 'runninghub': return '#10b981';
               case 'drawingBoard': return '#f59e0b';
+              case 'browser': return '#f97316';
               default: return '#6b7280';
             }
           }}

@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-param' | 'rh-main' | 'rh-magic' | 'drawing-board';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-param' | 'rh-main' | 'rh-magic' | 'drawing-board' | 'browser';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -150,6 +150,11 @@ export interface NodeData {
   bananaAspectRatio?: '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '16:9' | '9:16' | '21:9'; // 宽高比
   bananaTaskId?: string; // 任务ID
   bananaProgress?: string; // 进度信息
+  
+  // Browser Node Specifics
+  browserUrl?: string; // 当前浏览URL
+  browserTitle?: string; // 页面标题
+  browserExpanded?: boolean; // 是否展开
 }
 
 export interface CanvasNode {
@@ -228,6 +233,10 @@ export const ARCTIC_COLORS = {
   // 画板橙色 - DrawingBoard节点
   boardOrange: 'rgb(245, 158, 11)',
   boardOrangeLight: 'rgb(251, 191, 36)',
+  
+  // 浏览器橙红 - Browser节点
+  browserOrange: 'rgb(249, 115, 22)',
+  browserOrangeLight: 'rgb(251, 146, 60)',
 } as const;
 
 // 节点类型颜色映射
@@ -262,6 +271,9 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
     
     case 'drawing-board':
       return { primary: ARCTIC_COLORS.boardOrange, light: ARCTIC_COLORS.boardOrangeLight };
+    
+    case 'browser':
+      return { primary: ARCTIC_COLORS.browserOrange, light: ARCTIC_COLORS.browserOrangeLight };
     
     default:
       return { primary: ARCTIC_COLORS.arcticGray, light: ARCTIC_COLORS.arcticGrayLight };

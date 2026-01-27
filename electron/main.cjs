@@ -1013,7 +1013,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true
+      webSecurity: true,
+      webviewTag: true  // 启用 webview 标签支持
     },
     show: false // 先隐藏，等加载完成后显示
   });
