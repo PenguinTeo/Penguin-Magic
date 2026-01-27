@@ -114,6 +114,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   
   // RunningHub 相关状态
   const [showRunningHubKey, setShowRunningHubKey] = useState(false);
+  const [isRhConfigured, setIsRhConfigured] = useState(false);
 
   useEffect(() => {
     setLocalThirdPartyUrl(thirdPartyConfig.baseUrl || 'https://ai.t8star.cn');
@@ -138,11 +139,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         try {
           const result = await getRunningHubConfig();
           if (result.success && result.data) {
+            setIsRhConfigured(result.data.configured);
             setRunningHubConfig({
-              apiKey: result.data.configured ? 'dummy_key_for_display' : '', // 不显示真实密钥
+              apiKey: '', // 不显示真实密钥，只用于输入新的
               baseUrl: result.data.baseUrl || 'https://api.runninghub.fun'
             });
           } else {
+            setIsRhConfigured(false);
             setRunningHubConfig({
               apiKey: '',
               baseUrl: 'https://api.runninghub.fun'
@@ -150,6 +153,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           }
         } catch (error) {
           console.error('获取 RunningHub 配置失败:', error);
+          setIsRhConfigured(false);
           setRunningHubConfig({
             apiKey: '',
             baseUrl: 'https://api.runninghub.fun'
@@ -215,11 +219,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleSaveRunningHubConfig = async () => {
+    if (!runningHubConfig.apiKey.trim()) {
+      setSaveSuccessMessage('请输入 API Key');
+      setTimeout(() => setSaveSuccessMessage(null), 2000);
+      return;
+    }
     try {
-      const result = await saveRunningHubConfig(runningHubConfig.apiKey);
+      const result = await saveRunningHubConfig(runningHubConfig.apiKey.trim());
       if (result.success) {
         setSaveSuccessMessage('RunningHub API 已保存');
-        // 重置输入框以避免显示真实的密钥
+        setIsRhConfigured(true);
+        // 重置输入框
         setRunningHubConfig(prev => ({
           ...prev,
           apiKey: ''
@@ -663,10 +673,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <path d="M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <div>
+              <div className="flex-1">
                 <h4 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>RunningHub AI应用</h4>
                 <p className="text-xs" style={{ color: styles.textSecondary }}>配置RunningHub API Key以使用AI应用</p>
               </div>
+              {isRhConfigured && (
+                <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+                  <Check className="w-3 h-3" />
+                  <span>已配置</span>
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">API 地址</label>
@@ -686,7 +702,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="form-input"
                   value={runningHubConfig.apiKey}
                   onChange={(e) => setRunningHubConfig({ ...runningHubConfig, apiKey: e.target.value })}
-                  placeholder="输入你的 RunningHub API Key"
+                  placeholder={isRhConfigured ? '输入新 Key 更新' : '输入你的 RunningHub API Key'}
                 />
                 <button className="input-btn" onClick={() => setShowRunningHubKey(!showRunningHubKey)}>
                   {showRunningHubKey ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}

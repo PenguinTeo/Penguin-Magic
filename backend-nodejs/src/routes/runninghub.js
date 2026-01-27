@@ -222,6 +222,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
 /**
  * POST /upload-image - 上传 base64 图片到 RunningHub
+ * 使用标准模型 API 的上传接口: /openapi/v2/media/upload/binary
  */
 router.post('/upload-image', async (req, res) => {
     try {
@@ -234,6 +235,8 @@ router.post('/upload-image', async (req, res) => {
         if (!image) {
             return res.status(400).json({ success: false, error: '缺少图片数据' });
         }
+        
+        console.log('[RH Upload] 开始上传图片, 数据长度:', image.length);
         
         // 解析 base64 数据
         let base64Data = image;
@@ -259,48 +262,53 @@ router.post('/upload-image', async (req, res) => {
             }
         }
         
+        console.log('[RH Upload] MIME:', mimeType, '扩展名:', extension);
+        
         // 将 base64 转换为 Buffer
         const imageBuffer = Buffer.from(base64Data, 'base64');
         const fileName = `upload_${Date.now()}${extension}`;
         
-        // 构建 FormData
+        console.log('[RH Upload] 文件名:', fileName, '大小:', imageBuffer.length);
+        
+        // 构建 FormData - 使用标准模型 API 的上传接口
         const formData = new FormData();
-        formData.append('apiKey', apiKey);
-        formData.append('fileType', 'input');
         formData.append('file', imageBuffer, {
             filename: fileName,
             contentType: mimeType
         });
         
-        // 上传到 RunningHub
-        const response = await fetch(`${RH_BASE_URL}/task/openapi/upload`, {
+        // 上传到 RunningHub - 使用新的标准模型 API 上传接口
+        console.log('[RH Upload] 请求 RH API: /openapi/v2/media/upload/binary');
+        const response = await fetch(`${RH_BASE_URL}/openapi/v2/media/upload/binary`, {
             method: 'POST',
             headers: {
-                'Host': 'www.runninghub.cn',
+                'Authorization': `Bearer ${apiKey}`,
                 ...formData.getHeaders()
             },
             body: formData
         });
         
         const result = await response.json();
+        console.log('[RH Upload] RH响应:', JSON.stringify(result));
         
-        if (result.code === 0) {
+        if (result.code === 0 && result.data?.download_url) {
+            // 返回 download_url 用于标准模型 API
             res.json({
                 success: true,
                 data: {
-                    fileKey: result.data?.fileName,
-                    fileName: result.data?.fileName,
-                    fileType: result.data?.fileType
+                    fileName: result.data.download_url,  // 直接返回完整 URL
+                    downloadUrl: result.data.download_url,
+                    fileType: result.data.type
                 }
             });
         } else {
             res.json({
                 success: false,
-                error: result.msg || '图片上传失败'
+                error: result.message || '图片上传失败'
             });
         }
     } catch (error) {
-        console.error('图片上传失败:', error);
+        console.error('[RH Upload] 图片上传失败:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -545,7 +553,12 @@ router.post('/banana/text-to-image', async (req, res) => {
             ? '/openapi/v2/rhart-image-n-pro-official/text-to-image'
             : '/openapi/v2/rhart-image-n-pro/text-to-image';
         
+        // 对官方模型，分辨率需要小写
         const body = { prompt, resolution: resolution || '2K' };
+        if (official !== false && body.resolution) {
+            // 官方模型：1K -> 1k, 2K -> 2k, 4K -> 4k
+            body.resolution = body.resolution.toLowerCase();
+        }
         if (aspectRatio) body.aspectRatio = aspectRatio;
         
         const response = await fetch(`${RH_BASE_URL}${endpoint}`, {
@@ -558,6 +571,7 @@ router.post('/banana/text-to-image', async (req, res) => {
         });
         
         const result = await response.json();
+        console.log('[Banana] 文生图响应:', JSON.stringify(result));
         res.json(result);
     } catch (error) {
         console.error('香蕉文生图失败:', error);
@@ -576,6 +590,8 @@ router.post('/banana/image-to-image', async (req, res) => {
         }
         
         const { prompt, resolution, aspectRatio, imageUrls, official } = req.body;
+        console.log('[Banana I2I] 收到请求:', { prompt: prompt?.slice(0, 30), resolution, aspectRatio, imageUrlsCount: imageUrls?.length, imageUrls, official });
+        
         if (!prompt || !imageUrls || imageUrls.length === 0) {
             return res.status(400).json({ success: false, error: '缺少 prompt 或 imageUrls 参数' });
         }
@@ -586,8 +602,18 @@ router.post('/banana/image-to-image', async (req, res) => {
             : '/openapi/v2/rhart-image-n-pro/edit';
         
         const body = { prompt, imageUrls };
-        if (resolution) body.resolution = resolution;
+        if (resolution) {
+            // 对官方模型，分辨率需要小写
+            if (official !== false) {
+                // 官方模型：1K -> 1k, 2K -> 2k, 4K -> 4k
+                body.resolution = resolution.toLowerCase();
+            } else {
+                body.resolution = resolution;
+            }
+        }
         if (aspectRatio) body.aspectRatio = aspectRatio;
+        
+        console.log('[Banana I2I] 调用RH API:', endpoint, '请求体:', JSON.stringify(body));
         
         const response = await fetch(`${RH_BASE_URL}${endpoint}`, {
             method: 'POST',
@@ -599,6 +625,7 @@ router.post('/banana/image-to-image', async (req, res) => {
         });
         
         const result = await response.json();
+        console.log('[Banana] 图生图响应:', JSON.stringify(result));
         res.json(result);
     } catch (error) {
         console.error('香蕉图生图失败:', error);
@@ -631,6 +658,7 @@ router.post('/banana/query', async (req, res) => {
         });
         
         const result = await response.json();
+        console.log('[Banana] 查询响应:', JSON.stringify(result));
         res.json(result);
     } catch (error) {
         console.error('香蕉查询任务失败:', error);

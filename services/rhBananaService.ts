@@ -5,7 +5,7 @@
  */
 
 // 分辨率选项
-export type BananaResolution = '1K' | '2K' | '4K';
+export type BananaResolution = '1K' | '2K' | '4K' | '1k' | '2k' | '4k';
 
 // 宽高比选项（对标Magic，支持AUTO）
 export type BananaAspectRatio = 'AUTO' | '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '3:5' | '5:3' | '4:5' | '5:4' | '16:9' | '9:16' | '21:9';
@@ -180,11 +180,11 @@ export const uploadImageForBanana = async (imageData: string): Promise<string> =
     // RH上传返回的是fileName，需要拼接成完整URL
     // 根据RH文档，上传的文件URL格式为: https://rh-images-switch-1252422369.cos.ap-guangzhou.myqcloud.com/input/openapi/{fileName}
     const fileName = result.data.fileName;
-    // 如果已经是完整URL
+    // 如果已经是完整URL（新接口返回完整URL）
     if (fileName.startsWith('http')) {
       return fileName;
     }
-    // 拼接完整URL
+    // 拼接完整URL（旧接口格式兼容）
     return `https://rh-images-switch-1252422369.cos.ap-guangzhou.myqcloud.com/input/openapi/${fileName}`;
   }
   throw new Error(result.error || '图片上传失败');
@@ -204,25 +204,45 @@ export const executeBananaTask = async (
   },
   onProgress?: (status: BananaTaskStatus, message?: string) => void
 ): Promise<{ url: string; outputType: string }> => {
+  // 校验 prompt
+  if (!prompt || !prompt.trim()) {
+    throw new Error('请输入提示词');
+  }
+
   let response: BananaApiResponse;
   const official = options.official !== false; // 默认官方
 
   if (options.mode === 'text2image') {
+    // 对官方模型，分辨率需要小写
+    const resolution = official ? (options.resolution.toLowerCase() as BananaResolution) : options.resolution;
     response = await bananaTextToImage({
       prompt,
-      resolution: options.resolution,
+      resolution,
       aspectRatio: options.aspectRatio
     }, official);
   } else {
     if (!options.imageUrls || options.imageUrls.length === 0) {
       throw new Error('图生图需要提供图片');
     }
+    // 对官方模型，分辨率需要小写
+    const resolution = official ? (options.resolution.toLowerCase() as BananaResolution) : options.resolution;
     response = await bananaImageToImage({
       prompt,
-      resolution: options.resolution,
+      resolution,
       aspectRatio: options.aspectRatio,
       imageUrls: options.imageUrls
     }, official);
+  }
+
+  console.log('[Banana] API响应:', JSON.stringify(response));
+
+  // 检查是否成功创建任务
+  if (!response.taskId) {
+    throw new Error(response.errorMessage || '任务创建失败: 未获取到 taskId');
+  }
+
+  if (response.status === 'FAILED') {
+    throw new Error(response.errorMessage || '任务创建失败');
   }
 
   console.log('[Banana] 任务已提交:', response.taskId);

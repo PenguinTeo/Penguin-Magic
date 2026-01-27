@@ -4,6 +4,7 @@ const config = require('../config');
 const FileHandler = require('../utils/fileHandler');
 const PathHelper = require('../utils/pathHelper');
 const ThumbnailGenerator = require('../utils/thumbnail');
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.get('/input', (req, res) => {
 });
 
 // 保存图片到output目录（并生成缩略图）
+// 支持 base64 数据或远程 URL
 router.post('/save-output', async (req, res) => {
   const { imageData, filename } = req.body;
   
@@ -27,7 +29,46 @@ router.post('/save-output', async (req, res) => {
     return res.status(400).json({ success: false, error: '缺少图片数据' });
   }
   
-  const result = FileHandler.saveImage(imageData, config.OUTPUT_DIR, filename);
+  let result;
+  
+  // 检查是否为远程 URL
+  if (imageData.startsWith('http://') || imageData.startsWith('https://')) {
+    try {
+      // 下载远程图片
+      console.log('[save-output] 下载远程图片:', imageData.slice(0, 80));
+      const response = await fetch(imageData);
+      
+      if (!response.ok) {
+        return res.status(400).json({ success: false, error: `下载图片失败: ${response.status}` });
+      }
+      
+      const buffer = await response.buffer();
+      const base64 = buffer.toString('base64');
+      
+      // 根据 Content-Type 或 URL 确定格式
+      let ext = '.png';
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('jpeg') || contentType.includes('jpg') || imageData.match(/\.jpe?g/i)) {
+        ext = '.jpg';
+      } else if (contentType.includes('webp') || imageData.match(/\.webp/i)) {
+        ext = '.webp';
+      } else if (contentType.includes('gif') || imageData.match(/\.gif/i)) {
+        ext = '.gif';
+      }
+      
+      // 构造 data URI
+      const mimeType = ext === '.jpg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : 'image/png';
+      const dataUri = `data:${mimeType};base64,${base64}`;
+      
+      result = FileHandler.saveImage(dataUri, config.OUTPUT_DIR, filename || `rh-${Date.now()}${ext}`);
+    } catch (err) {
+      console.error('下载远程图片失败:', err.message);
+      return res.status(500).json({ success: false, error: '下载图片失败: ' + err.message });
+    }
+  } else {
+    // base64 数据直接保存
+    result = FileHandler.saveImage(imageData, config.OUTPUT_DIR, filename);
+  }
   
   // 异步生成缩略图（不阻塞主流程）
   if (result.success && result.data?.path) {

@@ -2,34 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { ThirdPartyApiConfig, getApiConfig, saveApiConfig, checkBalance } from '../../services/pebblingGeminiService';
 import { SoraConfig, getSoraConfig, saveSoraConfig } from '../../services/soraService';
 import { GrokConfig, getGrokConfig, saveGrokConfig } from '../../services/grokService';
+import { getRunningHubConfig, saveRunningHubConfig } from '../../services/api/runninghub';
 import { Icons } from './Icons';
 
-// RunningHub 配置
+// RunningHub 配置（本地输入状态）
 interface RHConfig {
   apiKey: string;
+  configured?: boolean;
 }
-
-const getRHConfig = (): RHConfig => {
-  const stored = localStorage.getItem('runninghub_config');
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      return { apiKey: '' };
-    }
-  }
-  return { apiKey: '' };
-};
-
-const saveRHConfig = (config: RHConfig) => {
-  localStorage.setItem('runninghub_config', JSON.stringify(config));
-  // 同时保存到后端
-  fetch('/api/runninghub/config', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ apiKey: config.apiKey })
-  }).catch(console.error);
-};
 
 interface ApiSettingsProps {
   isOpen: boolean;
@@ -58,7 +38,8 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
   });
   
   const [rhConfig, setRhConfig] = useState<RHConfig>({
-    apiKey: ''
+    apiKey: '',
+    configured: false
   });
   
   const [showApiKey, setShowApiKey] = useState(false);
@@ -77,19 +58,36 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
       setSoraConfig(savedSoraConfig);
       const savedGrokConfig = getGrokConfig();
       setGrokConfig(savedGrokConfig);
-      const savedRHConfig = getRHConfig();
-      setRhConfig(savedRHConfig);
+      
+      // 从后端加载 RunningHub 配置状态
+      getRunningHubConfig().then(result => {
+        if (result.success && result.data) {
+          setRhConfig({
+            apiKey: '', // 不显示真实 key，只用于输入新的
+            configured: result.data.configured
+          });
+        }
+      }).catch(console.error);
+      
       setSaveStatus('idle');
       setBalance(null);
     }
   }, [isOpen]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     try {
       saveApiConfig(config);
       saveSoraConfig(soraConfig);
       saveGrokConfig(grokConfig);
-      saveRHConfig(rhConfig);
+      
+      // 只有输入了新的 API Key 才保存到后端
+      if (rhConfig.apiKey.trim()) {
+        const result = await saveRunningHubConfig(rhConfig.apiKey.trim());
+        if (result.success) {
+          setRhConfig({ apiKey: '', configured: true });
+        }
+      }
+      
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (e) {
@@ -311,6 +309,12 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 mb-2">
                 <p className="text-xs text-emerald-300">ℹ️ RunningHub 提供 AI 应用调用服务，请在官网获取 API Key</p>
               </div>
+              {rhConfig.configured && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-emerald-500/10 rounded-lg">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                  <span className="text-xs text-emerald-400">已配置 API Key</span>
+                </div>
+              )}
               <div>
                 <label className="block text-sm text-white/70 mb-2">RunningHub API Key</label>
                 <div className="relative">
@@ -318,7 +322,7 @@ const ApiSettings: React.FC<ApiSettingsProps> = ({ isOpen, onClose }) => {
                     type={showRHKey ? 'text' : 'password'}
                     value={rhConfig.apiKey}
                     onChange={(e) => setRhConfig({ ...rhConfig, apiKey: e.target.value })}
-                    placeholder="输入你的 RunningHub API Key"
+                    placeholder={rhConfig.configured ? '输入新 Key 更新' : '输入你的 RunningHub API Key'}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 pr-12"
                   />
                   <button onClick={() => setShowRHKey(!showRHKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 text-xs">

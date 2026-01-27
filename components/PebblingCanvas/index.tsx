@@ -3630,12 +3630,58 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               const nodePrompt = node.data?.prompt || '';
               const inputTexts = inputs.texts.join('\n');
               const combinedPrompt = inputTexts || nodePrompt;
-              const inputImages = inputs.images;
+              
+              // 🔧 打印所有连接和节点信息，彻底诊断问题
+              console.log('[RH Magic] 全部连接:', connectionsRef.current.map(c => ({
+                  from: c.fromNode.slice(0, 8),
+                  to: c.toNode.slice(0, 8)
+              })));
+              console.log('[RH Magic] 全部节点:', nodesRef.current.map(n => ({
+                  id: n.id.slice(0, 8),
+                  type: n.type,
+                  hasContent: !!n.content
+              })));
+              console.log('[RH Magic] 当前节点ID:', nodeId.slice(0, 8));
+              
+              // 查找指向当前节点的连接
+              const incomingConns = connectionsRef.current.filter(c => c.toNode === nodeId);
+              console.log('[RH Magic] 指向本节点的连接:', incomingConns.length);
+              
+              // 直接从连接获取上游节点
+              const directImages: string[] = [];
+              for (const conn of incomingConns) {
+                  const upNode = nodesRef.current.find(n => n.id === conn.fromNode);
+                  console.log('[RH Magic] 上游节点:', upNode ? {
+                      id: upNode.id.slice(0, 8),
+                      type: upNode.type,
+                      hasContent: !!upNode.content,
+                      contentStart: upNode.content?.slice(0, 60)
+                  } : '未找到');
+                  
+                  if (upNode && upNode.type === 'image' && upNode.content) {
+                      directImages.push(upNode.content);
+                      console.log('[RH Magic] ✅ 收集到图片!');
+                  }
+              }
+              
+              // 使用直接获取的图片或 resolveInputs 的结果
+              const inputImages = directImages.length > 0 ? directImages : inputs.images;
+              console.log('[RH Magic] 最终输入图片数:', inputImages.length);
+              
+              // 🔧 详细日志：检查输入解析情况
+              console.log('[RH Magic] 输入解析结果:', {
+                  nodeId: nodeId.slice(0, 8),
+                  nodePrompt: nodePrompt.slice(0, 30),
+                  inputTextsCount: inputs.texts.length,
+                  inputTexts: inputs.texts,
+                  inputImagesCount: inputImages.length,
+                  inputImages: inputImages.map(img => img.slice(0, 50)) // 🔧 显示图片内容前50字符
+              });
               
               // 获取节点设置（对标Magic结构）
               const bananaResolution = node.data?.settings?.resolution || '2K';
               const bananaAspectRatio = node.data?.settings?.aspectRatio || 'AUTO';
-              const bananaOfficial = node.data?.bananaOfficial !== false; // 默认官方
+              const bananaOfficial = node.data?.bananaOfficial === true; // 🔧 默认非官方
               
               // 自动判断模式：有图片连接=图生图，无图片=文生图
               const effectiveMode = inputImages.length > 0 ? 'image2image' : 'text2image';
@@ -3646,7 +3692,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   resolution: bananaResolution,
                   aspectRatio: bananaAspectRatio,
                   official: bananaOfficial,
-                  inputImagesCount: inputImages.length
+                  inputImagesCount: inputImages.length,
+                  inputImages: inputImages.map(img => img.slice(0, 50)) // 🔧 显示图片内容前50字符
               });
               
               // 验证输入
@@ -3656,27 +3703,64 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   return;
               }
               
+              // 🔧 先创建输出容器（完全对齐 Magic 节点）
+              const outputNodeId = uuid();
+              const outputNode: CanvasNode = {
+                  id: outputNodeId,
+                  type: 'image',
+                  content: '',
+                  x: node.x + node.width + 100,
+                  y: node.y,
+                  width: 300,
+                  height: 300,
+                  data: {},
+                  status: 'running'
+              };
+              
+              const newConnection = {
+                  id: uuid(),
+                  fromNode: nodeId,
+                  toNode: outputNodeId
+              };
+              
+              setNodes(prev => [...prev, outputNode]);
+              setConnections(prev => [...prev, newConnection]);
+              setHasUnsavedChanges(true);
+              console.log('[RH Magic] 已创建输出容器:', outputNodeId.slice(0, 8));
+              
               try {
-                  // 更新进度
                   updateNode(nodeId, { data: { ...node.data, bananaProgress: '准备中...' } });
                   
                   // 如果是图生图，需要上传图片到RH获取URL
                   let imageUrls: string[] = [];
                   if (effectiveMode === 'image2image' && inputImages.length > 0) {
                       updateNode(nodeId, { data: { ...node.data, bananaProgress: '上传图片中...' } });
-                      for (const img of inputImages) {
+                      console.log('[RH Magic] 开始上传图片, 数量:', inputImages.length);
+                      for (let i = 0; i < inputImages.length; i++) {
+                          const img = inputImages[i];
+                          console.log(`[RH Magic] 上传图片 ${i + 1}/${inputImages.length}:`, img.slice(0, 80));
                           try {
                               const url = await uploadImageForBanana(img);
                               imageUrls.push(url);
-                              console.log('[RH Magic] 图片上传成功:', url.slice(0, 80));
+                              console.log('[RH Magic] 图片上传成功:', url);
                           } catch (uploadErr) {
                               console.error('[RH Magic] 图片上传失败:', uploadErr);
-                              throw new Error('图片上传失败');
+                              throw new Error('图片上传失败: ' + (uploadErr instanceof Error ? uploadErr.message : '未知错误'));
                           }
                       }
+                      console.log('[RH Magic] 所有图片上传完成, URLs:', imageUrls);
                   }
                   
                   // 调用API
+                  console.log('[RH Magic] 调用executeBananaTask, 参数:', {
+                      prompt: combinedPrompt.slice(0, 30),
+                      mode: effectiveMode,
+                      resolution: bananaResolution,
+                      aspectRatio: bananaAspectRatio,
+                      imageUrlsCount: imageUrls.length,
+                      imageUrls: imageUrls,
+                      official: bananaOfficial
+                  });
                   const result = await executeBananaTask(
                       combinedPrompt,
                       {
@@ -3702,44 +3786,46 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   console.log('[RH Magic] 任务完成, 结果:', result.url.slice(0, 80));
                   
                   if (!signal.aborted && result.url) {
-                      // 下载图片并保存到本地
+                      // 尝试下载图片并保存到本地，失败则直接使用远程URL
                       let finalImageUrl = result.url;
                       try {
                           const { saveToOutput } = await import('../../services/api/files');
                           const saveResult = await saveToOutput(result.url, `rh-magic-${Date.now()}.${result.outputType || 'png'}`);
                           if (saveResult.success && saveResult.data?.url) {
                               finalImageUrl = saveResult.data.url;
-                              console.log('[RH Magic] 图片已保存:', finalImageUrl);
+                              console.log('[RH Magic] 图片已保存到本地:', finalImageUrl);
+                          } else {
+                              console.warn('[RH Magic] 保存失败，使用远程URL:', saveResult.error || '未知原因');
                           }
                       } catch (saveErr) {
-                          console.warn('[RH Magic] 保存图片失败，使用远程URL:', saveErr);
+                          console.warn('[RH Magic] 保存异常，使用远程URL:', saveErr);
                       }
                       
-                      // 创建输出图片节点
-                      const outputNodeId = uuid();
-                      const outputNode: CanvasNode = {
-                          id: outputNodeId,
-                          type: 'image',
-                          title: 'RH Magic 输出',
+                      // 获取图片实际尺寸以设置容器比例
+                      let imgWidth = 300;
+                      let imgHeight = 300;
+                      try {
+                          const img = new Image();
+                          await new Promise<void>((resolve, reject) => {
+                              img.onload = () => resolve();
+                              img.onerror = () => reject(new Error('load failed'));
+                              img.src = finalImageUrl;
+                          });
+                          const ratio = img.width / img.height;
+                          imgWidth = 300;
+                          imgHeight = Math.round(300 / ratio);
+                          console.log('[RH Magic] 图片尺寸:', img.width, 'x', img.height, '-> 容器:', imgWidth, 'x', imgHeight);
+                      } catch {
+                          console.warn('[RH Magic] 无法获取图片尺寸，使用默认');
+                      }
+                      
+                      // 🔧 更新已创建的输出节点（而不是新建）
+                      updateNode(outputNodeId, {
                           content: finalImageUrl,
-                          x: node.x + node.width + 100,
-                          y: node.y,
-                          width: 300,
-                          height: 300,
-                          data: {},
+                          width: imgWidth,
+                          height: imgHeight,
                           status: 'completed'
-                      };
-                      
-                      const newConnection: Connection = {
-                          id: uuid(),
-                          fromNode: nodeId,
-                          toNode: outputNodeId
-                      };
-                      
-                      setNodes(prev => [...prev, outputNode]);
-                      setConnections(prev => [...prev, newConnection]);
-                      nodesRef.current = [...nodesRef.current, outputNode];
-                      connectionsRef.current = [...connectionsRef.current, newConnection];
+                      });
                       
                       updateNode(nodeId, { status: 'completed', data: { ...node.data, bananaProgress: '' } });
                       saveCurrentCanvas();
@@ -3751,6 +3837,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   }
               } catch (err) {
                   console.error('[RH Magic] 执行失败:', err);
+                  // 更新输出节点为错误状态
+                  updateNode(outputNodeId, { status: 'error' });
                   updateNode(nodeId, { 
                       status: 'error', 
                       data: { ...node.data, bananaProgress: err instanceof Error ? err.message : '执行失败' }
