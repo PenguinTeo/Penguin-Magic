@@ -23,7 +23,7 @@ const MultiAngle3D = lazy(() => import('./MultiAngle3D'));
 
 // 自定义下拉选择器组件（替代原生 select，支持深色主题）
 const CustomSelect: React.FC<{
-  options: string[];
+  options: Array<{ name: string; index: string }>;
   value: string;
   onChange: (value: string) => void;
   isLightCanvas: boolean;
@@ -45,6 +45,9 @@ const CustomSelect: React.FC<{
     }
   }, [isOpen]);
   
+  // 根据 value(即 index) 查找对应的显示名称
+  const displayName = options.find(opt => opt.index === value)?.name || value;
+  
   return (
     <div ref={ref} className="relative w-full">
       <div
@@ -53,7 +56,7 @@ const CustomSelect: React.FC<{
         onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <span className="truncate">{value}</span>
+        <span className="truncate">{displayName}</span>
         <ChevronDown size={10} className={`shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </div>
       {isOpen && (
@@ -64,16 +67,16 @@ const CustomSelect: React.FC<{
           {options.map((opt, i) => (
             <div
               key={i}
-              className={`px-2 py-1 text-[8px] cursor-pointer transition-colors ${opt === value ? 'font-bold' : ''}`}
+              className={`px-2 py-1 text-[8px] cursor-pointer transition-colors ${opt.index === value ? 'font-bold' : ''}`}
               style={{ 
-                backgroundColor: opt === value ? (isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.2)') : 'transparent',
-                color: opt === value ? '#10b981' : themeColors.textSecondary
+                backgroundColor: opt.index === value ? (isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.2)') : 'transparent',
+                color: opt.index === value ? '#10b981' : themeColors.textSecondary
               }}
-              onClick={(e) => { e.stopPropagation(); onChange(opt); setIsOpen(false); }}
+              onClick={(e) => { e.stopPropagation(); onChange(opt.index); setIsOpen(false); }}
               onMouseEnter={(e) => { (e.target as HTMLDivElement).style.backgroundColor = isLightCanvas ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)'; }}
-              onMouseLeave={(e) => { (e.target as HTMLDivElement).style.backgroundColor = opt === value ? (isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.2)') : 'transparent'; }}
+              onMouseLeave={(e) => { (e.target as HTMLDivElement).style.backgroundColor = opt.index === value ? (isLightCanvas ? 'rgba(16,185,129,0.1)' : 'rgba(16,185,129,0.2)') : 'transparent'; }}
             >
-              {opt}
+              {opt.name}
             </div>
           ))}
         </div>
@@ -1767,6 +1770,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                     'STRING': { bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.25)', text: '#10b981' },
                                     'LIST': { bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.25)', text: '#f59e0b' },
                                     'COMBO': { bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.25)', text: '#f59e0b' },
+                                    'SWITCH': { bg: 'rgba(14, 165, 233, 0.08)', border: 'rgba(14, 165, 233, 0.25)', text: '#0ea5e9' },
                                 };
                                 const typeConfig = typeConfigs[fieldType] || typeConfigs['STRING'];
                                 
@@ -1777,38 +1781,60 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                         case 'IMAGE': return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
                                         case 'VIDEO': return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>;
                                         case 'LIST': case 'COMBO': return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>;
+                                        case 'SWITCH': return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>;
                                         default: return <svg className={iconClass} fill="none" stroke={typeConfig.text} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
                                     }
                                 };
                                 
-                                // LIST 选项解析 - 保留 name 和 index 用于显示和提交
+                                // LIST/SWITCH 选项解析 - 保留 name 和 index 用于显示和提交
                                 let listOptions: { name: string; index: string }[] = [];
                                 let defaultValue = info.fieldValue || '';
-                                if ((fieldType === 'LIST' || fieldType === 'COMBO') && info.fieldData) {
+                                const isSelectType = ['LIST', 'COMBO', 'SWITCH'].includes(fieldType);
+                                
+                                if (isSelectType && info.fieldData) {
                                     try {
                                         const parsed = JSON.parse(info.fieldData);
+                                        
                                         if (Array.isArray(parsed)) {
-                                            if (parsed.length === 2 && Array.isArray(parsed[0])) {
+                                            // 检查是否是只有一个字符串元素的数组（需要分割）
+                                            if (parsed.length === 1 && typeof parsed[0] === 'string') {
+                                                listOptions = parsed[0].split(',').map((s: string) => ({ name: s.trim(), index: s.trim() }));
+                                            } else if (parsed.length === 1 && Array.isArray(parsed[0])) {
+                                                // 格式: [["选项1", "选项2", ...]] - 嵌套数组
+                                                listOptions = parsed[0].map((v: any) => {
+                                                    if (typeof v === 'object') {
+                                                        const displayName = v.description || v.label || v.name || String(v);
+                                                        return { name: displayName, index: String(v.index ?? v.value ?? v.name ?? v) };
+                                                    }
+                                                    return { name: String(v), index: String(v) };
+                                                });
+                                            } else if (parsed.length === 2 && Array.isArray(parsed[0])) {
                                                 // 格式: [[options], {default: ...}]
                                                 listOptions = parsed[0].map((v: any) => {
                                                     if (typeof v === 'object') {
-                                                        return { name: v.label || v.name || String(v), index: v.index || v.value || v.label || v.name || String(v) };
+                                                        const displayName = v.description || v.label || v.name || String(v);
+                                                        return { name: displayName, index: String(v.index ?? v.value ?? v.name ?? v) };
                                                     }
                                                     return { name: String(v), index: String(v) };
                                                 });
                                                 if (parsed[1]?.default !== undefined) defaultValue = String(parsed[1].default);
                                             } else {
-                                                // 格式: [{name, index, description}, ...]
+                                                // 格式: [{name, index, description}, ...] 或 ["选项1", "选项2", ...]
                                                 listOptions = parsed.map((v: any) => {
                                                     if (typeof v === 'object') {
-                                                        return { name: v.label || v.name || String(v), index: v.index || v.value || v.label || v.name || String(v) };
+                                                        // 优先使用 description 作为显示名称
+                                                        const displayName = v.description || v.label || v.name || String(v);
+                                                        return { name: displayName, index: String(v.index ?? v.value ?? v.name ?? v) };
                                                     }
                                                     return { name: String(v), index: String(v) };
                                                 });
                                             }
+                                        } else if (typeof parsed === 'string') {
+                                            // JSON.parse 后是字符串，按逗号分割
+                                            listOptions = parsed.split(',').map((s: string) => ({ name: s.trim(), index: s.trim() }));
                                         }
                                     } catch { 
-                                        // 逗号分隔格式
+                                        // 非 JSON，直接按逗号分割
                                         listOptions = info.fieldData.split(',').map((s: string) => ({ name: s.trim(), index: s.trim() })); 
                                     }
                                 }
@@ -1880,18 +1906,14 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                                             </svg>
                                                         </button>
                                                     </div>
-                                                ) : (fieldType === 'LIST' || fieldType === 'COMBO') && listOptions.length > 0 ? (
-                                                    <select
-                                                        className="w-full rounded px-1.5 py-0.5 text-[8px] outline-none cursor-pointer"
-                                                        style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', color: themeColors.textSecondary }}
+                                                ) : isSelectType && listOptions.length > 0 ? (
+                                                    <CustomSelect
+                                                        options={listOptions}
                                                         value={nodeInputs[key] || defaultValue || listOptions[0]?.index || ''}
-                                                        onChange={(e) => handleNodeInputChange(key, e.target.value)}
-                                                        onMouseDown={(e) => e.stopPropagation()}
-                                                    >
-                                                        {listOptions.map((opt, i) => (
-                                                            <option key={i} value={opt.index}>{opt.name}</option>
-                                                        ))}
-                                                    </select>
+                                                        onChange={(val) => handleNodeInputChange(key, val)}
+                                                        isLightCanvas={isLightCanvas}
+                                                        themeColors={themeColors}
+                                                    />
                                                 ) : (
                                                     <input
                                                         type="text"
