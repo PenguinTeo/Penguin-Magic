@@ -1095,14 +1095,99 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       }
   }, [selectedNodeIds, selectedConnectionId]);
 
-  const handleCopy = useCallback(() => {
+  const handleCopy = useCallback(async () => {
       if (selectedNodeIds.size === 0) return;
       const nodesToCopy = nodesRef.current.filter(n => selectedNodeIds.has(n.id));
-      // Store deep copy
+      // Store deep copy for internal paste
       clipboardRef.current = JSON.parse(JSON.stringify(nodesToCopy));
+      
+      // 尝试将图片写入系统剪贴板
+      if (nodesToCopy.length === 1 && nodesToCopy[0].type === 'image' && nodesToCopy[0].content) {
+          try {
+              const imageContent = nodesToCopy[0].content;
+              let blob: Blob;
+              
+              if (imageContent.startsWith('data:image')) {
+                  // Base64 转 Blob
+                  const response = await fetch(imageContent);
+                  blob = await response.blob();
+              } else if (imageContent.startsWith('http') || imageContent.startsWith('/files/')) {
+                  // URL 转 Blob
+                  const url = imageContent.startsWith('/files/') ? `http://localhost:8765${imageContent}` : imageContent;
+                  const response = await fetch(url);
+                  blob = await response.blob();
+              } else {
+                  return;
+              }
+              
+              // 写入系统剪贴板
+              await navigator.clipboard.write([
+                  new ClipboardItem({ [blob.type]: blob })
+              ]);
+              console.log('[Clipboard] 图片已复制到系统剪贴板');
+          } catch (err) {
+              console.warn('[Clipboard] 写入系统剪贴板失败:', err);
+          }
+      }
   }, [selectedNodeIds]);
 
-  const handlePaste = useCallback(() => {
+  const handlePaste = useCallback(async () => {
+      // 先检查系统剪贴板是否有图片
+      try {
+          const clipboardItems = await navigator.clipboard.read();
+          for (const item of clipboardItems) {
+              // 检查是否有图片类型
+              const imageType = item.types.find(type => type.startsWith('image/'));
+              if (imageType) {
+                  const blob = await item.getType(imageType);
+                  const reader = new FileReader();
+                  reader.onload = (e) => {
+                      const base64 = e.target?.result as string;
+                      if (base64) {
+                          // 在鼠标位置创建图片节点
+                          const pasteX = currentMousePosRef.current.x;
+                          const pasteY = currentMousePosRef.current.y;
+                          
+                          const newId = uuid();
+                          const newNode: CanvasNode = {
+                              id: newId,
+                              type: 'image',
+                              content: base64,
+                              x: pasteX,
+                              y: pasteY,
+                              width: 300,
+                              height: 300,
+                              status: 'idle'
+                          };
+                          
+                          // 根据图片实际尺寸调整节点大小
+                          const img = new Image();
+                          img.onload = () => {
+                              const aspectRatio = img.width / img.height;
+                              const nodeWidth = 300;
+                              const nodeHeight = nodeWidth / aspectRatio;
+                              setNodes(prev => prev.map(n => 
+                                  n.id === newId ? { ...n, width: nodeWidth, height: nodeHeight } : n
+                              ));
+                          };
+                          img.src = base64;
+                          
+                          setNodes(prev => [...prev, newNode]);
+                          setSelectedNodeIds(new Set([newId]));
+                          setHasUnsavedChanges(true);
+                          console.log('[Clipboard] 从系统剪贴板粘贴图片');
+                      }
+                  };
+                  reader.readAsDataURL(blob);
+                  return; // 已处理系统剪贴板图片，直接返回
+              }
+          }
+      } catch (err) {
+          // 系统剪贴板读取失败，继续使用内部剪贴板
+          console.log('[Clipboard] 系统剪贴板无图片或读取失败，使用内部剪贴板');
+      }
+      
+      // 使用内部剪贴板
       if (clipboardRef.current.length === 0) return;
       
       const newNodes: CanvasNode[] = [];
