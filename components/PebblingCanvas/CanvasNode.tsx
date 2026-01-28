@@ -3492,34 +3492,49 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     } as React.CSSProperties}
                 />
                 
-                {/* 信息查询按钮 - 移动到右上角 */}
-                <div 
-                  className="absolute top-2 right-2 z-20"
-                  onMouseEnter={() => setShowMediaInfo(true)}
-                  onMouseLeave={() => setShowMediaInfo(false)}
-                >
+                {/* 信息查询按钮 & 清除按钮 - 右上角 */}
+                <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 p-1 rounded-full bg-black/40 backdrop-blur-md">
+                  {/* 清除图片按钮 */}
                   <div 
-                    className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center cursor-pointer transition-all"
-                    title="图片信息"
+                    className="w-6 h-6 rounded-full bg-black/30 hover:bg-red-500/50 flex items-center justify-center cursor-pointer transition-all group/clear"
+                    title="清除图片"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpdate(node.id, { content: '', data: { ...node.data, prompt: node.data?.prompt || '' } });
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
                   >
-                    <Icons.Info size={14} className="text-white/70" />
+                    <Icons.Trash size={12} className="text-white/90 group-hover/clear:text-white" />
                   </div>
                   
-                  {/* 信息浮窗 - 从右侧弹出 */}
-                  {showMediaInfo && mediaMetadata && (
+                  {/* 信息按钮 */}
+                  <div 
+                    onMouseEnter={() => setShowMediaInfo(true)}
+                    onMouseLeave={() => setShowMediaInfo(false)}
+                  >
                     <div 
-                      className="absolute top-full right-0 mt-1 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-2 text-[10px] text-white/90 whitespace-nowrap shadow-lg"
-                      onMouseDown={(e) => e.stopPropagation()}
+                      className="w-6 h-6 rounded-full bg-black/30 hover:bg-white/30 flex items-center justify-center cursor-pointer transition-all"
+                      title="图片信息"
                     >
-                      <div className="space-y-0.5">
-                        <div><span className="text-zinc-500">宽度:</span> {mediaMetadata.width} px</div>
-                        <div><span className="text-zinc-500">高度:</span> {mediaMetadata.height} px</div>
-                        <div><span className="text-zinc-500">比例:</span> {getAspectRatio(mediaMetadata.width, mediaMetadata.height)}</div>
-                        <div><span className="text-zinc-500">大小:</span> {mediaMetadata.size}</div>
-                        <div><span className="text-zinc-500">格式:</span> {mediaMetadata.format}</div>
-                      </div>
+                      <Icons.Info size={14} className="text-white/90" />
                     </div>
-                  )}
+                    
+                    {/* 信息浮窗 - 从右侧弹出 */}
+                    {showMediaInfo && mediaMetadata && (
+                      <div 
+                        className="absolute top-full right-0 mt-1 bg-black/90 backdrop-blur-md border border-white/20 rounded-lg p-2 text-[10px] text-white/90 whitespace-nowrap shadow-lg"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="space-y-0.5">
+                          <div><span className="text-zinc-500">宽度:</span> {mediaMetadata.width} px</div>
+                          <div><span className="text-zinc-500">高度:</span> {mediaMetadata.height} px</div>
+                          <div><span className="text-zinc-500">比例:</span> {getAspectRatio(mediaMetadata.width, mediaMetadata.height)}</div>
+                          <div><span className="text-zinc-500">大小:</span> {mediaMetadata.size}</div>
+                          <div><span className="text-zinc-500">格式:</span> {mediaMetadata.format}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {/* 工具箱按钮 - 向左上移动一些 */}

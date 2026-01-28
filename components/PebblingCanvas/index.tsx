@@ -4122,14 +4122,37 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   
                   const pendingImageUploads: Array<{ portKey: string; imageData: string }> = [];
                   const pendingVideoUploads: Array<{ portKey: string; videoUrl: string }> = [];
+                  const textInputs: Record<string, string> = {}; // 文字输入
                   
                   for (const conn of incomingMediaConns) {
                       const sourceNode = nodesRef.current.find(n => n.id === conn.fromNode);
-                      if (!sourceNode?.content) continue;
+                      if (!sourceNode) continue;
                       
                       const portKey = conn.toPortKey!;
-                      // 如果已有值，跳过
+                      
+                      // 检测源节点类型
+                      const isTextNode = sourceNode.type === 'text' || sourceNode.type === 'idea';
+                      const isLLMNode = sourceNode.type === 'llm';
+                      
+                      if (isTextNode || isLLMNode) {
+                          // 文字/LLM节点：获取文字内容
+                          // LLM 节点的输出在 data.output，文字节点在 content
+                          const textContent = isLLMNode 
+                              ? (sourceNode.data?.output || '') 
+                              : (sourceNode.content || sourceNode.data?.output || '');
+                          if (textContent) {
+                              console.log('[RH-Config] 收集文字输入:', portKey, textContent.slice(0, 50), '来源:', sourceNode.type);
+                              textInputs[portKey] = textContent;
+                          }
+                          continue;
+                      }
+                      
+                      // 以下是图片/视频节点的处理
+                      // 如果已有上传值，跳过
                       if (nodeInputs[portKey] && nodeInputs[portKey].length > 10) continue;
+                      
+                      // 图片/视频节点需要有 content
+                      if (!sourceNode.content) continue;
                       
                       // 检测内容类型
                       const content = sourceNode.content;
@@ -4172,6 +4195,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           }
                           pendingImageUploads.push({ portKey, imageData });
                       }
+                  }
+                  
+                  // ============ 应用文字输入到 nodeInputs ============
+                  for (const [key, value] of Object.entries(textInputs)) {
+                      nodeInputs[key] = value;
                   }
                   
                   // ============ 构建 nodeInfoList ============
