@@ -1636,8 +1636,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 reader.onload = async (ev) => {
                     if (ev.target?.result) {
                         try {
-                            const { uploadImage } = await import('../../services/api/runninghub');
-                            const result = await uploadImage(ev.target.result as string);
+                            // AI 应用专用上传接口
+                            const { uploadImageForApp } = await import('../../services/api/runninghub');
+                            const result = await uploadImageForApp(ev.target.result as string);
                             if (result.success && result.data?.fileKey) {
                                 handleNodeInputChange(key, result.data.fileKey);
                             } else {
@@ -1780,21 +1781,36 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                     }
                                 };
                                 
-                                // LIST 选项解析
-                                let listOptions: string[] = [];
+                                // LIST 选项解析 - 保留 name 和 index 用于显示和提交
+                                let listOptions: { name: string; index: string }[] = [];
                                 let defaultValue = info.fieldValue || '';
                                 if ((fieldType === 'LIST' || fieldType === 'COMBO') && info.fieldData) {
                                     try {
                                         const parsed = JSON.parse(info.fieldData);
                                         if (Array.isArray(parsed)) {
                                             if (parsed.length === 2 && Array.isArray(parsed[0])) {
-                                                listOptions = parsed[0].map((v: any) => typeof v === 'object' ? (v.label || v.name || String(v)) : String(v));
+                                                // 格式: [[options], {default: ...}]
+                                                listOptions = parsed[0].map((v: any) => {
+                                                    if (typeof v === 'object') {
+                                                        return { name: v.label || v.name || String(v), index: v.index || v.value || v.label || v.name || String(v) };
+                                                    }
+                                                    return { name: String(v), index: String(v) };
+                                                });
                                                 if (parsed[1]?.default !== undefined) defaultValue = String(parsed[1].default);
                                             } else {
-                                                listOptions = parsed.map((v: any) => typeof v === 'object' ? (v.label || v.name || String(v)) : String(v));
+                                                // 格式: [{name, index, description}, ...]
+                                                listOptions = parsed.map((v: any) => {
+                                                    if (typeof v === 'object') {
+                                                        return { name: v.label || v.name || String(v), index: v.index || v.value || v.label || v.name || String(v) };
+                                                    }
+                                                    return { name: String(v), index: String(v) };
+                                                });
                                             }
                                         }
-                                    } catch { listOptions = info.fieldData.split(',').map((s: string) => s.trim()); }
+                                    } catch { 
+                                        // 逗号分隔格式
+                                        listOptions = info.fieldData.split(',').map((s: string) => ({ name: s.trim(), index: s.trim() })); 
+                                    }
                                 }
                                 
                                 return (
@@ -1865,13 +1881,17 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                                                         </button>
                                                     </div>
                                                 ) : (fieldType === 'LIST' || fieldType === 'COMBO') && listOptions.length > 0 ? (
-                                                    <CustomSelect
-                                                        options={listOptions}
-                                                        value={nodeInputs[key] || defaultValue || listOptions[0] || ''}
-                                                        onChange={(val) => handleNodeInputChange(key, val)}
-                                                        isLightCanvas={isLightCanvas}
-                                                        themeColors={themeColors}
-                                                    />
+                                                    <select
+                                                        className="w-full rounded px-1.5 py-0.5 text-[8px] outline-none cursor-pointer"
+                                                        style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', color: themeColors.textSecondary }}
+                                                        value={nodeInputs[key] || defaultValue || listOptions[0]?.index || ''}
+                                                        onChange={(e) => handleNodeInputChange(key, e.target.value)}
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                    >
+                                                        {listOptions.map((opt, i) => (
+                                                            <option key={i} value={opt.index}>{opt.name}</option>
+                                                        ))}
+                                                    </select>
                                                 ) : (
                                                     <input
                                                         type="text"

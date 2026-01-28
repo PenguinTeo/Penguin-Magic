@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react';
-import { runAIApp, uploadImage, uploadToRunningHub, RHTaskOutput } from '../services/api/runninghub';
+import { runAIApp, uploadImage, uploadImageForApp, uploadToRunningHub, RHTaskOutput } from '../services/api/runninghub';
 
 // 简单的 uuid 生成
 const uuid = () => Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -183,7 +183,7 @@ export const RHTaskQueueProvider: React.FC<{ children: ReactNode }> = ({ childre
           for (const upload of task.pendingImageUploads!) {
             try {
               console.log('[RHQueue] 上传图片:', upload.portKey);
-              const result = await uploadImage(upload.imageData);
+              const result = await uploadImageForApp(upload.imageData);
               if (result.success && result.data?.fileKey) {
                 console.log('[RHQueue] 上传成功:', upload.portKey, result.data.fileKey);
                 uploadUpdates[upload.portKey] = result.data.fileKey;

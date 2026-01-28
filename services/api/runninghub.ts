@@ -164,6 +164,7 @@ export const uploadToRunningHub = async (
 /**
  * 上传图片到 RunningHub（base64）
  * 返回 fileKey 用于作为 fieldValue
+ * 注：此接口用于标准模型 API (RH Magic)
  */
 export const uploadImage = async (
     base64Data: string
@@ -176,6 +177,24 @@ export const uploadImage = async (
     error?: string;
 }> => {
     return post('/runninghub/upload-image', { image: base64Data });
+};
+
+/**
+ * 上传图片到 RunningHub（base64）- AI 应用专用
+ * 返回 fileKey 用于作为 fieldValue
+ * 注：此接口用于 AI 应用（会员消费 API）
+ */
+export const uploadImageForApp = async (
+    base64Data: string
+): Promise<{
+    success: boolean;
+    data?: {
+        fileKey: string;
+        fileName?: string;
+    };
+    error?: string;
+}> => {
+    return post('/runninghub/upload-image-for-app', { image: base64Data });
 };
 
 /**

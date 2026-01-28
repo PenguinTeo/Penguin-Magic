@@ -366,6 +366,102 @@ router.post('/upload-image', async (req, res) => {
 });
 
 /**
+ * POST /upload-image-for-app - 上传 base64 图片到 RunningHub（AI 应用专用）
+ * 使用 AI 应用的上传接口: /task/openapi/upload
+ * 使用会员消费 API Key
+ */
+router.post('/upload-image-for-app', async (req, res) => {
+    try {
+        const apiKey = getAppApiKey();
+        if (!apiKey) {
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 会员消费 API Key' });
+        }
+        
+        const { image } = req.body;
+        if (!image) {
+            return res.status(400).json({ success: false, error: '缺少图片数据' });
+        }
+        
+        console.log('[RH App Upload] 开始上传图片, 数据长度:', image.length);
+        
+        // 解析 base64 数据
+        let base64Data = image;
+        let mimeType = 'image/png';
+        let extension = '.png';
+        
+        if (image.startsWith('data:')) {
+            const matches = image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            if (matches && matches.length === 3) {
+                mimeType = matches[1];
+                base64Data = matches[2];
+                
+                // 根据 MIME 类型确定扩展名
+                if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
+                    extension = '.jpg';
+                } else if (mimeType.includes('png')) {
+                    extension = '.png';
+                } else if (mimeType.includes('gif')) {
+                    extension = '.gif';
+                } else if (mimeType.includes('webp')) {
+                    extension = '.webp';
+                }
+            }
+        }
+        
+        console.log('[RH App Upload] MIME:', mimeType, '扩展名:', extension);
+        
+        // 将 base64 转换为 Buffer
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        const fileName = `upload_${Date.now()}${extension}`;
+        
+        console.log('[RH App Upload] 文件名:', fileName, '大小:', imageBuffer.length);
+        
+        // 构建 FormData - 使用 AI 应用的上传接口
+        const formData = new FormData();
+        formData.append('apiKey', apiKey);
+        formData.append('fileType', 'input');
+        formData.append('file', imageBuffer, {
+            filename: fileName,
+            contentType: mimeType
+        });
+        
+        // 上传到 RunningHub - 使用 AI 应用的上传接口
+        console.log('[RH App Upload] 请求 RH API: /task/openapi/upload');
+        const response = await fetch(`${RH_BASE_URL}/task/openapi/upload`, {
+            method: 'POST',
+            headers: {
+                'Host': 'www.runninghub.cn',
+                ...formData.getHeaders()
+            },
+            body: formData
+        });
+        
+        const result = await response.json();
+        console.log('[RH App Upload] RH响应:', JSON.stringify(result));
+        
+        if (result.code === 0 && result.data?.fileName) {
+            // 返回 fileName 用于 AI 应用
+            res.json({
+                success: true,
+                data: {
+                    fileKey: result.data.fileName,  // AI 应用需要 fileKey
+                    fileName: result.data.fileName,
+                    fileType: result.data.fileType
+                }
+            });
+        } else {
+            res.json({
+                success: false,
+                error: result.msg || '图片上传失败'
+            });
+        }
+    } catch (error) {
+        console.error('[RH App Upload] 图片上传失败:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * POST /ai-app/run - 发起 AI 应用任务
  * 使用会员消费 API Key
  */
