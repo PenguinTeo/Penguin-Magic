@@ -4583,17 +4583,56 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             );
         }
 
-        // Edit 节点 - 显示设置界面（与创意节点UI保持一致）
+        // Edit 节点 - 显示设置界面（支持本地API和RunningHub两种模式）
         if (node.type === 'edit') {
+            // API来源：本地API / RunningHub
+            const magicSource = node.data?.magicSource || 'local';
+            // RunningHub模式的官方/非官方切换
+            const bananaOfficial = node.data?.bananaOfficial !== false; // 默认官方
+            
+            // 根据来源设置主题色
+            const isRunningHub = magicSource === 'runninghub';
+            const themeColor = isRunningHub ? 'rgba(16,185,129' : 'rgba(234,179,8'; // 绿色 / 黄色
+            const activeColorClass = isRunningHub ? 'bg-emerald-500/30 text-emerald-200' : 'bg-yellow-500/30 text-yellow-200';
+            const textColor = isLightCanvas 
+                ? (isRunningHub ? '#047857' : '#a16207')
+                : (isRunningHub ? '#6ee7b7' : '#fef08a');
+            
             return (
-                <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(234,179,8,0.3)' : 'rgba(234,179,8,0.3)'}` }}>
-                    {/* 头部 - 与创意节点一致 */}
-                    <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${isLightCanvas ? 'rgba(234,179,8,0.2)' : 'rgba(234,179,8,0.2)'}`, backgroundColor: isLightCanvas ? 'rgba(234,179,8,0.08)' : 'rgba(234,179,8,0.1)' }}>
-                        <div className="flex items-center gap-2">
-                            <BananaIcon size={12} className={isLightCanvas ? 'text-yellow-600' : 'text-yellow-300'} />
-                            <span className="text-[10px] font-bold truncate max-w-[200px]" style={{ color: isLightCanvas ? '#a16207' : '#fef08a' }}>{label}</span>
+                <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${themeColor},0.3)` }}>
+                    {/* 头部 - 带TAB切换 */}
+                    <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${themeColor},0.2)`, backgroundColor: isLightCanvas ? `${themeColor},0.08)` : `${themeColor},0.1)` }}>
+                        <div className="flex items-center gap-1">
+                            <BananaIcon size={12} className={isLightCanvas ? (isRunningHub ? 'text-emerald-600' : 'text-yellow-600') : (isRunningHub ? 'text-emerald-300' : 'text-yellow-300')} />
+                            {/* TAB切换按钮 */}
+                            <div className={`flex ${controlBg} rounded p-0.5 ml-1`}>
+                                <button
+                                    className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded transition-all ${
+                                        magicSource === 'local' 
+                                            ? 'bg-yellow-500/30 text-yellow-200' 
+                                            : 'text-zinc-500 hover:text-zinc-300'
+                                    }`}
+                                    onClick={() => onUpdate(node.id, { data: { ...node.data, magicSource: 'local' } })}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    本地
+                                </button>
+                                <button
+                                    className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded transition-all ${
+                                        magicSource === 'runninghub' 
+                                            ? 'bg-emerald-500/30 text-emerald-200' 
+                                            : 'text-zinc-500 hover:text-zinc-300'
+                                    }`}
+                                    onClick={() => onUpdate(node.id, { data: { ...node.data, magicSource: 'runninghub' } })}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    RH
+                                </button>
+                            </div>
                         </div>
-                        <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: isLightCanvas ? '#854d0e' : 'rgba(253,224,71,0.6)', backgroundColor: isLightCanvas ? 'rgba(234,179,8,0.15)' : 'rgba(234,179,8,0.2)' }}>MAGIC</span>
+                        <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: isLightCanvas ? (isRunningHub ? '#065f46' : '#854d0e') : (isRunningHub ? 'rgba(110,231,183,0.6)' : 'rgba(253,224,71,0.6)'), backgroundColor: isLightCanvas ? `${themeColor},0.15)` : `${themeColor},0.2)` }}>
+                            {isRunningHub ? 'RH MAGIC' : 'MAGIC'}
+                        </span>
                     </div>
                     <div className="flex-1 p-3 flex flex-col gap-2 overflow-hidden">
                         {/* Prompt */}
@@ -4610,14 +4649,33 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         </div>
                     </div>
                         
-                    {/* 设置区 - 与创意节点一致的样式 */}
+                    {/* 设置区 */}
                     <div className="px-3 pb-3 space-y-1.5 flex-shrink-0">
+                        {/* RunningHub模式：官方/非官方切换 */}
+                        {isRunningHub && (
+                            <div className={`flex ${controlBg} rounded-lg p-0.5`}>
+                                <button
+                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded-md transition-all ${bananaOfficial ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    onClick={() => onUpdate(node.id, { data: { ...node.data, bananaOfficial: true } })}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    官方
+                                </button>
+                                <button
+                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded-md transition-all ${!bananaOfficial ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    onClick={() => onUpdate(node.id, { data: { ...node.data, bananaOfficial: false } })}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    非官方
+                                </button>
+                            </div>
+                        )}
                         {/* Aspect Ratio Row 1 */}
                         <div className={`flex ${controlBg} rounded-lg p-0.5`}>
                             {aspectRatios1.map(r => (
                                 <button
                                     key={r}
-                                    className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${editAspectRatio === r ? 'bg-yellow-500/30 text-yellow-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${editAspectRatio === r ? activeColorClass : 'text-zinc-500 hover:text-zinc-300'}`}
                                     onClick={() => handleEditSettingChange('aspectRatio', r)}
                                     onMouseDown={(e) => e.stopPropagation()}
                                 >
@@ -4630,7 +4688,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             {aspectRatios2.map(r => (
                                 <button
                                     key={r}
-                                    className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${editAspectRatio === r ? 'bg-yellow-500/30 text-yellow-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    className={`flex-1 px-1 py-1 text-[9px] font-medium rounded-md transition-all ${editAspectRatio === r ? activeColorClass : 'text-zinc-500 hover:text-zinc-300'}`}
                                     onClick={() => handleEditSettingChange('aspectRatio', r)}
                                     onMouseDown={(e) => e.stopPropagation()}
                                 >
@@ -4643,7 +4701,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             {resolutions.map(r => (
                                 <button
                                     key={r}
-                                    className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${editResolution === r ? 'bg-yellow-500/30 text-yellow-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    className={`flex-1 px-2 py-1 text-[10px] font-medium rounded-md transition-all ${editResolution === r ? activeColorClass : 'text-zinc-500 hover:text-zinc-300'}`}
                                     onClick={() => handleEditSettingChange('resolution', r)}
                                     onMouseDown={(e) => e.stopPropagation()}
                                 >
@@ -4653,15 +4711,15 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         </div>
                     </div>
                     
-                    {/* 底部状态 - 与创意节点一致 */}
+                    {/* 底部状态 */}
                     <div className={`h-6 ${footerBarBg} border-t px-3 flex items-center justify-between text-[10px]`} style={{ borderColor: themeColors.headerBorder, color: themeColors.textMuted }}>
-                        <span>输入: 1/1</span>
+                        <span>{isRunningHub ? 'RunningHub' : '本地API'}</span>
                         <span>{editAspectRatio} · {editResolution}</span>
                     </div>
                     
                     {showRunningIndicator && (
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-30">
-                            <div className="w-8 h-8 border-2 border-yellow-400/50 border-t-yellow-400 rounded-full animate-spin"></div>
+                            <div className={`w-8 h-8 border-2 ${isRunningHub ? 'border-emerald-400/50 border-t-emerald-400' : 'border-yellow-400/50 border-t-yellow-400'} rounded-full animate-spin`}></div>
                         </div>
                     )}
                 </div>

@@ -1292,7 +1292,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       }
       if (type === 'video') { width = 400; height = 225; }
       if (type === 'relay') { width = 40; height = 40; }
-      if (['edit', 'remove-bg', 'upscale', 'llm', 'resize'].includes(type)) { width = 280; height = 250; }
+      if (['edit', 'remove-bg', 'upscale', 'llm', 'resize'].includes(type)) { width = 280; height = 300; }
       if (type === 'llm') { width = 320; height = 300; }
       // RunningHub 节点（输入 ID 的节点）
       if (type === 'runninghub') { width = 280; height = 180; }
@@ -2772,7 +2772,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               }
           }
           else if (node.type === 'edit') {
-               // Magic节点执行逻辑
+               // Magic节点执行逻辑（支持本地API和RunningHub两种模式）
+               const magicSource = node.data?.magicSource || 'local';
                const inputTexts = inputs.texts.join('\n');
                const inputImages = inputs.images;
                          
@@ -2786,31 +2787,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                const editResolution = node.data?.settings?.resolution || 'AUTO';
                
                console.log('[Magic] 节点设置:', {
+                   magicSource,
                    aspectRatio: editAspectRatio,
                    resolution: editResolution,
                    nodeSettings: node.data?.settings
                });
-                         
-               // 🔧 修复：AUTO 比例应该传递给服务层，让服务层根据是否有输入图片决定处理方式
-               let finalConfig: GenerationConfig | undefined = undefined;
-               const hasInputImages = inputImages.length > 0;
-                         
-               if (editAspectRatio === 'AUTO' && hasInputImages) {
-                   // 图生图 + AUTO：只传递 resolution（如果不是 AUTO），不传 aspectRatio
-                   if (editResolution !== 'AUTO') {
-                       finalConfig = {
-                           resolution: editResolution as '1K' | '2K' | '4K'
-                       };
-                   }
-               } else if (editAspectRatio !== 'AUTO' || editResolution !== 'AUTO') {
-                   finalConfig = {
-                       aspectRatio: editAspectRatio !== 'AUTO' ? editAspectRatio : '1:1',
-                       resolution: editResolution !== 'AUTO' ? editResolution as '1K' | '2K' | '4K' : '1K'
-                   };
-               }
                
-               console.log('[Magic] 构建的 finalConfig:', finalConfig);
-                         
                // 🔧 每次运行都创建新的输出节点
                const outputNodeId = uuid();
                const outputNode: CanvasNode = {
@@ -2835,52 +2817,181 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                setConnections(prev => [...prev, newConnection]);
                setHasUnsavedChanges(true);
                console.log(`[Magic] 已创建新输出节点 ${outputNodeId.slice(0,8)}`);
-                         
-               // 调用API
-               try {
-                   let result: string | null = null;
-                             
-                   if (!combinedPrompt && inputImages.length === 0) {
-                       console.warn('[Magic] 无prompt且无图片，无法执行');
+               
+               // =========== RunningHub 模式 ===========
+               if (magicSource === 'runninghub') {
+                   const { executeBananaTask, uploadImageForBanana } = await import('../../services/rhBananaService');
+                   
+                   const bananaOfficial = node.data?.bananaOfficial !== false; // 默认官方
+                   const effectiveMode = inputImages.length > 0 ? 'image2image' : 'text2image';
+                   
+                   console.log('[Magic-RH] 执行参数:', {
+                       prompt: combinedPrompt.slice(0, 50),
+                       mode: effectiveMode,
+                       resolution: editResolution !== 'AUTO' ? editResolution : '2K',
+                       aspectRatio: editAspectRatio,
+                       official: bananaOfficial,
+                       inputImagesCount: inputImages.length
+                   });
+                   
+                   // 验证输入
+                   if (!combinedPrompt) {
+                       console.error('[Magic-RH] 无提示词');
                        updateNode(outputNodeId, { status: 'error' });
-                       updateNode(nodeId, { status: 'error' });
+                       updateNode(nodeId, { status: 'error', data: { ...node.data, bananaProgress: '请输入提示词' } });
                        return;
-                   } else if (combinedPrompt && inputImages.length === 0) {
-                       result = await generateCreativeImage(combinedPrompt, finalConfig, signal);
-                   } else if (!combinedPrompt && inputImages.length > 0) {
-                       result = inputImages[0];
-                       updateNode(nodeId, { status: 'completed' });
-                   } else {
-                       result = await editCreativeImage(inputImages, combinedPrompt, finalConfig, signal);
                    }
-                             
-                   if (!signal.aborted) {
-                       if (result) {
-                           console.log(`[Magic] API返回成功,更新输出节点内容`);
-                           const metadata = await extractImageMetadata(result);
-                           updateNode(outputNodeId, { 
-                               content: result,
-                               status: 'completed',
-                               data: { imageMetadata: metadata }
-                           });
-                           updateNode(nodeId, { status: 'completed' });
+                   
+                   try {
+                       updateNode(nodeId, { data: { ...node.data, bananaProgress: '准备中...' } });
+                       
+                       // 如果是图生图，需要上传图片到RH获取URL
+                       let imageUrls: string[] = [];
+                       if (effectiveMode === 'image2image' && inputImages.length > 0) {
+                           updateNode(nodeId, { data: { ...node.data, bananaProgress: '上传图片中...' } });
+                           for (let i = 0; i < inputImages.length; i++) {
+                               const url = await uploadImageForBanana(inputImages[i]);
+                               imageUrls.push(url);
+                           }
+                           console.log('[Magic-RH] 图片上传完成, URLs:', imageUrls.length);
+                       }
+                       
+                       // 调用API
+                       const result = await executeBananaTask(
+                           combinedPrompt,
+                           {
+                               mode: effectiveMode,
+                               resolution: editResolution !== 'AUTO' ? editResolution : '2K',
+                               aspectRatio: editAspectRatio,
+                               imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+                               official: bananaOfficial
+                           },
+                           (status, message) => {
+                               let progressText = '';
+                               switch (status) {
+                                   case 'QUEUED': progressText = '排队中...'; break;
+                                   case 'RUNNING': progressText = '生成中...'; break;
+                                   case 'SUCCESS': progressText = '完成!'; break;
+                                   default: progressText = message || status;
+                               }
+                               updateNode(nodeId, { data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, bananaProgress: progressText } });
+                           }
+                       );
+                       
+                       if (!signal.aborted && result.url) {
+                           // 尝试下载图片并保存到本地
+                           let finalImageUrl = result.url;
+                           try {
+                               const { saveToOutput } = await import('../../services/api/files');
+                               const saveResult = await saveToOutput(result.url, `magic-rh-${Date.now()}.${result.outputType || 'png'}`);
+                               if (saveResult.success && saveResult.data?.url) {
+                                   finalImageUrl = saveResult.data.url;
+                               }
+                           } catch (saveErr) {
+                               console.warn('[Magic-RH] 保存异常，使用远程URL');
+                           }
                            
-                           // 🔧 保存画布
+                           // 获取图片实际尺寸
+                           let imgWidth = 300, imgHeight = 300;
+                           try {
+                               const img = new Image();
+                               await new Promise<void>((resolve, reject) => {
+                                   img.onload = () => resolve();
+                                   img.onerror = () => reject();
+                                   img.src = finalImageUrl;
+                               });
+                               const ratio = img.width / img.height;
+                               imgWidth = 300;
+                               imgHeight = Math.round(300 / ratio);
+                           } catch {}
+                           
+                           updateNode(outputNodeId, {
+                               content: finalImageUrl,
+                               width: imgWidth,
+                               height: imgHeight,
+                               status: 'completed'
+                           });
+                           updateNode(nodeId, { status: 'completed', data: { ...node.data, bananaProgress: '' } });
                            saveCurrentCanvas();
                            
-                           // 🔧 同步到桌面
                            if (onImageGenerated) {
-                               onImageGenerated(result, combinedPrompt || 'Magic结果', currentCanvasId || undefined, canvasName);
+                               onImageGenerated(finalImageUrl, combinedPrompt, currentCanvasId || undefined, canvasName);
                            }
-                       } else {
+                       }
+                   } catch (err) {
+                       console.error('[Magic-RH] 执行失败:', err);
+                       updateNode(outputNodeId, { status: 'error' });
+                       updateNode(nodeId, { 
+                           status: 'error', 
+                           data: { ...node.data, bananaProgress: err instanceof Error ? err.message : '执行失败' }
+                       });
+                   }
+               }
+               // =========== 本地API 模式 ===========
+               else {
+                   // 🔧 AUTO 比例应该传递给服务层
+                   let finalConfig: GenerationConfig | undefined = undefined;
+                   const hasInputImages = inputImages.length > 0;
+                             
+                   if (editAspectRatio === 'AUTO' && hasInputImages) {
+                       if (editResolution !== 'AUTO') {
+                           finalConfig = {
+                               resolution: editResolution as '1K' | '2K' | '4K'
+                           };
+                       }
+                   } else if (editAspectRatio !== 'AUTO' || editResolution !== 'AUTO') {
+                       finalConfig = {
+                           aspectRatio: editAspectRatio !== 'AUTO' ? editAspectRatio : '1:1',
+                           resolution: editResolution !== 'AUTO' ? editResolution as '1K' | '2K' | '4K' : '1K'
+                       };
+                   }
+                   
+                   console.log('[Magic-Local] 构建的 finalConfig:', finalConfig);
+                             
+                   // 调用API
+                   try {
+                       let result: string | null = null;
+                                 
+                       if (!combinedPrompt && inputImages.length === 0) {
+                           console.warn('[Magic-Local] 无prompt且无图片，无法执行');
                            updateNode(outputNodeId, { status: 'error' });
                            updateNode(nodeId, { status: 'error' });
+                           return;
+                       } else if (combinedPrompt && inputImages.length === 0) {
+                           result = await generateCreativeImage(combinedPrompt, finalConfig, signal);
+                       } else if (!combinedPrompt && inputImages.length > 0) {
+                           result = inputImages[0];
+                           updateNode(nodeId, { status: 'completed' });
+                       } else {
+                           result = await editCreativeImage(inputImages, combinedPrompt, finalConfig, signal);
                        }
+                                 
+                       if (!signal.aborted) {
+                           if (result) {
+                               console.log(`[Magic-Local] API返回成功,更新输出节点内容`);
+                               const metadata = await extractImageMetadata(result);
+                               updateNode(outputNodeId, { 
+                                   content: result,
+                                   status: 'completed',
+                                   data: { imageMetadata: metadata }
+                               });
+                               updateNode(nodeId, { status: 'completed' });
+                               
+                               saveCurrentCanvas();
+                               
+                               if (onImageGenerated) {
+                                   onImageGenerated(result, combinedPrompt || 'Magic结果', currentCanvasId || undefined, canvasName);
+                               }
+                           } else {
+                               updateNode(outputNodeId, { status: 'error' });
+                               updateNode(nodeId, { status: 'error' });
+                           }
+                       }
+                   } catch (error) {
+                       console.error('[Magic-Local] 执行失败:', error);
+                       updateNode(outputNodeId, { status: 'error' });
+                       updateNode(nodeId, { status: 'error' });
                    }
-               } catch (error) {
-                   console.error('[Magic] 执行失败:', error);
-                   updateNode(outputNodeId, { status: 'error' });
-                   updateNode(nodeId, { status: 'error' });
                }
           }
           else if (node.type === 'video') {

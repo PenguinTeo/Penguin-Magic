@@ -195,14 +195,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <DraggableButton type="relay" icon={<Icons.Relay />} label="Relay" onDragStart={onDragStart} onClick={() => onAdd('relay')} isLight={isLight} />
                 <DraggableButton type="edit" icon={<BananaIcon />} label="Magic" onDragStart={onDragStart} onClick={() => onAdd('edit')} isLight={isLight} />
                 <DraggableButton 
-                    type="rh-magic" 
-                    icon={<span className="text-[10px]">🍌</span>} 
-                    label="RH Magic" 
-                    onDragStart={onDragStart} 
-                    onClick={() => onAdd('rh-magic')} 
-                    isLight={isLight}
-                />
-                <DraggableButton 
                     type="runninghub" 
                     icon={<span className="text-[10px] font-black">R</span>} 
                     label="RunningHub" 

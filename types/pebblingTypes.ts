@@ -144,7 +144,9 @@ export interface NodeData {
   receivedImages?: string[]; // 接收到的上游图片URL列表
   outputImageUrl?: string; // 画板输出的PNG图片URL
   
-  // RH Magic 节点（香蕉 - 全能图片PRO）
+  // Magic 节点统一配置（支持本地API和RunningHub两种来源）
+  magicSource?: 'local' | 'runninghub'; // API来源：本地API / RunningHub
+  bananaOfficial?: boolean; // RunningHub模式：官方/非官方（仅runninghub模式有效）
   bananaMode?: 'text2image' | 'image2image'; // 文生图/图生图
   bananaResolution?: '1K' | '2K' | '4K'; // 分辨率
   bananaAspectRatio?: '1:1' | '2:3' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '16:9' | '9:16' | '21:9'; // 宽高比
