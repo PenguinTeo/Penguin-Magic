@@ -336,7 +336,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   const [canvasName, setCanvasName] = useState('未命名画布');
   const [isCanvasLoading, setIsCanvasLoading] = useState(false);
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSaveRef = useRef<{ nodes: string; connections: string }>({ nodes: '', connections: '' });
+  const lastSaveRef = useRef<{ nodes: string; connections: string; groups: string }>({ nodes: '', connections: '', groups: '' });
   const saveCanvasRef = useRef<(() => Promise<void>) | null>(null); // 用于避免循环依赖
 
   // --- State ---
@@ -353,6 +353,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // Refs for State (to avoid stale closures in execution logic)
   const nodesRef = useRef<CanvasNode[]>([]);
   const connectionsRef = useRef<Connection[]>([]);
+  const groupsRef = useRef<NodeGroup[]>([]);
 
   useEffect(() => {
       nodesRef.current = nodes;
@@ -373,6 +374,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // Node Selection & Dragging
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set<string>());
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null); // 选中的组
   
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [isDragOperation, setIsDragOperation] = useState(false); // Tracks if actual movement occurred
@@ -464,6 +466,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   
   // 节点编组状态
   const [groups, setGroups] = useState<NodeGroup[]>([]);
+  
+  // 同步 groupsRef
+  useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
+  
   const [groupContextMenu, setGroupContextMenu] = useState<{
     x: number;
     y: number;
@@ -557,8 +565,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       // 检查是否有变化（与 lastSaveRef 比较）
       const currentNodesStr = JSON.stringify(nodesRef.current);
       const currentConnsStr = JSON.stringify(connectionsRef.current);
+      const currentGroupsStr = JSON.stringify(groupsRef.current);
       const hasChanges = currentNodesStr !== lastSaveRef.current.nodes || 
-                         currentConnsStr !== lastSaveRef.current.connections;
+                         currentConnsStr !== lastSaveRef.current.connections ||
+                         currentGroupsStr !== lastSaveRef.current.groups;
       
       if (hasChanges || nodesRef.current.length > 0) {
         console.log('[画布切换] ✅ 检测到数据，强制保存...');
@@ -567,11 +577,13 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           await canvasApi.updateCanvas(currentCanvasId, {
             nodes: nodesRef.current,
             connections: connectionsRef.current,
+            groups: groupsRef.current,
           });
           console.log('[画布切换] ✅ 当前画布已保存');
           lastSaveRef.current = {
             nodes: currentNodesStr,
-            connections: currentConnsStr
+            connections: currentConnsStr,
+            groups: currentGroupsStr
           };
           // 🆕 保存后刷新列表，更新节点数和修改时间
           await loadCanvasList();
@@ -590,10 +602,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (result.success && result.data) {
         const loadedNodes = result.data.nodes || [];
         const loadedConnections = result.data.connections || [];
+        const loadedGroups = result.data.groups || [];
         
         console.log('[画布切换] 📦 后端返回数据:', result.data.name);
         console.log('[画布切换] 📦 loadedNodes.length:', loadedNodes.length);
-        console.log('[画布切换] 📦 loadedNodes:', JSON.stringify(loadedNodes.map(n => ({ id: n.id.slice(0, 8), type: n.type }))));
+        console.log('[画布切换] 📦 loadedGroups.length:', loadedGroups.length);
         
         // 🔧 关键修复3：先更新 currentCanvasId，再更新 nodes/connections
         // 这样自动保存的 useEffect 就会看到正确的 canvasId
@@ -608,16 +621,17 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         // 然后更新 state 和 ref
         setNodes(loadedNodes);
         setConnections(loadedConnections);
+        setGroups(loadedGroups);
         nodesRef.current = loadedNodes;
         connectionsRef.current = loadedConnections;
         
         console.log('[画布切换] 🔄 更新后的 nodesRef.length:', nodesRef.current.length);
-        console.log('[画布切换] 🔄 更新后的 nodesRef:', JSON.stringify(nodesRef.current.map(n => ({ id: n.id.slice(0, 8), type: n.type }))));
         
         // 更新缓存，防止立即触发保存
         lastSaveRef.current = {
           nodes: JSON.stringify(loadedNodes),
-          connections: JSON.stringify(loadedConnections)
+          connections: JSON.stringify(loadedConnections),
+          groups: JSON.stringify(loadedGroups)
         };
         
         // 清除未保存标记
@@ -654,8 +668,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       
       const currentNodesStr = JSON.stringify(nodesRef.current);
       const currentConnsStr = JSON.stringify(connectionsRef.current);
+      const currentGroupsStr = JSON.stringify(groupsRef.current);
       const hasChanges = currentNodesStr !== lastSaveRef.current.nodes || 
-                         currentConnsStr !== lastSaveRef.current.connections;
+                         currentConnsStr !== lastSaveRef.current.connections ||
+                         currentGroupsStr !== lastSaveRef.current.groups;
       
       if (hasChanges || nodesRef.current.length > 0) {
         console.log('[创建画布] 检测到数据，强制保存...');
@@ -664,11 +680,13 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           await canvasApi.updateCanvas(currentCanvasId, {
             nodes: nodesRef.current,
             connections: connectionsRef.current,
+            groups: groupsRef.current,
           });
           console.log('[创建画布] 当前画布已保存');
           lastSaveRef.current = {
             nodes: currentNodesStr,
-            connections: currentConnsStr
+            connections: currentConnsStr,
+            groups: currentGroupsStr
           };
           // 🆕 保存后刷新列表，更新节点数和修改时间
           await loadCanvasList();
@@ -703,9 +721,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         setCanvasName(result.data.name);
         setNodes([]);
         setConnections([]);
+        setGroups([]);
         nodesRef.current = [];
         connectionsRef.current = [];
-        lastSaveRef.current = { nodes: '[]', connections: '[]' };
+        groupsRef.current = [];
+        lastSaveRef.current = { nodes: '[]', connections: '[]', groups: '[]' };
         setHasUnsavedChanges(false);
         await loadCanvasList();
         console.log('[创建画布] 创建新画布完成:', result.data.name);
@@ -770,9 +790,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
     
     const nodesStr = JSON.stringify(localizedNodes);
     const connectionsStr = JSON.stringify(connectionsRef.current);
+    const groupsStr = JSON.stringify(groupsRef.current);
     
     // 检查是否有变化
-    if (nodesStr === lastSaveRef.current.nodes && connectionsStr === lastSaveRef.current.connections) {
+    if (nodesStr === lastSaveRef.current.nodes && 
+        connectionsStr === lastSaveRef.current.connections &&
+        groupsStr === lastSaveRef.current.groups) {
       return;
     }
     
@@ -780,6 +803,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       await canvasApi.updateCanvas(currentCanvasId, {
         nodes: localizedNodes,
         connections: connectionsRef.current,
+        groups: groupsRef.current,
       });
       
       // 🔧 关键修复：使用函数式更新，只更新被本地化的节点，避免覆盖并发添加的新节点
@@ -795,7 +819,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         });
       });
       
-      lastSaveRef.current = { nodes: nodesStr, connections: connectionsStr };
+      lastSaveRef.current = { nodes: nodesStr, connections: connectionsStr, groups: groupsStr };
       console.log('[Canvas] 自动保存');
       
       // 🆕 保存后刷新列表，更新节点数和修改时间
@@ -845,9 +869,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
     
     const nodesStr = JSON.stringify(localizedNodes);
     const connectionsStr = JSON.stringify(snapshotConnections);
+    const groupsStr = JSON.stringify(groupsRef.current);
     
     // 检查是否有变化
-    if (nodesStr === lastSaveRef.current.nodes && connectionsStr === lastSaveRef.current.connections) {
+    if (nodesStr === lastSaveRef.current.nodes && 
+        connectionsStr === lastSaveRef.current.connections &&
+        groupsStr === lastSaveRef.current.groups) {
       return;
     }
     
@@ -855,6 +882,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       await canvasApi.updateCanvas(currentCanvasId, {
         nodes: localizedNodes,
         connections: snapshotConnections,
+        groups: groupsRef.current,
       });
       
       // 使用函数式更新，只更新被本地化的节点
@@ -869,7 +897,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         });
       });
       
-      lastSaveRef.current = { nodes: nodesStr, connections: connectionsStr };
+      lastSaveRef.current = { nodes: nodesStr, connections: connectionsStr, groups: groupsStr };
       console.log('[Canvas] 自动保存(快照)');
       
       await loadCanvasList();
@@ -1018,12 +1046,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       return;
     }
       
-    // 🔧 关键修复：检查当前 nodes/connections 是否与 lastSaveRef 一致
+    // 🔧 关键修复：检查当前 nodes/connections/groups 是否与 lastSaveRef 一致
     // 如果一致，说明是刚加载的数据，不需要保存
     const currentNodesStr = JSON.stringify(nodes);
     const currentConnsStr = JSON.stringify(connections);
+    const currentGroupsStr = JSON.stringify(groups);
     if (currentNodesStr === lastSaveRef.current.nodes && 
-        currentConnsStr === lastSaveRef.current.connections) {
+        currentConnsStr === lastSaveRef.current.connections &&
+        currentGroupsStr === lastSaveRef.current.groups) {
       console.log('[自动保存] 数据未变化，跳过');
       return;
     }
@@ -1047,7 +1077,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, [nodes, connections, currentCanvasId, saveCurrentCanvas, draggingNodeId, isDragOperation, autoSaveEnabled]);
+  }, [nodes, connections, groups, currentCanvasId, saveCurrentCanvas, draggingNodeId, isDragOperation, autoSaveEnabled]);
 
 
   // Re-check API config when settings modal closes
@@ -1328,18 +1358,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   const deleteSelection = useCallback(() => {
       // 1. Delete Nodes
       if (selectedNodeIds.size > 0) {
-          const idsToDelete = new Set<string>(selectedNodeIds);
+        const idsToDelete = new Set<string>(selectedNodeIds);
           setNodes(prev => prev.filter(n => !idsToDelete.has(n.id)));
           setConnections(prev => prev.filter(c => !idsToDelete.has(c.fromNode) && !idsToDelete.has(c.toNode)));
           
-          // 同步更新组：移除已删除的节点，如果组内节点少于2个则解散组
-          setGroups(prev => prev
-            .map(g => ({
-              ...g,
-              nodeIds: g.nodeIds.filter(id => !idsToDelete.has(id))
-            }))
-            .filter(g => g.nodeIds.length >= 2)
-          );
+          // 组现在是基于位置检测的，不需要同步更新 nodeIds
           
           setSelectedNodeIds(new Set<string>());
           setHasUnsavedChanges(true); // 标记未保存
@@ -1410,7 +1433,198 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
     setHasUnsavedChanges(true);
   }, []);
   
-  // 更新组属性（名称、颜色等）
+  // 导出组 - 包含组信息、组内节点和连接
+  const exportGroup = useCallback((groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+    
+    // 获取组内节点（基于位置检测）
+    const headerHeight = 48;
+    const nodesInGroup = nodesRef.current.filter(node => {
+      const nodeRight = node.x + node.width;
+      const nodeBottom = node.y + node.height;
+      const groupContentY = group.y + headerHeight;
+      return node.x >= group.x && nodeRight <= group.x + group.width &&
+             node.y >= groupContentY && nodeBottom <= group.y + group.height;
+    });
+    
+    if (nodesInGroup.length === 0) {
+      alert('组内没有节点，无法导出');
+      return;
+    }
+    
+    // 获取组内节点的连接
+    const nodeIds = new Set(nodesInGroup.map(n => n.id));
+    const groupConnections = connections.filter(c => 
+      nodeIds.has(c.fromNode) && nodeIds.has(c.toNode)
+    );
+    
+    // 计算节点相对于组的位置（方便导入时重新定位）
+    const exportNodes = nodesInGroup.map(node => ({
+      ...node,
+      x: node.x - group.x,
+      y: node.y - group.y,
+    }));
+    
+    // 获取组颜色（如果未设置则使用默认计算的颜色）
+    const GROUP_COLORS = ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EC4899', '#06B6D4'];
+    const groupColor = group.color || GROUP_COLORS[parseInt(group.id.slice(-2), 16) % GROUP_COLORS.length];
+    
+    // 构建导出数据
+    const exportData = {
+      type: 'penguin-magic-group',
+      version: '1.0',
+      exportTime: new Date().toISOString(),
+      group: {
+        name: group.name,
+        width: group.width,
+        height: group.height,
+        color: groupColor, // 确保总是有颜色值
+      },
+      nodes: exportNodes,
+      connections: groupConnections,
+    };
+    
+    // 下载文件
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${group.name.replace(/[\\/:*?"<>|]/g, '_')}.pmgroup`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [groups, connections]);
+  
+  // 导入组
+  const importGroup = useCallback((file: File, position?: Vec2) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        if (data.type !== 'penguin-magic-group') {
+          alert('无效的组文件格式');
+          return;
+        }
+        
+        const groupWidth = data.group.width || 400;
+        const groupHeight = data.group.height || 300;
+        const padding = 50; // 与其他元素的间距
+        
+        // 检测位置是否与现有节点/组重叠
+        const checkOverlap = (x: number, y: number, w: number, h: number): boolean => {
+          // 检测与所有节点的重叠
+          for (const node of nodesRef.current) {
+            if (!(x + w < node.x - padding || x > node.x + node.width + padding ||
+                  y + h < node.y - padding || y > node.y + node.height + padding)) {
+              return true; // 有重叠
+            }
+          }
+          // 检测与所有组的重叠
+          for (const group of groups) {
+            if (!(x + w < group.x - padding || x > group.x + group.width + padding ||
+                  y + h < group.y - padding || y > group.y + group.height + padding)) {
+              return true; // 有重叠
+            }
+          }
+          return false;
+        };
+        
+        // 找到不重叠的位置
+        let importX = position?.x ?? 100;
+        let importY = position?.y ?? 100;
+        
+        // 如果初始位置有重叠，尝试在右下方寻找空白位置
+        let attempts = 0;
+        const maxAttempts = 50;
+        const stepX = 100;
+        const stepY = 100;
+        
+        while (checkOverlap(importX, importY, groupWidth, groupHeight) && attempts < maxAttempts) {
+          // 先向右移动
+          importX += stepX;
+          
+          // 如果太右了，换下一行
+          if (importX > 3000) {
+            importX = 100;
+            importY += stepY;
+          }
+          attempts++;
+        }
+        
+        // 如果还是找不到，就放在画布最右下方
+        if (checkOverlap(importX, importY, groupWidth, groupHeight)) {
+          let maxX = 100, maxY = 100;
+          nodesRef.current.forEach(n => {
+            maxX = Math.max(maxX, n.x + n.width);
+            maxY = Math.max(maxY, n.y + n.height);
+          });
+          groups.forEach(g => {
+            maxX = Math.max(maxX, g.x + g.width);
+            maxY = Math.max(maxY, g.y + g.height);
+          });
+          importX = maxX + padding;
+          importY = 100;
+        }
+        
+        // 生成新的节点ID映射
+        const idMap = new Map<string, string>();
+        const timestamp = Date.now();
+        
+        // 创建新节点 - 完整保留所有数据包括base64图片
+        const newNodes: CanvasNode[] = data.nodes.map((node: CanvasNode, idx: number) => {
+          const newId = `${node.type}_${timestamp}_${idx}_${Math.random().toString(36).substr(2, 9)}`;
+          idMap.set(node.id, newId);
+          const clonedNode = JSON.parse(JSON.stringify(node));
+          return {
+            ...clonedNode,
+            id: newId,
+            x: node.x + importX,
+            y: node.y + importY,
+          };
+        });
+        
+        // 创建新连接
+        const newConnections: Connection[] = data.connections.map((conn: Connection, idx: number) => ({
+          ...conn,
+          id: `conn_${timestamp}_${idx}_${Math.random().toString(36).substr(2, 9)}`,
+          fromNode: idMap.get(conn.fromNode) || conn.fromNode,
+          toNode: idMap.get(conn.toNode) || conn.toNode,
+        }));
+        
+        // 创建新组
+        const newGroup: NodeGroup = {
+          id: `group_${timestamp}`,
+          name: data.group.name || `导入的组`,
+          x: importX,
+          y: importY,
+          width: groupWidth,
+          height: groupHeight,
+          color: data.group.color || '#10B981',
+        };
+        
+        // 添加到画布
+        setNodes(prev => [...prev, ...newNodes]);
+        setConnections(prev => [...prev, ...newConnections]);
+        setGroups(prev => [...prev, newGroup]);
+        setHasUnsavedChanges(true);
+        
+        console.log('[ImportGroup] 导入成功:', { 
+          position: { x: importX, y: importY },
+          nodeCount: newNodes.length, 
+          group: newGroup 
+        });
+      } catch (err) {
+        console.error('导入组失败:', err);
+        alert('导入失败，文件格式错误');
+      }
+    };
+    reader.readAsText(file);
+  }, [groups]);
+  
+  // 组导入文件选择器ref
+  const groupFileInputRef = useRef<HTMLInputElement>(null);
   const updateGroup = useCallback((groupId: string, updates: Partial<NodeGroup>) => {
     setGroups(prev => prev.map(g => 
       g.id === groupId ? { ...g, ...updates } : g
@@ -1469,6 +1683,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       groupY: group.y,
       nodePositions,
     };
+    // 初始化 lastMousePosRef，用于空格键平移画布
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
     setDraggingGroupId(groupId);
   }, [groups]);
   
@@ -5502,6 +5718,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
              // Just Left Click = Deselect only (no pan)
              setSelectedNodeIds(new Set());
              setSelectedConnectionId(null);
+             setSelectedGroupId(null); // 取消选中组
              setRadialMenu(null); // 单击关闭圆形菜单
              setGroupContextMenu(null); // 单击关闭组菜单
           }
@@ -5528,6 +5745,18 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       
       // 0. 拖动组 - 移动组内所有节点
       if (draggingGroupId) {
+          // 🔥 拖拽组时按住空格可同时平移画布
+          if (isSpacePressed) {
+              const mouseDeltaX = clientX - lastMousePosRef.current.x;
+              const mouseDeltaY = clientY - lastMousePosRef.current.y;
+              if (lastMousePosRef.current.x !== 0 || lastMousePosRef.current.y !== 0) {
+                  setCanvasOffset(prev => ({
+                      x: prev.x + mouseDeltaX,
+                      y: prev.y + mouseDeltaY
+                  }));
+              }
+          }
+          lastMousePosRef.current = { x: clientX, y: clientY };
           handleGroupDrag(e);
           return;
       }
@@ -5623,6 +5852,19 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
       // 4. Linking - 使用 RAF 优化
       if (linkingState.active) {
+          // 🔥 拉线时按住空格可同时平移画布
+          if (isSpacePressed) {
+              const mouseDeltaX = clientX - lastMousePosRef.current.x;
+              const mouseDeltaY = clientY - lastMousePosRef.current.y;
+              if (lastMousePosRef.current.x !== 0 || lastMousePosRef.current.y !== 0) {
+                  setCanvasOffset(prev => ({
+                      x: prev.x + mouseDeltaX,
+                      y: prev.y + mouseDeltaY
+                  }));
+              }
+          }
+          lastMousePosRef.current = { x: clientX, y: clientY };
+          
           const container = containerRef.current;
           if (container) {
                const rect = container.getBoundingClientRect();
@@ -6304,6 +6546,40 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           onChange={handleImportCanvas}
         />
         
+        {/* 组导入文件选择器 */}
+        <input
+          type="file"
+          ref={groupFileInputRef}
+          className="hidden"
+          accept=".pmgroup,.json"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              // 在画布中心位置导入
+              const container = containerRef.current;
+              if (container) {
+                const rect = container.getBoundingClientRect();
+                const centerX = (rect.width / 2 - canvasOffset.x) / scale;
+                const centerY = (rect.height / 2 - canvasOffset.y) / scale;
+                importGroup(file, { x: centerX, y: centerY });
+              } else {
+                importGroup(file);
+              }
+            }
+            e.target.value = ''; // 清空以便重复选择同一文件
+          }}
+        />
+        
+        {/* 导入组按钮 */}
+        <button
+          onClick={() => groupFileInputRef.current?.click()}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-700/50 hover:bg-gray-600/70 text-gray-300 transition-all"
+          style={{ backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)' }}
+          title="导入组 (.pmgroup)"
+        >
+          导入组
+        </button>
+        
         {/* 帮助按钮 */}
         <button
           onClick={() => setShowHelpPanel(!showHelpPanel)}
@@ -6787,12 +7063,21 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                             isLightCanvas={isLightCanvas}
                             isDragging={draggingGroupId === group.id}
                             isResizing={resizingGroupId === group.id}
+                            isSelected={selectedGroupId === group.id}
+                            onSelect={(id) => {
+                                setSelectedGroupId(id);
+                                setSelectedNodeIds(new Set());
+                            }}
+                            onExecute={executeGroup}
+                            onExport={exportGroup}
+                            onDissolve={dissolveGroup}
                             onDragStart={(e) => handleGroupDragStart(group.id, e)}
                             onResizeStart={(e) => handleGroupResizeStart(group.id, e)}
                             onUpdateGroup={updateGroup}
                             onContextMenu={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                setSelectedGroupId(group.id);
                                 setGroupContextMenu({
                                     x: e.clientX,
                                     y: e.clientY,
@@ -6967,16 +7252,29 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           <div className="p-1 flex flex-col gap-0.5 min-w-[160px]">
             {groupContextMenu.type === 'selection' ? (
               // 框选后的菜单 - 建立组
-              <button
-                onClick={() => {
-                  createGroup(Array.from(selectedNodeIds));
-                  setGroupContextMenu(null);
-                }}
-                className="w-full text-left px-3 py-2 rounded-md text-xs font-medium flex items-center gap-2 text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
-              >
-                <Icons.Layers size={14} />
-                建立组
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    createGroup(Array.from(selectedNodeIds));
+                    setGroupContextMenu(null);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md text-xs font-medium flex items-center gap-2 text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
+                >
+                  <Icons.Layers size={14} />
+                  建立组
+                </button>
+                <div className="h-px bg-white/10 my-1" />
+                <button
+                  onClick={() => {
+                    groupFileInputRef.current?.click();
+                    setGroupContextMenu(null);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md text-xs font-medium flex items-center gap-2 text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
+                >
+                  <Icons.Upload size={14} />
+                  导入组
+                </button>
+              </>
             ) : (
               // 组内右键菜单
               <>
@@ -6992,6 +7290,19 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   <Icons.Play size={14} />
                   执行组内节点
                 </button>
+                <button
+                  onClick={() => {
+                    if (groupContextMenu.groupId) {
+                      exportGroup(groupContextMenu.groupId);
+                    }
+                    setGroupContextMenu(null);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md text-xs font-medium flex items-center gap-2 text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
+                >
+                  <Icons.Download size={14} />
+                  导出组
+                </button>
+                <div className="h-px bg-white/10 my-1" />
                 <button
                   onClick={() => {
                     if (groupContextMenu.groupId) {

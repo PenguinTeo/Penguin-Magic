@@ -98,7 +98,7 @@ router.get('/:id', (req, res) => {
  */
 router.post('/', (req, res) => {
   try {
-    const { name, nodes = [], connections = [] } = req.body;
+    const { name, nodes = [], connections = [], groups = [] } = req.body;
     const canvasList = JsonStorage.load(config.CANVAS_FILE, []);
     
     const now = Date.now();
@@ -109,6 +109,7 @@ router.post('/', (req, res) => {
       name: canvasName,
       nodes: nodes,
       connections: connections,
+      groups: groups,
       createdAt: now,
       updatedAt: now,
       thumbnail: null,
@@ -133,7 +134,7 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const { id } = req.params;
-    const { name, nodes, connections, thumbnail } = req.body;
+    const { name, nodes, connections, groups, thumbnail } = req.body;
     const canvasList = JsonStorage.load(config.CANVAS_FILE, []);
     
     const index = canvasList.findIndex(c => c.id === id);
@@ -151,6 +152,7 @@ router.put('/:id', (req, res) => {
     }
     if (nodes !== undefined) canvasList[index].nodes = nodes;
     if (connections !== undefined) canvasList[index].connections = connections;
+    if (groups !== undefined) canvasList[index].groups = groups;
     if (thumbnail !== undefined) canvasList[index].thumbnail = thumbnail;
     canvasList[index].updatedAt = Date.now();
     

@@ -1,6 +1,6 @@
 // 画布 API - 本地版本
 import { get, post, put, del } from './index';
-import { CanvasNode, Connection } from '../../types/pebblingTypes';
+import { CanvasNode, Connection, NodeGroup } from '../../types/pebblingTypes';
 
 // 画布数据类型
 export interface CanvasData {
@@ -8,6 +8,7 @@ export interface CanvasData {
   name: string;
   nodes: CanvasNode[];
   connections: Connection[];
+  groups?: NodeGroup[];
   createdAt: number;
   updatedAt: number;
   thumbnail?: string | null;
@@ -49,6 +50,7 @@ export const updateCanvas = async (
     name?: string;
     nodes?: CanvasNode[];
     connections?: Connection[];
+    groups?: NodeGroup[];
     thumbnail?: string | null;
   }
 ): Promise<{ success: boolean; data?: CanvasData; error?: string }> => {

@@ -7,6 +7,11 @@ interface NodeGroupBoxProps {
   isLightCanvas?: boolean;
   isDragging?: boolean;
   isResizing?: boolean;
+  isSelected?: boolean;
+  onSelect: (groupId: string) => void;
+  onExecute: (groupId: string) => void;
+  onExport: (groupId: string) => void;
+  onDissolve: (groupId: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onDragStart: (e: React.MouseEvent) => void;
   onResizeStart: (e: React.MouseEvent) => void;
@@ -27,12 +32,41 @@ const EditIcon = ({ color }: { color: string }) => (
   </svg>
 );
 
+// 播放图标
+const PlayIcon = ({ color }: { color: string }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill={color}>
+    <path d="M8 5v14l11-7z" />
+  </svg>
+);
+
+// 下载图标
+const DownloadIcon = ({ color }: { color: string }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
+
+// 关闭图标
+const CloseIcon = ({ color }: { color: string }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
 const NodeGroupBox: React.FC<NodeGroupBoxProps> = ({
   group,
   nodeCount,
   isLightCanvas = false,
   isDragging = false,
   isResizing = false,
+  isSelected = false,
+  onSelect,
+  onExecute,
+  onExport,
+  onDissolve,
   onContextMenu,
   onDragStart,
   onResizeStart,
@@ -72,7 +106,7 @@ const NodeGroupBox: React.FC<NodeGroupBoxProps> = ({
     setShowColorPicker(false);
   }, [group.id, onUpdateGroup]);
 
-  const isActive = isDragging || isResizing;
+  const isActive = isDragging || isResizing || isSelected;
 
   return (
     <g>
@@ -85,17 +119,22 @@ const NodeGroupBox: React.FC<NodeGroupBoxProps> = ({
         rx={16}
         ry={16}
         fill={themeColors.bg}
-        stroke={isActive ? '#ffffff' : themeColors.border}
-        strokeWidth={isActive ? 2.5 : 2}
+        stroke={isSelected ? '#3B82F6' : (isActive ? '#ffffff' : themeColors.border)}
+        strokeWidth={isSelected ? 3 : (isActive ? 2.5 : 2)}
         style={{ 
           cursor: 'move',
           pointerEvents: 'all',
           transition: 'stroke 0.15s, stroke-width 0.15s',
         }}
         onContextMenu={onContextMenu}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(group.id);
+        }}
         onMouseDown={(e) => {
           if (e.button === 0 && !isEditingName && !showColorPicker) {
             e.stopPropagation();
+            onSelect(group.id);
             onDragStart(e);
           }
         }}
@@ -233,8 +272,8 @@ const NodeGroupBox: React.FC<NodeGroupBoxProps> = ({
           </foreignObject>
         </g>
       )}
-      
-      {/* 节点数量标签 */}
+
+      {/* 节点数量标签 - 始终显示 */}
       <text
         x={group.x + group.width - 16}
         y={group.y + headerHeight / 2 + 5}
@@ -242,13 +281,12 @@ const NodeGroupBox: React.FC<NodeGroupBoxProps> = ({
         fontSize={13}
         fontWeight={500}
         textAnchor="end"
-        style={{ 
-          userSelect: 'none',
-          pointerEvents: 'none',
-        }}
+        style={{ userSelect: 'none', pointerEvents: 'none' }}
       >
         {nodeCount} 节点
       </text>
+
+      {/* 控制栏已移至 index.tsx 中用独立 HTML div 渲染 */}
 
       {/* 右下角调整大小手柄 */}
       <g
