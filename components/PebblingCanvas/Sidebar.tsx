@@ -56,6 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [activeLibrary, setActiveLibrary] = useState(false);
   const [showCanvasPanel, setShowCanvasPanel] = useState(false);
+  const [showToolbox, setShowToolbox] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState('');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'bp' | 'workflow' | 'favorite'>('all');
@@ -188,11 +189,10 @@ const Sidebar: React.FC<SidebarProps> = ({
             
             <div className={`w-8 h-px ${isLight ? 'bg-gray-200' : 'bg-white/10'} my-1`} />
             
-            {/* Logic Group */}
+            {/* Tools Group */}
             <div className="flex flex-col gap-1.5">
-                <span className={`text-[9px] font-bold ${labelText} text-center uppercase tracking-wider`}>Logic</span>
+                <span className={`text-[9px] font-bold ${labelText} text-center uppercase tracking-wider`}>Tools</span>
                 <DraggableButton type="llm" icon={<Icons.Sparkles />} label="LLM / Vision" onDragStart={onDragStart} onClick={() => onAdd('llm')} isLight={isLight} />
-                <DraggableButton type="relay" icon={<Icons.Relay />} label="Relay" onDragStart={onDragStart} onClick={() => onAdd('relay')} isLight={isLight} />
                 <DraggableButton type="edit" icon={<BananaIcon />} label="Magic" onDragStart={onDragStart} onClick={() => onAdd('edit')} isLight={isLight} />
                 <DraggableButton 
                     type="runninghub" 
@@ -202,30 +202,36 @@ const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => onAdd('runninghub')} 
                     isLight={isLight}
                 />
-                <DraggableButton 
-                    type="drawing-board" 
-                    icon={<Icons.Palette />} 
-                    label="画板" 
-                    onDragStart={onDragStart} 
-                    onClick={() => onAdd('drawing-board')} 
-                    isLight={isLight}
-                />
-                <DraggableButton 
-                    type="browser" 
-                    icon={<Icons.Globe />} 
-                    label="浏览器" 
-                    onDragStart={onDragStart} 
-                    onClick={() => onAdd('browser')} 
-                    isLight={isLight}
-                />
-                <DraggableButton 
-                    type="image-compare" 
-                    icon={<Icons.Columns />} 
-                    label="图像对比" 
-                    onDragStart={onDragStart} 
-                    onClick={() => onAdd('image-compare')} 
-                    isLight={isLight}
-                />
+            </div>
+            
+            <div className={`w-8 h-px ${isLight ? 'bg-gray-200' : 'bg-white/10'} my-1`} />
+            
+            {/* 工具箱按钮 + 展开面板 */}
+            <div className="relative">
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setShowToolbox(!showToolbox); }}
+                    className={`p-2.5 rounded-xl transition-all shadow-inner border flex items-center justify-center
+                        ${showToolbox ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50' : `${btnBg} ${btnText} border-transparent ${btnHoverText} ${btnHoverBg}`}
+                    `}
+                    title="工具箱"
+                >
+                    <Icons.Package size={18} />
+                </button>
+                
+                {/* 工具箱展开面板 - 在按钮右侧 */}
+                {showToolbox && (
+                    <div 
+                        className="absolute left-full top-1/2 -translate-y-1/2 ml-3 bg-[#1c1c1e]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-2 animate-in slide-in-from-left-2 fade-in duration-200 z-50"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex gap-1.5">
+                            <DraggableButton type="relay" icon={<Icons.Relay />} label="Relay" onDragStart={onDragStart} onClick={() => { onAdd('relay'); setShowToolbox(false); }} isLight={isLight} />
+                            <DraggableButton type="drawing-board" icon={<Icons.Palette />} label="画板" onDragStart={onDragStart} onClick={() => { onAdd('drawing-board'); setShowToolbox(false); }} isLight={isLight} />
+                            <DraggableButton type="browser" icon={<Icons.Globe />} label="浏览器" onDragStart={onDragStart} onClick={() => { onAdd('browser'); setShowToolbox(false); }} isLight={isLight} />
+                            <DraggableButton type="image-compare" icon={<Icons.Columns />} label="图像对比" onDragStart={onDragStart} onClick={() => { onAdd('image-compare'); setShowToolbox(false); }} isLight={isLight} />
+                        </div>
+                    </div>
+                )}
             </div>
 
         </div>

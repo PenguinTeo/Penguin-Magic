@@ -42,7 +42,8 @@ import {
   RefreshCw,
   ExternalLink,
   Globe,
-  Columns
+  Columns,
+  Package
 } from 'lucide-react';
 
 export const Icons = {
@@ -87,5 +88,6 @@ export const Icons = {
   Refresh: RefreshCw,
   ExternalLink,
   Globe,
-  Columns
+  Columns,
+  Package
 };

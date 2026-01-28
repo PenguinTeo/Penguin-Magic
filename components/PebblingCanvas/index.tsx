@@ -1195,7 +1195,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           const x = (detail.x - rect.left - canvasOffset.x) / scale - 150;
           const y = (detail.y - rect.top - canvasOffset.y) / scale - 100;
           
-          if (detail.type && ['image', 'text', 'video', 'llm', 'idea', 'relay', 'edit', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config', 'drawing-board'].includes(detail.type)) {
+          if (detail.type && ['image', 'text', 'video', 'llm', 'idea', 'relay', 'edit', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config', 'drawing-board', 'browser', 'image-compare'].includes(detail.type)) {
               console.log('[Canvas] 创建节点:', detail.type, '位置:', x, y);
               addNode(detail.type, '', { x, y });
           }
