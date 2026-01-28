@@ -207,6 +207,17 @@ export interface CanvasPreset {
   inputs: PresetInput[];
 }
 
+// 节点组 - 可编辑区域，节点可拖入拖出
+export interface NodeGroup {
+  id: string;
+  name: string;
+  x: number;          // 组区域左上角X坐标
+  y: number;          // 组区域左上角Y坐标
+  width: number;      // 组区域宽度
+  height: number;     // 组区域高度
+  color?: string;     // 组边框颜色（可选）
+}
+
 // 北极冰原配色方案 - 低饱和度冷色调
 export const ARCTIC_COLORS = {
   // 冰川蓝 - Image类节点（image/edit/remove-bg/upscale/resize）

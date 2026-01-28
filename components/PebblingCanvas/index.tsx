@@ -1,11 +1,12 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { CanvasNode, Vec2, NodeType, Connection, GenerationConfig, NodeData, CanvasPreset, PresetInput } from '../../types/pebblingTypes';
+import { CanvasNode, Vec2, NodeType, Connection, GenerationConfig, NodeData, CanvasPreset, PresetInput, NodeGroup } from '../../types/pebblingTypes';
 import { CreativeIdea } from '../../types';
 import FloatingInput from './FloatingInput';
 import CanvasNodeItem from './CanvasNode';
 import Sidebar from './Sidebar';
-import ContextMenu from './ContextMenu';
+import RadialMenu from './RadialMenu';
+import NodeGroupBox from './NodeGroupBox';
 import PresetCreationModal from './PresetCreationModal';
 import PresetInstantiationModal from './PresetInstantiationModal';
 import CanvasNameBadge from './CanvasNameBadge';
@@ -458,7 +459,26 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       console.error('Failed to save presets:', e);
     }
   }, [userPresets]);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+      const [radialMenu, setRadialMenu] = useState<{ x: number; y: number; canvasPos: Vec2 } | null>(null); // 双击空白区域显示的圆形菜单
+    const lastClickTimeRef = useRef<number>(0); // 用于双击检测
+  
+  // 节点编组状态
+  const [groups, setGroups] = useState<NodeGroup[]>([]);
+  const [groupContextMenu, setGroupContextMenu] = useState<{
+    x: number;
+    y: number;
+    type: 'selection' | 'group';  // selection=框选后菜单, group=组内菜单
+    groupId?: string;
+  } | null>(null);
+  
+  // 组拖动状态
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
+  const groupDragStartRef = useRef<{ mouseX: number; mouseY: number; groupX: number; groupY: number; nodePositions: Map<string, { x: number; y: number }> } | null>(null);
+  
+  // 组调整大小状态
+  const [resizingGroupId, setResizingGroupId] = useState<string | null>(null);
+  const groupResizeStartRef = useRef<{ mouseX: number; mouseY: number; width: number; height: number } | null>(null);
+
   const [showPresetModal, setShowPresetModal] = useState(false);
   const [nodesForPreset, setNodesForPreset] = useState<CanvasNode[]>([]); // Buffer for preset creation
   
@@ -1311,6 +1331,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           const idsToDelete = new Set<string>(selectedNodeIds);
           setNodes(prev => prev.filter(n => !idsToDelete.has(n.id)));
           setConnections(prev => prev.filter(c => !idsToDelete.has(c.fromNode) && !idsToDelete.has(c.toNode)));
+          
+          // 同步更新组：移除已删除的节点，如果组内节点少于2个则解散组
+          setGroups(prev => prev
+            .map(g => ({
+              ...g,
+              nodeIds: g.nodeIds.filter(id => !idsToDelete.has(id))
+            }))
+            .filter(g => g.nodeIds.length >= 2)
+          );
+          
           setSelectedNodeIds(new Set<string>());
           setHasUnsavedChanges(true); // 标记未保存
       }
@@ -1340,6 +1370,224 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           setHasUnsavedChanges(true); // 标记未保存
       }
   }, [selectedNodeIds, selectedConnectionId]);
+
+  // === 节点编组操作 ===
+  
+  // 创建组 - 基于选中节点计算边界框
+  const createGroup = useCallback((nodeIds: string[]) => {
+    if (nodeIds.length < 1) return;
+    
+    // 获取选中节点
+    const selectedNodes = nodesRef.current.filter(n => nodeIds.includes(n.id));
+    if (selectedNodes.length === 0) return;
+    
+    // 计算边界框
+    const padding = 30;
+    const headerHeight = 52;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    selectedNodes.forEach(node => {
+      minX = Math.min(minX, node.x);
+      minY = Math.min(minY, node.y);
+      maxX = Math.max(maxX, node.x + node.width);
+      maxY = Math.max(maxY, node.y + node.height);
+    });
+    
+    const newGroup: NodeGroup = {
+      id: `group_${Date.now()}`,
+      name: `组 ${groups.length + 1}`,
+      x: minX - padding,
+      y: minY - padding - headerHeight,
+      width: maxX - minX + padding * 2,
+      height: maxY - minY + padding * 2 + headerHeight,
+    };
+    setGroups(prev => [...prev, newGroup]);
+    setHasUnsavedChanges(true);
+  }, [groups.length]);
+  
+  // 解散组
+  const dissolveGroup = useCallback((groupId: string) => {
+    setGroups(prev => prev.filter(g => g.id !== groupId));
+    setHasUnsavedChanges(true);
+  }, []);
+  
+  // 更新组属性（名称、颜色等）
+  const updateGroup = useCallback((groupId: string, updates: Partial<NodeGroup>) => {
+    setGroups(prev => prev.map(g => 
+      g.id === groupId ? { ...g, ...updates } : g
+    ));
+    setHasUnsavedChanges(true);
+  }, []);
+  
+  // 执行组内所有节点 - 基于位置检测
+  const executeGroup = useCallback(async (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group || !executeNodeRef.current) return;
+    
+    // 获取组内节点（基于位置检测）
+    const headerHeight = 48;
+    const nodesInGroup = nodesRef.current.filter(node => {
+      const nodeRight = node.x + node.width;
+      const nodeBottom = node.y + node.height;
+      const groupContentY = group.y + headerHeight;
+      return node.x >= group.x && nodeRight <= group.x + group.width &&
+             node.y >= groupContentY && nodeBottom <= group.y + group.height;
+    });
+    
+    // 按顺序执行组内所有可执行节点
+    for (const node of nodesInGroup) {
+      if (['edit', 'llm', 'video', 'rh-magic', 'rh-config', 'remove-bg', 'upscale', 'resize'].includes(node.type)) {
+        await executeNodeRef.current(node.id);
+      }
+    }
+  }, [groups]);
+  
+  // 开始拖动组
+  const handleGroupDragStart = useCallback((groupId: string, e: React.MouseEvent) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+    
+    // 获取组内节点（基于位置检测）
+    const headerHeight = 48;
+    const nodesInGroup = nodesRef.current.filter(node => {
+      const nodeRight = node.x + node.width;
+      const nodeBottom = node.y + node.height;
+      const groupContentY = group.y + headerHeight;
+      return node.x >= group.x && nodeRight <= group.x + group.width &&
+             node.y >= groupContentY && nodeBottom <= group.y + group.height;
+    });
+    
+    // 记录拖动开始时的鼠标位置、组位置和所有组内节点的位置
+    const nodePositions = new Map<string, { x: number; y: number }>();
+    nodesInGroup.forEach(node => {
+      nodePositions.set(node.id, { x: node.x, y: node.y });
+    });
+    
+    groupDragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      groupX: group.x,
+      groupY: group.y,
+      nodePositions,
+    };
+    setDraggingGroupId(groupId);
+  }, [groups]);
+  
+  // 移动组（在 onMouseMove 中调用）
+  const handleGroupDrag = useCallback((e: React.MouseEvent) => {
+    if (!draggingGroupId || !groupDragStartRef.current) return;
+    
+    const { mouseX, mouseY, groupX, groupY, nodePositions } = groupDragStartRef.current;
+    const deltaX = (e.clientX - mouseX) / scale;
+    const deltaY = (e.clientY - mouseY) / scale;
+    
+    // 更新组位置
+    setGroups(prev => prev.map(g => 
+      g.id === draggingGroupId ? { ...g, x: groupX + deltaX, y: groupY + deltaY } : g
+    ));
+    
+    // 更新所有组内节点的位置
+    setNodes(prev => prev.map(node => {
+      const startPos = nodePositions.get(node.id);
+      if (startPos) {
+        return {
+          ...node,
+          x: startPos.x + deltaX,
+          y: startPos.y + deltaY,
+        };
+      }
+      return node;
+    }));
+  }, [draggingGroupId, scale]);
+  
+  // 结束拖动组
+  const handleGroupDragEnd = useCallback(() => {
+    if (draggingGroupId) {
+      setDraggingGroupId(null);
+      groupDragStartRef.current = null;
+      setHasUnsavedChanges(true);
+    }
+  }, [draggingGroupId]);
+  
+  // 开始调整组大小
+  const handleGroupResizeStart = useCallback((groupId: string, e: React.MouseEvent) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+    
+    groupResizeStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      width: group.width,
+      height: group.height,
+    };
+    setResizingGroupId(groupId);
+  }, [groups]);
+  
+  // 调整组大小（在 onMouseMove 中调用）
+  const handleGroupResize = useCallback((e: React.MouseEvent) => {
+    if (!resizingGroupId || !groupResizeStartRef.current) return;
+    
+    const { mouseX, mouseY, width, height } = groupResizeStartRef.current;
+    const deltaX = (e.clientX - mouseX) / scale;
+    const deltaY = (e.clientY - mouseY) / scale;
+    
+    // 最小尺寸限制
+    const minWidth = 200;
+    const minHeight = 150;
+    
+    setGroups(prev => prev.map(g => 
+      g.id === resizingGroupId ? {
+        ...g,
+        width: Math.max(minWidth, width + deltaX),
+        height: Math.max(minHeight, height + deltaY),
+      } : g
+    ));
+  }, [resizingGroupId, scale]);
+  
+  // 结束调整组大小
+  const handleGroupResizeEnd = useCallback(() => {
+    if (resizingGroupId) {
+      setResizingGroupId(null);
+      groupResizeStartRef.current = null;
+      setHasUnsavedChanges(true);
+    }
+  }, [resizingGroupId]);
+  
+  // 右键菜单处理：检测是否有选中的节点或点击在组内
+  const handleCanvasContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // 检查是否有选中的节点（框选后右键）
+    if (selectedNodeIds.size >= 2) {
+      setGroupContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        type: 'selection',
+      });
+      return;
+    }
+    
+    // 检查点击位置是否在某个组内
+    const container = containerRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      const canvasX = (e.clientX - rect.left - canvasOffset.x) / scale;
+      const canvasY = (e.clientY - rect.top - canvasOffset.y) / scale;
+      
+      // 检查点击位置是否在某个组的边界框内
+      for (const group of groups) {
+        if (canvasX >= group.x && canvasX <= group.x + group.width &&
+            canvasY >= group.y && canvasY <= group.y + group.height) {
+          setGroupContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            type: 'group',
+            groupId: group.id,
+          });
+          return;
+        }
+      }
+    }
+  }, [selectedNodeIds, groups, canvasOffset, scale]);
 
   const handleCopy = useCallback(async () => {
       if (selectedNodeIds.size === 0) return;
@@ -5221,8 +5469,28 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       // Ctrl/Meta + 左键 = Box Selection
       // 中键 = Pan
       // 左键点击空白 = 取消选择
+      // 左键双击空白 = 显示圆形菜单
       
       if (e.button === 0) {
+          // 检测双击：两次点击间隔小于300ms
+          const now = Date.now();
+          const timeDiff = now - lastClickTimeRef.current;
+          lastClickTimeRef.current = now;
+          
+          if (timeDiff < 300 && !(e.ctrlKey || e.metaKey) && !isSpacePressed && !isPanMode) {
+              // 双击空白区域 - 显示圆形菜单
+              const container = containerRef.current;
+              if (container) {
+                  const rect = container.getBoundingClientRect();
+                  const canvasPos: Vec2 = {
+                      x: (e.clientX - rect.left - canvasOffset.x) / scale,
+                      y: (e.clientY - rect.top - canvasOffset.y) / scale
+                  };
+                  setRadialMenu({ x: e.clientX, y: e.clientY, canvasPos });
+              }
+              return;
+          }
+          
           if (e.ctrlKey || e.metaKey) {
              // START SELECTION BOX
              setSelectionBox({ start: { x: e.clientX, y: e.clientY }, current: { x: e.clientX, y: e.clientY } });
@@ -5234,6 +5502,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
              // Just Left Click = Deselect only (no pan)
              setSelectedNodeIds(new Set());
              setSelectedConnectionId(null);
+             setRadialMenu(null); // 单击关闭圆形菜单
+             setGroupContextMenu(null); // 单击关闭组菜单
           }
       } else if (e.button === 1) {
           // Middle click pan
@@ -5254,6 +5524,18 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               x: (clientX - rect.left - canvasOffset.x) / scale,
               y: (clientY - rect.top - canvasOffset.y) / scale
           };
+      }
+      
+      // 0. 拖动组 - 移动组内所有节点
+      if (draggingGroupId) {
+          handleGroupDrag(e);
+          return;
+      }
+      
+      // 0.5 调整组大小
+      if (resizingGroupId) {
+          handleGroupResize(e);
+          return;
       }
       
       // 1. Pan Canvas - 使用 RAF 批量更新
@@ -5364,6 +5646,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (rafRef.current) {
           cancelAnimationFrame(rafRef.current);
           rafRef.current = null;
+      }
+      
+      // 结束组拖动
+      if (draggingGroupId) {
+          handleGroupDragEnd();
+      }
+      
+      // 结束组调整大小
+      if (resizingGroupId) {
+          handleGroupResizeEnd();
       }
       
       // 记录是否刚完成拖拽操作
@@ -5812,38 +6104,13 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       }
   };
 
-  // --- CONTEXT MENU ---
-  const handleContextMenu = (e: React.MouseEvent) => {
-      e.preventDefault();
-      setContextMenu({ x: e.clientX, y: e.clientY });
-  };
-
-  const contextOptions = [
-      { 
-          label: "Save as Preset", 
-          icon: <Icons.Layers />, 
-          action: () => {
-              if (selectedNodeIds.size > 0) {
-                  setNodesForPreset(nodes.filter(n => selectedNodeIds.has(n.id)));
-                  setShowPresetModal(true);
-              }
-          }
-      },
-      {
-          label: "Delete Selection",
-          icon: <Icons.Close />,
-          action: deleteSelection,
-          danger: true
-      }
-  ];
-
   return (
     <div 
       className={`w-full h-full text-white overflow-hidden relative transition-colors duration-300 ${
         isLightCanvas ? 'bg-[#f5f5f7]' : 'bg-[#0a0a0f]'
       }`}
       style={{ color: isLightCanvas ? '#1d1d1f' : '#ffffff' }}
-      onContextMenu={handleContextMenu}
+      onContextMenu={handleCanvasContextMenu}
     >
 
       <Sidebar 
@@ -6499,6 +6766,45 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                 })()}
             </svg>
 
+            {/* Node Groups - 节点组框 */}
+            <svg className="absolute top-0 left-0 w-full h-full overflow-visible pointer-events-none z-[1]">
+                {groups.map(group => {
+                    // 基于位置检测组内节点数量
+                    const headerHeight = 48;
+                    const nodeCount = nodes.filter(node => {
+                        const nodeRight = node.x + node.width;
+                        const nodeBottom = node.y + node.height;
+                        const groupContentY = group.y + headerHeight;
+                        return node.x >= group.x && nodeRight <= group.x + group.width &&
+                               node.y >= groupContentY && nodeBottom <= group.y + group.height;
+                    }).length;
+                    
+                    return (
+                        <NodeGroupBox
+                            key={group.id}
+                            group={group}
+                            nodeCount={nodeCount}
+                            isLightCanvas={isLightCanvas}
+                            isDragging={draggingGroupId === group.id}
+                            isResizing={resizingGroupId === group.id}
+                            onDragStart={(e) => handleGroupDragStart(group.id, e)}
+                            onResizeStart={(e) => handleGroupResizeStart(group.id, e)}
+                            onUpdateGroup={updateGroup}
+                            onContextMenu={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setGroupContextMenu({
+                                    x: e.clientX,
+                                    y: e.clientY,
+                                    type: 'group',
+                                    groupId: group.id,
+                                });
+                            }}
+                        />
+                    );
+                })}
+            </svg>
+
             {/* Nodes */}
             {nodes.map(node => (
                 <CanvasNodeItem 
@@ -6636,14 +6942,72 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         )}
       </div>
 
-      {/* Context Menu */}
-      {contextMenu && (
-          <ContextMenu 
-            x={contextMenu.x} 
-            y={contextMenu.y} 
-            onClose={() => setContextMenu(null)}
-            options={contextOptions}
+      {/* 双击圆形菜单 - 快速创建节点 */}
+      {radialMenu && (
+          <RadialMenu
+            x={radialMenu.x}
+            y={radialMenu.y}
+            isLightCanvas={isLightCanvas}
+            onSelect={(nodeType) => {
+              // 在双击位置创建对应类型的节点
+              addNode(nodeType, '', radialMenu.canvasPos);
+              setRadialMenu(null);
+            }}
+            onClose={() => setRadialMenu(null)}
           />
+      )}
+
+      {/* 组操作右键菜单 */}
+      {groupContextMenu && (
+        <div
+          className="fixed z-[200] bg-[#1c1c1e] border border-white/10 rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+          style={{ left: groupContextMenu.x, top: groupContextMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="p-1 flex flex-col gap-0.5 min-w-[160px]">
+            {groupContextMenu.type === 'selection' ? (
+              // 框选后的菜单 - 建立组
+              <button
+                onClick={() => {
+                  createGroup(Array.from(selectedNodeIds));
+                  setGroupContextMenu(null);
+                }}
+                className="w-full text-left px-3 py-2 rounded-md text-xs font-medium flex items-center gap-2 text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
+              >
+                <Icons.Layers size={14} />
+                建立组
+              </button>
+            ) : (
+              // 组内右键菜单
+              <>
+                <button
+                  onClick={() => {
+                    if (groupContextMenu.groupId) {
+                      executeGroup(groupContextMenu.groupId);
+                    }
+                    setGroupContextMenu(null);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md text-xs font-medium flex items-center gap-2 text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
+                >
+                  <Icons.Play size={14} />
+                  执行组内节点
+                </button>
+                <button
+                  onClick={() => {
+                    if (groupContextMenu.groupId) {
+                      dissolveGroup(groupContextMenu.groupId);
+                    }
+                    setGroupContextMenu(null);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md text-xs font-medium flex items-center gap-2 text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  <Icons.Close size={14} />
+                  解散组
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Modals */}
