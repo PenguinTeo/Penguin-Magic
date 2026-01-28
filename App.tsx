@@ -1812,6 +1812,7 @@ const App: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false); // 导入状态
   const [isImportingById, setIsImportingById] = useState(false); // 按ID导入状态
   const [backendStatus, setBackendStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking'); // 后端连接状态
+  const [showAnnouncement, setShowAnnouncement] = useState(false); // 公告弹窗状态
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importIdeasInputRef = useRef<HTMLInputElement>(null);
@@ -1994,6 +1995,12 @@ const App: React.FC = () => {
       setDesktopItems([]);
     } finally {
       setIsLoading(false);
+      // 检查是否需要显示公告（基于版本号）
+      const ANNOUNCEMENT_VERSION = '1.7.8';
+      const dismissedVersion = localStorage.getItem('announcement_dismissed_version');
+      if (dismissedVersion !== ANNOUNCEMENT_VERSION) {
+        setShowAnnouncement(true);
+      }
     }
   };
 
@@ -4009,6 +4016,115 @@ const App: React.FC = () => {
                 <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '0.15s' }} />
                 <span className="w-1 h-1 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '0.3s' }} />
               </span>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 公告弹窗 */}
+      {showAnnouncement && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div 
+            className="relative w-[520px] max-h-[85vh] overflow-hidden rounded-3xl border border-white/10 shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-500"
+            style={{
+              background: 'linear-gradient(145deg, rgba(30, 30, 40, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%)',
+              boxShadow: '0 25px 80px -12px rgba(0, 0, 0, 0.6), 0 0 40px -15px rgba(59, 130, 246, 0.3)'
+            }}
+          >
+            {/* 装饰性背景 */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute -top-20 -right-20 w-60 h-60 bg-blue-500/10 rounded-full blur-3xl" />
+              <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-purple-500/10 rounded-full blur-3xl" />
+            </div>
+            
+            {/* 关闭按钮 */}
+            <button 
+              onClick={() => {
+                setShowAnnouncement(false);
+                localStorage.setItem('announcement_dismissed_version', '1.7.8');
+              }}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all z-10 group"
+            >
+              <X className="w-4 h-4 text-white/40 group-hover:text-white/80 transition-colors" />
+            </button>
+            
+            {/* 内容 */}
+            <div className="relative p-8 overflow-y-auto max-h-[85vh] custom-scrollbar">
+              {/* 标题 */}
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-white/10">
+                  <img src="/icons/p-icon-white.svg" alt="P" className="w-7 h-7 opacity-90" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">企鹅工坊</h2>
+                  <p className="text-sm text-white/40">致用户的一封信</p>
+                </div>
+              </div>
+              
+              {/* 正文 */}
+              <div className="space-y-4 text-white/70 text-sm leading-relaxed">
+                <p className="text-white/90 text-base">
+                  嗨，朋友们 👋
+                </p>
+                
+                <p>
+                  很开心你正在使用企鹅工坊！这是一个由<span className="text-blue-400">企鹅</span>和一群热爱技术的小伙伴共同打造的<span className="text-purple-400 font-medium">开源项目</span>。
+                </p>
+                
+                <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                  <p className="text-white/90 font-medium mb-2">🎯 我们的初心很简单：</p>
+                  <p>让每个人都能轻松体验 AI 的魔力，哪怕你是零基础的小白，也能快速上手玩起来。</p>
+                </div>
+                
+                <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
+                  <p className="text-white/90 font-medium mb-2">✨ 特别感谢：</p>
+                  <ul className="space-y-1.5 text-white/60">
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-400 mt-0.5">•</span>
+                      <span><span className="text-white/80">T8</span> 一直在义务帮我们宣传推广</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-purple-400 mt-0.5">•</span>
+                      <span>众多<span className="text-white/80">开发者</span>积极出谋划策、贡献代码</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-400 mt-0.5">•</span>
+                      <span>还有每一位<span className="text-white/80">使用和反馈</span>的朋友</span>
+                    </li>
+                  </ul>
+                </div>
+                
+                <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 rounded-2xl p-4 border border-amber-500/20">
+                  <p className="text-amber-300/90 font-medium mb-2">💬 温馨提示：</p>
+                  <p className="text-white/70">
+                    我们打包软件是为了<span className="text-white/90 font-medium">方便大家使用</span>，而不是拿去销售。
+                  </p>
+                  <p className="mt-2 text-white/70">
+                    如果你是做教学或有特殊需求搞不定的，可以联系企鹅帮忙实现。但请不要直接拿着安装包去卖钱哦~
+                  </p>
+                </div>
+                
+                <p className="text-center pt-2">
+                  感谢大家的支持与理解！💙
+                </p>
+                
+                <p className="text-right text-white/40 italic">
+                  — 企鹅
+                </p>
+              </div>
+              
+              {/* 按钮 */}
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={() => {
+                    setShowAnnouncement(false);
+                    localStorage.setItem('announcement_dismissed_version', '1.7.8');
+                  }}
+                  className="px-8 py-2.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium text-sm hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 hover:scale-105 active:scale-100"
+                >
+                  我知道了 ✨
+                </button>
+              </div>
             </div>
           </div>
         </div>

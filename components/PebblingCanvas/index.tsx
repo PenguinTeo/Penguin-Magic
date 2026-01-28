@@ -390,6 +390,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   
   // Copy/Paste Buffer
   const clipboardRef = useRef<CanvasNode[]>([]);
+  const internalCopyTimeRef = useRef<number>(0); // 内部复制时间戳
+  const systemClipboardSnapshotRef = useRef<number>(0); // 复制节点时系统剪贴板图片大小（指纹）
 
   // Abort Controllers for cancelling operations
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -1256,6 +1258,22 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       const nodesToCopy = nodesRef.current.filter(n => selectedNodeIds.has(n.id));
       // Store deep copy for internal paste
       clipboardRef.current = JSON.parse(JSON.stringify(nodesToCopy));
+      internalCopyTimeRef.current = Date.now(); // 记录复制时间
+      
+      // 记录当前系统剪贴板图片的指纹（大小），用于检测粘贴时是否更新了
+      try {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+              const imageType = item.types.find(t => t.startsWith('image/'));
+              if (imageType) {
+                  const blob = await item.getType(imageType);
+                  systemClipboardSnapshotRef.current = blob.size; // 用大小作为指纹
+                  break;
+              }
+          }
+      } catch {
+          systemClipboardSnapshotRef.current = 0;
+      }
       
       // 尝试将图片写入系统剪贴板
       if (nodesToCopy.length === 1 && nodesToCopy[0].type === 'image' && nodesToCopy[0].content) {
@@ -1280,6 +1298,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               await navigator.clipboard.write([
                   new ClipboardItem({ [blob.type]: blob })
               ]);
+              // 更新指纹（因为我们刚写入了新图片）
+              systemClipboardSnapshotRef.current = blob.size;
               console.log('[Clipboard] 图片已复制到系统剪贴板');
           } catch (err) {
               console.warn('[Clipboard] 写入系统剪贴板失败:', err);
@@ -1288,77 +1308,118 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   }, [selectedNodeIds]);
 
   const handlePaste = useCallback(async () => {
-      // 先检查系统剪贴板是否有图片
+      const COPY_VALID_DURATION = 5000; // 5秒有效期
+      const now = Date.now();
+      const timeSinceCopy = now - internalCopyTimeRef.current;
+      const hasValidInternalCopy = timeSinceCopy < COPY_VALID_DURATION && clipboardRef.current.length > 0;
+      
+      // 检查系统剪贴板是否有图片，以及是否更新了
+      let systemClipboardImageBlob: Blob | null = null;
+      let systemClipboardUpdated = false;
+      
       try {
-          const clipboardItems = await navigator.clipboard.read();
-          for (const item of clipboardItems) {
-              // 检查是否有图片类型
-              const imageType = item.types.find(type => type.startsWith('image/'));
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+              const imageType = item.types.find(t => t.startsWith('image/'));
               if (imageType) {
-                  const blob = await item.getType(imageType);
-                  const reader = new FileReader();
-                  reader.onload = (e) => {
-                      const base64 = e.target?.result as string;
-                      if (base64) {
-                          // 在鼠标位置创建图片节点
-                          const pasteX = currentMousePosRef.current.x;
-                          const pasteY = currentMousePosRef.current.y;
-                          
-                          const newId = uuid();
-                          const newNode: CanvasNode = {
-                              id: newId,
-                              type: 'image',
-                              content: base64,
-                              x: pasteX,
-                              y: pasteY,
-                              width: 300,
-                              height: 300,
-                              status: 'idle'
-                          };
-                          
-                          // 根据图片实际尺寸调整节点大小
-                          const img = new Image();
-                          img.onload = () => {
-                              const aspectRatio = img.width / img.height;
-                              const nodeWidth = 300;
-                              const nodeHeight = nodeWidth / aspectRatio;
-                              setNodes(prev => prev.map(n => 
-                                  n.id === newId ? { ...n, width: nodeWidth, height: nodeHeight } : n
-                              ));
-                          };
-                          img.src = base64;
-                          
-                          setNodes(prev => [...prev, newNode]);
-                          setSelectedNodeIds(new Set([newId]));
-                          setHasUnsavedChanges(true);
-                          console.log('[Clipboard] 从系统剪贴板粘贴图片');
-                      }
-                  };
-                  reader.readAsDataURL(blob);
-                  return; // 已处理系统剪贴板图片，直接返回
+                  systemClipboardImageBlob = await item.getType(imageType);
+                  // 检查是否更新了（大小不同）
+                  if (systemClipboardImageBlob.size !== systemClipboardSnapshotRef.current) {
+                      systemClipboardUpdated = true;
+                  }
+                  break;
               }
           }
-      } catch (err) {
-          // 系统剪贴板读取失败，继续使用内部剪贴板
-          console.log('[Clipboard] 系统剪贴板无图片或读取失败，使用内部剪贴板');
+      } catch {
+          // 系统剪贴板读取失败
       }
       
-      // 使用内部剪贴板
-      if (clipboardRef.current.length === 0) return;
+      // 决策逻辑：
+      // 1. 如果系统剪贴板更新了（用户从外部复制了新图片）→ 使用系统剪贴板
+      // 2. 否则，如果内部复制在 5 秒内 → 使用内部剪贴板
+      // 3. 否则，如果系统剪贴板有图片 → 使用系统剪贴板
       
+      if (systemClipboardUpdated && systemClipboardImageBlob) {
+          // 系统剪贴板更新了，使用新图片
+          console.log('[Clipboard] 检测到系统剪贴板更新，使用新图片');
+          await pasteImageFromBlob(systemClipboardImageBlob);
+          // 更新指纹
+          systemClipboardSnapshotRef.current = systemClipboardImageBlob.size;
+          return;
+      }
+      
+      if (hasValidInternalCopy) {
+          // 内部复制在 5 秒内，使用内部剪贴板
+          console.log('[Clipboard] 使用内部剪贴板粘贴节点');
+          pasteNodesFromClipboard();
+          // 刷新时间戳，支持连续粘贴
+          internalCopyTimeRef.current = Date.now();
+          return;
+      }
+      
+      if (systemClipboardImageBlob) {
+          // 系统剪贴板有图片
+          console.log('[Clipboard] 使用系统剪贴板图片');
+          await pasteImageFromBlob(systemClipboardImageBlob);
+          return;
+      }
+      
+      console.log('[Clipboard] 无可粘贴内容');
+  }, []);
+  
+  // 从 Blob 粘贴图片
+  const pasteImageFromBlob = useCallback(async (blob: Blob) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          const base64 = e.target?.result as string;
+          if (base64) {
+              const pasteX = currentMousePosRef.current.x;
+              const pasteY = currentMousePosRef.current.y;
+              
+              const newId = uuid();
+              const newNode: CanvasNode = {
+                  id: newId,
+                  type: 'image',
+                  content: base64,
+                  x: pasteX,
+                  y: pasteY,
+                  width: 300,
+                  height: 300,
+                  status: 'idle'
+              };
+              
+              // 根据图片实际尺寸调整节点大小
+              const img = new Image();
+              img.onload = () => {
+                  const aspectRatio = img.width / img.height;
+                  const nodeWidth = 300;
+                  const nodeHeight = nodeWidth / aspectRatio;
+                  setNodes(prev => prev.map(n => 
+                      n.id === newId ? { ...n, width: nodeWidth, height: nodeHeight } : n
+                  ));
+              };
+              img.src = base64;
+              
+              setNodes(prev => [...prev, newNode]);
+              setSelectedNodeIds(new Set([newId]));
+              setHasUnsavedChanges(true);
+          }
+      };
+      reader.readAsDataURL(blob);
+  }, []);
+  
+  // 从内部剪贴板粘贴节点
+  const pasteNodesFromClipboard = useCallback(() => {
       const newNodes: CanvasNode[] = [];
-      const idMap = new Map<string, string>(); // Old ID -> New ID
+      const idMap = new Map<string, string>();
       
-      // 获取当前鼠标位置作为粘贴基准点
       const pasteBaseX = currentMousePosRef.current.x;
       const pasteBaseY = currentMousePosRef.current.y;
       
-      // 计算剪贴板节点的边界（用于定位到鼠标位置）
       const clipboardNodes = clipboardRef.current;
       const minX = Math.min(...clipboardNodes.map(n => n.x));
       const minY = Math.min(...clipboardNodes.map(n => n.y));
 
-      // Create new nodes - 根据鼠标位置偏移
       clipboardRef.current.forEach(node => {
           const newId = uuid();
           idMap.set(node.id, newId);
@@ -1367,13 +1428,13 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               id: newId,
               x: pasteBaseX + (node.x - minX),
               y: pasteBaseY + (node.y - minY),
-              status: 'idle' // Reset status
+              status: 'idle'
           });
       });
 
       setNodes(prev => [...prev, ...newNodes]);
       setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
-      setHasUnsavedChanges(true); // 标记未保存
+      setHasUnsavedChanges(true);
   }, []);
 
   // Global Key Listener - 只在画布活动时生效
