@@ -466,6 +466,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // API Settings Modal
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [showHelpPanel, setShowHelpPanel] = useState(false); // 使用说明面板
+  const [allVideosPaused, setAllVideosPaused] = useState(false); // 全局视频暂停状态
+  const [isExporting, setIsExporting] = useState(false); // 导出中状态
+  const [isImporting, setIsImporting] = useState(false); // 导入中状态
+  const [exportProgress, setExportProgress] = useState(''); // 导出进度提示
+  const canvasFileInputRef = useRef<HTMLInputElement>(null); // 画布导入文件选择器
   const [apiConfigured, setApiConfigured] = useState(false);
 
   // 画布主题（深色/浅色）
@@ -1053,6 +1058,157 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       saveRef.current = handleManualSave;
     }
   }, [saveRef, handleManualSave]);
+
+  // 将本地文件路径转为 base64
+  const convertLocalFileToBase64 = async (url: string): Promise<string> => {
+    try {
+      const fullUrl = url.startsWith('/files/') ? `http://localhost:8765${url}` : url;
+      const response = await fetch(fullUrl);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      console.warn('[Export] 转换文件失败:', url, err);
+      return url; // 失败时保留原路径
+    }
+  };
+
+  // 导出画布为 JSON 文件
+  const handleExportCanvas = useCallback(async () => {
+    if (isExporting) return; // 防止重复点击
+    
+    setIsExporting(true);
+    setExportProgress('正在准备数据...');
+    
+    try {
+      const totalNodes = nodesRef.current.length;
+      let processedCount = 0;
+      
+      // 处理节点，将本地文件转为 base64
+      const processedNodes = await Promise.all(
+        nodesRef.current.map(async (node) => {
+          const newNode = { ...node };
+          
+          // 处理 content 中的本地文件
+          if (newNode.content && newNode.content.startsWith('/files/')) {
+            newNode.content = await convertLocalFileToBase64(newNode.content);
+          }
+          
+          // 处理 data.nodeInputs 中的本地文件
+          if (newNode.data?.nodeInputs) {
+            const newInputs = { ...newNode.data.nodeInputs };
+            for (const [key, value] of Object.entries(newInputs)) {
+              if (typeof value === 'string' && value.startsWith('/files/')) {
+                newInputs[key] = await convertLocalFileToBase64(value);
+              }
+            }
+            newNode.data = { ...newNode.data, nodeInputs: newInputs };
+          }
+          
+          processedCount++;
+          setExportProgress(`处理节点 ${processedCount}/${totalNodes}`);
+          
+          return newNode;
+        })
+      );
+      
+      setExportProgress('正在生成文件...');
+      
+      const exportData = {
+        version: '1.0',
+        name: canvasName || '未命名画布',
+        exportedAt: new Date().toISOString(),
+        nodes: processedNodes,
+        connections: connectionsRef.current
+      };
+      
+      const json = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${canvasName || 'canvas'}_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      console.log('[Canvas] 导出成功:', exportData.name);
+      setExportProgress('导出完成!');
+      setTimeout(() => setExportProgress(''), 1500);
+    } catch (err) {
+      console.error('[Canvas] 导出失败:', err);
+      setExportProgress('导出失败');
+      setTimeout(() => setExportProgress(''), 2000);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [canvasName, isExporting]);
+
+  // 导入画布 JSON 文件
+  const handleImportCanvas = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isImporting) return; // 防止重复点击
+    
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setIsImporting(true);
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        
+        if (!data.nodes || !Array.isArray(data.nodes)) {
+          alert('无效的画布文件格式');
+          setIsImporting(false);
+          return;
+        }
+        
+        // 生成新的 ID 映射，避免 ID 冲突
+        const idMap = new Map<string, string>();
+        const newNodes: CanvasNode[] = data.nodes.map((node: CanvasNode) => {
+          const newId = uuid();
+          idMap.set(node.id, newId);
+          return { ...node, id: newId };
+        });
+        
+        // 更新连接的 ID 引用
+        const newConnections = (data.connections || []).map((conn: any) => ({
+          ...conn,
+          id: uuid(),
+          fromNode: idMap.get(conn.fromNode) || conn.fromNode,
+          toNode: idMap.get(conn.toNode) || conn.toNode
+        }));
+        
+        // 追加到当前画布
+        setNodes(prev => [...prev, ...newNodes]);
+        setConnections(prev => [...prev, ...newConnections]);
+        nodesRef.current = [...nodesRef.current, ...newNodes];
+        connectionsRef.current = [...connectionsRef.current, ...newConnections];
+        setHasUnsavedChanges(true);
+        
+        // 选中新导入的节点
+        setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
+        
+        console.log('[Canvas] 导入成功:', data.name, '节点数:', newNodes.length);
+        alert(`导入成功！共 ${newNodes.length} 个节点`);
+      } catch (err) {
+        console.error('[Canvas] 导入失败:', err);
+        alert('导入失败，请检查文件格式');
+      } finally {
+        setIsImporting(false);
+      }
+    };
+    reader.readAsText(file);
+    
+    // 清空 input 以便可以重复选择同一文件
+    e.target.value = '';
+  }, [isImporting]);
 
   const handleResetView = () => {
     setCanvasOffset({ x: 0, y: 0 });
@@ -5482,6 +5638,76 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       
       {/* 平移模式切换按钮和帮助按钮 */}
       <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+        {/* 视频暂停/播放按钮 */}
+        <button
+          onClick={() => setAllVideosPaused(!allVideosPaused)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            allVideosPaused 
+              ? 'bg-yellow-500 hover:bg-yellow-600 text-white shadow-lg' 
+              : 'bg-gray-700/50 hover:bg-gray-600/70 text-gray-300'
+          }`}
+          style={{
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+          title={allVideosPaused ? '播放所有视频' : '暂停所有视频'}
+        >
+          {allVideosPaused ? '▶ 播放' : '⏸ 暂停'}
+        </button>
+        
+        {/* 导出按钮 */}
+        <button
+          onClick={handleExportCanvas}
+          disabled={isExporting}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            isExporting 
+              ? 'bg-emerald-500/50 text-white cursor-wait' 
+              : 'bg-gray-700/50 hover:bg-gray-600/70 text-gray-300'
+          }`}
+          style={{
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+          title="导出画布"
+        >
+          {isExporting ? (
+            <span className="flex items-center gap-1">
+              <span className="animate-spin">⏳</span>
+              {exportProgress || '导出中...'}
+            </span>
+          ) : '导出'}
+        </button>
+        
+        {/* 导入按钮 */}
+        <button
+          onClick={() => canvasFileInputRef.current?.click()}
+          disabled={isImporting}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            isImporting 
+              ? 'bg-blue-500/50 text-white cursor-wait' 
+              : 'bg-gray-700/50 hover:bg-gray-600/70 text-gray-300'
+          }`}
+          style={{
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+          title="导入画布"
+        >
+          {isImporting ? (
+            <span className="flex items-center gap-1">
+              <span className="animate-spin">⏳</span>
+              导入中...
+            </span>
+          ) : '导入'}
+        </button>
+        <input
+          type="file"
+          ref={canvasFileInputRef}
+          className="hidden"
+          accept=".json"
+          onChange={handleImportCanvas}
+        />
+        
         {/* 帮助按钮 */}
         <button
           onClick={() => setShowHelpPanel(!showHelpPanel)}
@@ -6026,6 +6252,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     onExtractFrame={handleExtractFrame}
                     onCreateFrameExtractor={handleCreateFrameExtractor}
                     onExtractFrameFromExtractor={handleExtractFrameFromExtractor}
+                    allVideosPaused={allVideosPaused}
                     onRetryVideoDownload={async (id) => {
                         const n = nodesRef.current.find(x => x.id === id);
                         if (!n || !n.data?.videoUrl) {

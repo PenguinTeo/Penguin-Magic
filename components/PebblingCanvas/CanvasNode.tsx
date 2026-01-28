@@ -107,6 +107,7 @@ interface CanvasNodeProps {
   hasDownstream?: boolean; // 是否有下游连接
   incomingConnections?: Array<{ fromNode: string; toPortKey?: string }>; // 连入当前节点的连接
   onRetryVideoDownload?: (nodeId: string) => void; // 重试视频下载
+  allVideosPaused?: boolean; // 全局视频暂停状态
 }
 
 const CanvasNodeItem: React.FC<CanvasNodeProps> = ({ 
@@ -130,7 +131,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   onExtractFrameFromExtractor,
   hasDownstream = false,
   incomingConnections = [],
-  onRetryVideoDownload
+  onRetryVideoDownload,
+  allVideosPaused = false
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState(node.content);
@@ -181,6 +183,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   const [rhBatchCount, setRhBatchCount] = useState(1); // rh-config 节点批次数量
   const nodeRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null); // 视频元素ref，用于全局播放控制
 
   useEffect(() => {
     setLocalContent(node.content);
@@ -290,6 +293,17 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
       video.src = node.content.startsWith('/files/') ? `http://localhost:8765${node.content}` : node.content;
     }
   }, [node.content, node.title, node.data, node.type]);
+
+  // 全局视频暂停控制
+  useEffect(() => {
+    if (videoRef.current) {
+      if (allVideosPaused) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play().catch(() => {}); // 忽略自动播放被浏览器拦截的错误
+      }
+    }
+  }, [allVideosPaused]);
 
   // Enter Key to Edit shortcut
   useEffect(() => {
@@ -4065,7 +4079,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
             <div className="w-full h-full bg-black rounded-xl overflow-hidden relative">
                 {hasVideo ? (
                     <>
-                        {videoFallbackToImage ? (<img src={videoSrc} alt="Output" className="w-full h-full object-contain" />) : (<video src={videoSrc} controls loop autoPlay muted className="w-full h-full object-contain" onError={() => setVideoFallbackToImage(true)} />)}
+                        {videoFallbackToImage ? (<img src={videoSrc} alt="Output" className="w-full h-full object-contain" />) : (<video ref={videoRef} src={videoSrc} controls loop autoPlay={!allVideosPaused} muted className="w-full h-full object-contain" onError={() => setVideoFallbackToImage(true)} />)}
                         
                         {/* 状态标签 */}
                         <div className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded text-[9px] font-bold uppercase backdrop-blur-md bg-white/20 text-white">
