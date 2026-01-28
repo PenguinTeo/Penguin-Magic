@@ -762,14 +762,96 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         connections: connectionsRef.current,
       });
       
-      // 更新 ref 和 state
-      nodesRef.current = localizedNodes;
-      setNodes(localizedNodes);
+      // 🔧 关键修复：使用函数式更新，只更新被本地化的节点，避免覆盖并发添加的新节点
+      const localizedMap = new Map<string, CanvasNode>(localizedNodes.map(n => [n.id, n]));
+      setNodes(prevNodes => {
+        return prevNodes.map(node => {
+          const localized = localizedMap.get(node.id);
+          // 只更新 content 被本地化的节点
+          if (localized && localized.content !== node.content) {
+            return { ...node, content: localized.content };
+          }
+          return node;
+        });
+      });
       
       lastSaveRef.current = { nodes: nodesStr, connections: connectionsStr };
       console.log('[Canvas] 自动保存');
       
       // 🆕 保存后刷新列表，更新节点数和修改时间
+      await loadCanvasList();
+    } catch (e) {
+      console.error('[Canvas] 保存失败:', e);
+    }
+  }, [currentCanvasId, canvasList, canvasName, loadCanvasList]);
+
+  // 🔧 新增：使用快照数据保存画布（用于自动保存，避免竞态条件）
+  const saveCanvasWithSnapshot = useCallback(async (snapshotNodes: CanvasNode[], snapshotConnections: Connection[]) => {
+    if (!currentCanvasId) return;
+    
+    // 获取当前画布名称
+    const currentCanvas = canvasList.find(c => c.id === currentCanvasId);
+    const currentCanvasName = currentCanvas?.name || canvasName;
+    
+    // 本地化图片内容
+    const localizedNodes = await Promise.all(snapshotNodes.map(async (node) => {
+      if (!node.content) return node;
+      if (node.type === 'video-output' || node.type === 'video') return node;
+      
+      const isBase64 = node.content.startsWith('data:image');
+      const isTempUrl = node.content.startsWith('http') && 
+                        !node.content.includes('/files/output/') && 
+                        !node.content.includes('/files/input/');
+      
+      if (!isBase64 && !isTempUrl) {
+        return node;
+      }
+      
+      try {
+        let result;
+        if (isBase64) {
+          result = await canvasApi.saveCanvasImage(node.content, currentCanvasName, node.id, currentCanvasId);
+        } else if (isTempUrl) {
+          result = await downloadRemoteToOutput(node.content, `canvas_${node.id}_${Date.now()}.png`);
+        }
+        if (result?.success && result.data?.url) {
+          return { ...node, content: result.data.url };
+        }
+      } catch (e) {
+        console.error('[Canvas] 本地化图片失败:', e);
+      }
+      return node;
+    }));
+    
+    const nodesStr = JSON.stringify(localizedNodes);
+    const connectionsStr = JSON.stringify(snapshotConnections);
+    
+    // 检查是否有变化
+    if (nodesStr === lastSaveRef.current.nodes && connectionsStr === lastSaveRef.current.connections) {
+      return;
+    }
+    
+    try {
+      await canvasApi.updateCanvas(currentCanvasId, {
+        nodes: localizedNodes,
+        connections: snapshotConnections,
+      });
+      
+      // 使用函数式更新，只更新被本地化的节点
+      const localizedMap = new Map<string, CanvasNode>(localizedNodes.map(n => [n.id, n]));
+      setNodes(prevNodes => {
+        return prevNodes.map(node => {
+          const localized = localizedMap.get(node.id);
+          if (localized && localized.content !== node.content) {
+            return { ...node, content: localized.content };
+          }
+          return node;
+        });
+      });
+      
+      lastSaveRef.current = { nodes: nodesStr, connections: connectionsStr };
+      console.log('[Canvas] 自动保存(快照)');
+      
       await loadCanvasList();
     } catch (e) {
       console.error('[Canvas] 保存失败:', e);
@@ -929,9 +1011,15 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
     }
+    
+    // 🔧 关键修复：捕获当前的 nodes 和 connections 快照
+    // 避免定时器到期时读取到变化后的数据
+    const nodesToSave = [...nodes];
+    const connectionsToSave = [...connections];
       
-    saveTimerRef.current = setTimeout(() => {
-      saveCurrentCanvas();
+    saveTimerRef.current = setTimeout(async () => {
+      // 使用快照数据进行保存
+      await saveCanvasWithSnapshot(nodesToSave, connectionsToSave);
     }, 2000); // 增加防拖时间到2秒
       
     return () => {
@@ -1988,15 +2076,29 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               // Magic节点：输入=图片或文字，输出=图片
               // Magic 的输出在下游创建的 Image 节点中，不在自身
               // 如果有人直接连接到 Magic，不应该追溯它的上游（那是 Magic 的输入）
+              console.log(`[resolveInputs] Magic节点 ${node.id.slice(0,8)}:`, {
+                  status: node.status,
+                  hasOutput: !!node.data?.output,
+                  outputPreview: node.data?.output?.slice(0, 50)
+              });
               if (node.data?.output && node.status === 'completed' && isValidImage(node.data.output)) {
+                  console.log(`[resolveInputs] ✅ 从 Magic节点获取输出图片`);
                   images.push(node.data.output);
+              } else {
+                  console.log(`[resolveInputs] ⚠️ Magic节点没有有效输出`);
               }
               // 不管有没有输出，都停止追溯
               foundImageInThisPath = true;
           } else if (node.type === 'remove-bg' || node.type === 'upscale' || node.type === 'resize') {
               // 工具节点：输入=图片，输出=图片
-              // 输出在下游创建的 Image 节点中，不在自身
-              // 不应该追溯它们的上游（那是工具节点的输入）
+              // 从 data.output 或 content 获取输出图片，供下游节点追溯使用
+              if (node.status === 'completed') {
+                  const outputImage = node.data?.output || node.content;
+                  if (outputImage && isValidImage(outputImage)) {
+                      images.push(outputImage);
+                  }
+              }
+              // 不管有没有输出，都停止追溯（不应该追溯它们的上游，那是工具节点的输入）
               foundImageInThisPath = true;
           } else if (node.type === 'bp') {
               // BP节点：优先从 data.output 获取（有下游连接时），否则从 content 获取
@@ -2024,6 +2126,65 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       return { images, texts, videos };
   };
 
+  // 🔧 通用级联执行函数：确保上游节点先执行完成
+  const ensureUpstreamExecuted = async (nodeId: string): Promise<void> => {
+      const inputConnections = connectionsRef.current.filter(c => c.toNode === nodeId);
+      console.log(`[级联执行] 节点 ${nodeId.slice(0,8)} 有 ${inputConnections.length} 个上游连接`);
+      
+      // 🔧 完整的可执行节点类型列表
+      const executableTypes = ['image', 'llm', 'edit', 'remove-bg', 'upscale', 'resize', 'video', 'bp', 'rh-config', 'idea', 'text'];
+      
+      for (const conn of inputConnections) {
+          const upstreamNode = nodesRef.current.find(n => n.id === conn.fromNode);
+          console.log(`[级联执行] 上游节点:`, {
+              id: upstreamNode?.id.slice(0,8),
+              type: upstreamNode?.type,
+              status: upstreamNode?.status
+          });
+          
+          if (!upstreamNode) continue;
+          
+          // 如果上游节点需要执行且未完成，先执行上游
+          if (upstreamNode.status !== 'completed') {
+              if (upstreamNode.status === 'running') {
+                  // 上游正在执行，等待它完成
+                  console.log(`[级联执行] ⏳ 上游节点正在执行，等待完成...`);
+                  const maxWait = 120000;
+                  const checkInterval = 500;
+                  let waited = 0;
+                  while (waited < maxWait) {
+                      await new Promise(resolve => setTimeout(resolve, checkInterval));
+                      waited += checkInterval;
+                      const currentUpstream = nodesRef.current.find(n => n.id === upstreamNode.id);
+                      if (currentUpstream?.status === 'completed') {
+                          console.log(`[级联执行] ✅ 上游节点已完成`);
+                          break;
+                      }
+                      if (currentUpstream?.status === 'error') {
+                          console.log(`[级联执行] ❌ 上游节点执行失败`);
+                          break;
+                      }
+                  }
+              } else if (upstreamNode.status === 'error' || upstreamNode.status === 'idle') {
+                  // error 或 idle 状态：重新执行
+                  if (upstreamNode.status === 'error') {
+                      console.log(`[级联执行] 🔄 上游节点之前失败，重新执行`);
+                      updateNode(upstreamNode.id, { status: 'idle' });
+                  }
+                  
+                  if (executableTypes.includes(upstreamNode.type)) {
+                      console.log(`[级联执行] ⤵️ 触发上游节点执行: ${upstreamNode.type} ${upstreamNode.id.slice(0,8)}`);
+                      // 递归执行上游节点（传递 batchCount=1 避免无限嵌套）
+                      await handleExecuteNode(upstreamNode.id, 1);
+                      console.log(`[级联执行] ✅ 上游节点执行完成`);
+                  }
+              }
+          } else {
+              console.log(`[级联执行] ✅ 上游节点已完成，无需重新执行`);
+          }
+      }
+  };
+
   // --- 批量生成：创建多个结果节点并并发执行 ---
   const handleBatchExecute = async (sourceNodeId: string, sourceNode: CanvasNode, count: number) => {
       // 立即标记源节点为 running，防止重复点击
@@ -2040,8 +2201,16 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           resolution: sourceNode.data?.settings?.resolution
       });
       
-      // 获取源节点的位置和输入
+      // 🔧 关键修复：批量执行也需要级联执行上游节点
+      await ensureUpstreamExecuted(sourceNodeId);
+      
+      // 级联执行完成后，重新获取输入
       const inputs = resolveInputs(sourceNodeId);
+      console.log(`[批量生成] 级联执行后获取到的输入:`, {
+          imagesCount: inputs.images.length,
+          textsCount: inputs.texts.length,
+          firstImagePreview: inputs.images[0]?.slice(0, 50)
+      });
       const nodePrompt = sourceNode.data?.prompt || '';
       const inputTexts = inputs.texts.join('\n');
       // 🔧 上游输入优先替代节点自身prompt
@@ -2195,6 +2364,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       updateNode(sourceNodeId, { status: 'running' });
       
       console.log(`[BP/Idea批量] 开始生成 ${count} 个图像节点`);
+      
+      // 🔧 级联执行：先执行上游节点
+      await ensureUpstreamExecuted(sourceNodeId);
       
       // 获取输入
       const inputs = resolveInputs(sourceNodeId);
@@ -2389,6 +2561,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       
       console.log(`[工具批量] 开始生成 ${count} 个结果节点`);
       
+      // 🔧 级联执行：先执行上游节点
+      await ensureUpstreamExecuted(sourceNodeId);
+      
       // 获取源节点的位置和输入
       const inputs = resolveInputs(sourceNodeId);
       const inputImages = inputs.images;
@@ -2512,6 +2687,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // 视频节点批量执行：创建多个 video-output 节点
   const handleVideoBatchExecute = async (sourceNodeId: string, sourceNode: CanvasNode, count: number) => {
       console.log(`[视频批量] 开始生成 ${count} 个视频输出节点`);
+      
+      // 🔧 级联执行：先执行上游节点
+      await ensureUpstreamExecuted(sourceNodeId);
       
       // 获取输入
       const inputs = resolveInputs(sourceNodeId);
@@ -2824,6 +3002,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       if (node.type === 'drawing-board') {
           try {
               if (batchCount === 1) {
+                  // 🔧 级联执行：先执行上游节点
+                  await ensureUpstreamExecuted(nodeId);
+                  
                   // 接收上游图片
                   const inputs = resolveInputs(nodeId);
                   const inputImages = inputs.images;
@@ -2921,21 +3102,44 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               
               // 如果上游节点需要执行且未完成，先执行上游
               if (upstreamNode && upstreamNode.status !== 'completed') {
-                  // 只有 idle 状态的节点才需要级联执行（关键修复点）
-                  // running: 已在执行，等待完成
-                  // error: 已失败，不重试
-                  if (upstreamNode.status !== 'idle') {
-                      console.log(`[级联执行] ⚠️ 上游节点状态为 ${upstreamNode.status}，跳过级联执行`);
-                      continue; // 跳过这个上游节点
-                  }
+                  // 🔧 完整的可执行节点类型列表
+                  const executableTypes = ['image', 'llm', 'edit', 'remove-bg', 'upscale', 'resize', 'video', 'bp', 'rh-config', 'idea', 'text'];
                   
-                  // 可执行的节点类型：包含 image 以支持容器模式级联执行
-                  const executableTypes = ['image', 'llm', 'edit', 'remove-bg', 'upscale', 'resize', 'video', 'bp'];
-                  if (executableTypes.includes(upstreamNode.type)) {
-                      console.log(`[级联执行] ⤵️ 触发上游节点执行: ${upstreamNode.type} ${upstreamNode.id.slice(0,8)}`);
-                      // 递归执行上游节点
-                      await handleExecuteNode(upstreamNode.id);
-                      console.log(`[级联执行] ✅ 上游节点执行完成`);
+                  if (upstreamNode.status === 'running') {
+                      // 上游正在执行，等待它完成
+                      console.log(`[级联执行] ⏳ 上游节点正在执行，等待完成...`);
+                      // 等待上游节点完成（最多等待120秒）
+                      const maxWait = 120000;
+                      const checkInterval = 500;
+                      let waited = 0;
+                      while (waited < maxWait) {
+                          await new Promise(resolve => setTimeout(resolve, checkInterval));
+                          waited += checkInterval;
+                          const currentUpstream = nodesRef.current.find(n => n.id === upstreamNode.id);
+                          if (currentUpstream?.status === 'completed') {
+                              console.log(`[级联执行] ✅ 上游节点已完成`);
+                              break;
+                          }
+                          if (currentUpstream?.status === 'error') {
+                              console.log(`[级联执行] ❌ 上游节点执行失败`);
+                              break;
+                          }
+                          if (signal.aborted) return;
+                      }
+                  } else if (upstreamNode.status === 'error' || upstreamNode.status === 'idle') {
+                      // error 或 idle 状态：重新执行
+                      if (upstreamNode.status === 'error') {
+                          console.log(`[级联执行] 🔄 上游节点之前失败，重新执行`);
+                          // 重置为 idle 状态
+                          updateNode(upstreamNode.id, { status: 'idle' });
+                      }
+                      
+                      if (executableTypes.includes(upstreamNode.type)) {
+                          console.log(`[级联执行] ⤵️ 触发上游节点执行: ${upstreamNode.type} ${upstreamNode.id.slice(0,8)}`);
+                          // 递归执行上游节点
+                          await handleExecuteNode(upstreamNode.id);
+                          console.log(`[级联执行] ✅ 上游节点执行完成`);
+                      }
                   }
               } else if (upstreamNode) {
                   console.log(`[级联执行] ✅ 上游节点已完成，无需重新执行`);
@@ -2947,6 +3151,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
 
           // Resolve all inputs (recursive for edits/relays) - 向上追溯
           const inputs = resolveInputs(nodeId);
+          console.log(`[执行节点] 节点 ${nodeId.slice(0,8)} (${node.type}) 获取到的输入:`, {
+              imagesCount: inputs.images.length,
+              textsCount: inputs.texts.length,
+              firstImagePreview: inputs.images[0]?.slice(0, 50)
+          });
           
           if (node.type === 'image') {
               // 获取节点自身的prompt
@@ -3075,34 +3284,57 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           }
           else if (node.type === 'edit') {
                // Magic节点执行逻辑（支持本地API和RunningHub两种模式）
-               const magicSource = node.data?.magicSource || 'local';
+               
+               // 🔧 重新获取最新的节点信息（级联执行后可能已更新）
+               const currentNode = nodesRef.current.find(n => n.id === nodeId);
+               if (!currentNode) {
+                   console.error('[Magic] 节点不存在');
+                   return;
+               }
+               
+               const magicSource = currentNode.data?.magicSource || 'local';
                const inputTexts = inputs.texts.join('\n');
                const inputImages = inputs.images;
                          
                // 获取节点的设置和提示词
-               const nodePrompt = node.data?.prompt || '';
+               const nodePrompt = currentNode.data?.prompt || '';
                // 🔧 上游输入优先替代节点自身prompt
                const combinedPrompt = inputTexts || nodePrompt;
                          
               // 获取Edit节点的设置
-               const editAspectRatio = node.data?.settings?.aspectRatio || 'AUTO';
-               const editResolution = node.data?.settings?.resolution || 'AUTO';
+               const editAspectRatio = currentNode.data?.settings?.aspectRatio || 'AUTO';
+               const editResolution = currentNode.data?.settings?.resolution || 'AUTO';
                
                console.log('[Magic] 节点设置:', {
                    magicSource,
                    aspectRatio: editAspectRatio,
                    resolution: editResolution,
-                   nodeSettings: node.data?.settings
+                   nodeSettings: currentNode.data?.settings
                });
                
-               // 🔧 每次运行都创建新的输出节点
+               // 🔧 检查当前节点是否有下游连接的节点（决定输出节点位置）
+               const hasDownstreamNode = connectionsRef.current.some(c => c.fromNode === nodeId);
+               
+               // 计算输出节点位置：如果有下游节点，放在上方；否则放在右边
+               let outputX: number, outputY: number;
+               if (hasDownstreamNode) {
+                   // 有下游节点，放在上方
+                   outputX = currentNode.x;
+                   outputY = currentNode.y - 350; // 节点高度 + 间距
+               } else {
+                   // 没有下游节点，放在右边
+                   outputX = currentNode.x + currentNode.width + 100;
+                   outputY = currentNode.y;
+               }
+               
+               // 🔧 每次运行都创建新的输出节点（使用计算好的位置）
                const outputNodeId = uuid();
                const outputNode: CanvasNode = {
                    id: outputNodeId,
                    type: 'image',
                    content: '',
-                   x: node.x + node.width + 100,
-                   y: node.y,
+                   x: outputX,
+                   y: outputY,
                    width: 300,
                    height: 300,
                    data: {},
@@ -3114,17 +3346,22 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                    fromNode: nodeId,
                    toNode: outputNodeId
                };
-                         
+               
+               // 🔧 先同步更新 ref，确保级联执行时能立即获取最新状态
+               nodesRef.current = [...nodesRef.current, outputNode];
+               connectionsRef.current = [...connectionsRef.current, newConnection];
+               
+               // 再更新 React 状态
                setNodes(prev => [...prev, outputNode]);
                setConnections(prev => [...prev, newConnection]);
                setHasUnsavedChanges(true);
-               console.log(`[Magic] 已创建新输出节点 ${outputNodeId.slice(0,8)}`);
+               console.log(`[Magic] 已创建新输出节点 ${outputNodeId.slice(0,8)}, 位置: (${outputNode.x}, ${outputNode.y})`);
                
                // =========== RunningHub 模式 ===========
                if (magicSource === 'runninghub') {
                    const { executeBananaTask, uploadImageForBanana } = await import('../../services/rhBananaService');
                    
-                   const bananaOfficial = node.data?.bananaOfficial !== false; // 默认官方
+                   const bananaOfficial = currentNode.data?.bananaOfficial !== false; // 默认官方
                    const effectiveMode = inputImages.length > 0 ? 'image2image' : 'text2image';
                    
                    console.log('[Magic-RH] 执行参数:', {
@@ -3140,17 +3377,17 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                    if (!combinedPrompt) {
                        console.error('[Magic-RH] 无提示词');
                        updateNode(outputNodeId, { status: 'error' });
-                       updateNode(nodeId, { status: 'error', data: { ...node.data, bananaProgress: '请输入提示词' } });
+                       updateNode(nodeId, { status: 'error', data: { ...currentNode.data, bananaProgress: '请输入提示词' } });
                        return;
                    }
                    
                    try {
-                       updateNode(nodeId, { data: { ...node.data, bananaProgress: '准备中...' } });
+                       updateNode(nodeId, { data: { ...currentNode.data, bananaProgress: '准备中...' } });
                        
                        // 如果是图生图，需要上传图片到RH获取URL
                        let imageUrls: string[] = [];
                        if (effectiveMode === 'image2image' && inputImages.length > 0) {
-                           updateNode(nodeId, { data: { ...node.data, bananaProgress: '上传图片中...' } });
+                           updateNode(nodeId, { data: { ...currentNode.data, bananaProgress: '上传图片中...' } });
                            for (let i = 0; i < inputImages.length; i++) {
                                const url = await uploadImageForBanana(inputImages[i]);
                                imageUrls.push(url);
@@ -3213,7 +3450,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                height: imgHeight,
                                status: 'completed'
                            });
-                           updateNode(nodeId, { status: 'completed', data: { ...node.data, bananaProgress: '' } });
+                           // 保存输出到 data.output，供下游节点追溯使用（使用最新的 data）
+                           const latestNodeRH = nodesRef.current.find(n => n.id === nodeId);
+                           updateNode(nodeId, { status: 'completed', data: { ...latestNodeRH?.data, bananaProgress: '', output: finalImageUrl } });
+                           console.log(`[Magic-RH] ✅ 节点 ${nodeId.slice(0,8)} 完成，data.output 已设置`);
                            saveCurrentCanvas();
                            
                            if (onImageGenerated) {
@@ -3225,7 +3465,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                        updateNode(outputNodeId, { status: 'error' });
                        updateNode(nodeId, { 
                            status: 'error', 
-                           data: { ...node.data, bananaProgress: err instanceof Error ? err.message : '执行失败' }
+                           data: { ...currentNode.data, bananaProgress: err instanceof Error ? err.message : '执行失败' }
                        });
                    }
                }
@@ -3263,7 +3503,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                            result = await generateCreativeImage(combinedPrompt, finalConfig, signal);
                        } else if (!combinedPrompt && inputImages.length > 0) {
                            result = inputImages[0];
-                           updateNode(nodeId, { status: 'completed' });
+                           // 保存输出到 data.output，供下游节点追溯使用
+                           updateNode(nodeId, { status: 'completed', data: { ...currentNode.data, output: result } });
                        } else {
                            result = await editCreativeImage(inputImages, combinedPrompt, finalConfig, signal);
                        }
@@ -3277,7 +3518,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                    status: 'completed',
                                    data: { imageMetadata: metadata }
                                });
-                               updateNode(nodeId, { status: 'completed' });
+                               // 保存输出到 data.output，供下游节点追溯使用（使用最新的 data）
+                               const latestNode = nodesRef.current.find(n => n.id === nodeId);
+                               updateNode(nodeId, { status: 'completed', data: { ...latestNode?.data, output: result } });
+                               console.log(`[Magic-Local] ✅ 节点 ${nodeId.slice(0,8)} 完成，data.output 已设置`);
                                
                                saveCurrentCanvas();
                                
@@ -3673,6 +3917,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       toNode: outputNodeId
                   };
                   
+                  // 先同步更新 ref，确保级联执行时能立即获取最新状态
+                  nodesRef.current = [...nodesRef.current, outputNode];
+                  connectionsRef.current = [...connectionsRef.current, newConnection];
+                  
+                  // 再更新 React 状态
                   setNodes(prev => [...prev, outputNode]);
                   setConnections(prev => [...prev, newConnection]);
                   setHasUnsavedChanges(true);
@@ -3714,7 +3963,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   const h = node.data?.resizeHeight || 1024;
                   const resized = await resizeImageClient(src, mode, w, h);
                   if (!signal.aborted) {
-                      updateNode(nodeId, { content: resized, status: 'completed' });
+                      // 保存输出到 data.output，供下游节点追溯使用
+                      updateNode(nodeId, { content: resized, status: 'completed', data: { ...node.data, output: resized } });
                       
                       // 🔧 保存画布
                       saveCurrentCanvas();
@@ -3757,7 +4007,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       toNode: outputNodeId
                   };
                             
-                  // 2. 立即更新UI:添加节点+连接
+                  // 2. 先同步更新 ref，确保级联执行时能立即获取最新状态
+                  nodesRef.current = [...nodesRef.current, outputNode];
+                  connectionsRef.current = [...connectionsRef.current, newConnection];
+                  
+                  // 再更新 React 状态
                   setNodes(prev => [...prev, outputNode]);
                   setConnections(prev => [...prev, newConnection]);
                   setHasUnsavedChanges(true);
@@ -3782,8 +4036,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                               data: { imageMetadata: metadata }
                           });
                                     
-                          // 5. 标记工具节点完成
-                          updateNode(nodeId, { status: 'completed' });
+                          // 5. 标记工具节点完成，保存输出到 data.output 供下游节点追溯使用
+                          updateNode(nodeId, { status: 'completed', data: { output: result } });
                           
                           // 🔧 保存画布
                           saveCurrentCanvas();
@@ -3836,7 +4090,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       toNode: outputNodeId
                   };
                             
-                  // 2. 立即更新UI:添加节点+连接
+                  // 2. 先同步更新 ref，确保级联执行时能立即获取最新状态
+                  nodesRef.current = [...nodesRef.current, outputNode];
+                  connectionsRef.current = [...connectionsRef.current, newConnection];
+                  
+                  // 再更新 React 状态
                   setNodes(prev => [...prev, outputNode]);
                   setConnections(prev => [...prev, newConnection]);
                   setHasUnsavedChanges(true);
@@ -3867,8 +4125,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                               data: { imageMetadata: metadata }
                           });
                                     
-                          // 5. 标记工具节点完成
-                          updateNode(nodeId, { status: 'completed' });
+                          // 5. 标记工具节点完成，保存输出到 data.output 供下游节点追溯使用
+                          updateNode(nodeId, { status: 'completed', data: { ...node.data, output: result } });
                           
                           // 🔧 保存画布
                           saveCurrentCanvas();
@@ -4173,6 +4431,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   toNode: outputNodeId
               };
               
+              // 先同步更新 ref，确保级联执行时能立即获取最新状态
+              nodesRef.current = [...nodesRef.current, outputNode];
+              connectionsRef.current = [...connectionsRef.current, newConnection];
+              
+              // 再更新 React 状态
               setNodes(prev => [...prev, outputNode]);
               setConnections(prev => [...prev, newConnection]);
               setHasUnsavedChanges(true);
@@ -4412,6 +4675,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   updateNode(nodeId, { status: 'error', data: { ...node.data, error: '缺少应用配置' } });
                   return;
               }
+              
+              // 🔧 级联执行：先执行上游节点（如 Magic、LLM 等）
+              await ensureUpstreamExecuted(nodeId);
               
               try {
                   const appName = (appInfo as any).webappName || appInfo.title || webappId;
@@ -5042,22 +5308,24 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           if (rafRef.current) cancelAnimationFrame(rafRef.current);
           rafRef.current = requestAnimationFrame(() => {
               const delta = dragDeltaRef.current;
-              const newNodes = nodesRef.current.map(node => {
-                  if (selectedNodeIds.has(node.id)) {
-                      const initialPos = initialNodePositionsRef.current.get(node.id); // 使用 ref 获取最新值
-                      if (initialPos) {
-                          return {
-                              ...node,
-                              x: initialPos.x + delta.x,
-                              y: initialPos.y + delta.y
-                          };
+              
+              // 🔧 关键修复：使用函数式更新，避免覆盖并发添加的新节点
+              // 不在这里更新 nodesRef，让 useEffect 来同步
+              setNodes(prevNodes => {
+                  return prevNodes.map(node => {
+                      if (selectedNodeIds.has(node.id)) {
+                          const initialPos = initialNodePositionsRef.current.get(node.id);
+                          if (initialPos) {
+                              return {
+                                  ...node,
+                                  x: initialPos.x + delta.x,
+                                  y: initialPos.y + delta.y
+                              };
+                          }
                       }
-                  }
-                  return node;
+                      return node;
+                  });
               });
-              // 同时更新 state 和 ref，确保一致性
-              nodesRef.current = newNodes;
-              setNodes(newNodes);
           });
           return;
       }
@@ -6117,7 +6385,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     const pathD = `M ${startX} ${startY} C ${ctrl1X} ${ctrl1Y}, ${ctrl2X} ${ctrl2Y}, ${endX} ${endY}`;
 
                     return (
-                        <g key={conn.id} onClick={() => setSelectedConnectionId(conn.id)} className="pointer-events-auto cursor-pointer group">
+                        <g key={conn.id} onClick={(e) => {
+                            e.stopPropagation(); // 阻止事件冒泡到画布
+                            setSelectedNodeIds(new Set()); // 清除已选中的节点，避免删除连线时误删节点
+                            setSelectedConnectionId(conn.id);
+                        }} className="pointer-events-auto cursor-pointer group">
                              {/* 点击区域 */}
                              <path 
                                 d={pathD}
