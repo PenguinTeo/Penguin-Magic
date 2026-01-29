@@ -3485,6 +3485,46 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       console.log(`[视频批量] 任务已后台异步执行`);
   };
 
+  // 🌟 LLM优化文本内容
+  const handleOptimizeText = async (nodeId: string) => {
+      const node = nodesRef.current.find(n => n.id === nodeId);
+      if (!node || !node.content) {
+          console.warn(`[LLM优化] 节点 ${nodeId.slice(0,8)} 无内容`);
+          return;
+      }
+      
+      // 防止重复执行
+      if (node.status === 'running') {
+          console.warn(`[LLM优化] 节点 ${nodeId.slice(0,8)} 正在运行中`);
+          return;
+      }
+      
+      console.log(`[LLM优化] 开始优化节点 ${nodeId.slice(0,8)} 的内容`);
+      
+      // 更新状态为 running
+      updateNode(nodeId, { status: 'running' });
+      
+      try {
+          // 调用 generateCreativeText 进行LLM优化
+          const result = await generateCreativeText(node.content);
+          
+          // 更新节点内容
+          updateNode(nodeId, { 
+              title: result.title, 
+              content: result.content, 
+              status: 'completed' 
+          });
+          
+          console.log(`[LLM优化] 节点 ${nodeId.slice(0,8)} 优化完成`);
+          
+          // 保存画布
+          saveCurrentCanvas();
+      } catch (err) {
+          console.error(`[LLM优化] 失败:`, err);
+          updateNode(nodeId, { status: 'error' });
+      }
+  };
+
   const handleExecuteNode = async (nodeId: string, batchCount: number = 1) => {
       const node = nodesRef.current.find(n => n.id === nodeId);
       if (!node) {
@@ -4425,12 +4465,9 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                        console.warn('上游节点无输出');
                    }
                } else if (node.content) {
-                   // 没有上游连接，但有自身内容，使用LLM扩展
-                   const result = await generateCreativeText(node.content);
+                   // 🔧 纯文本模式：文字节点不再自动调用LLM，直接保持内容并标记完成
                    if (!signal.aborted) {
                        updateNode(nodeId, { 
-                           title: result.title, 
-                           content: result.content, 
                            status: 'completed' 
                        });
                    }
@@ -5409,56 +5446,121 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           }
                           
                           if (result.outputs?.length) {
-                              const output = result.outputs[0];
-                              const outputUrl = output.fileUrl;
-                              // 判断是否是视频：优先用应用名称判断，其次检查fileType或URL扩展名
-                              const fileTypeLower = output.fileType?.toLowerCase() || ''; const isImageFile = /^(png|jpg|jpeg|gif|webp|bmp|image)$/i.test(fileTypeLower); const isVideoFile = /^(mp4|webm|mov|avi|mkv|video)$/i.test(fileTypeLower); const isVideo = !isImageFile && (isVideoFile || isVideoApp || 
-                                              output.fileType?.toLowerCase() === 'video' || 
-                                              /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(outputUrl));
-                              const outputType = isVideo ? 'video' : 'image';
-                              
-                              console.log(`[RH-Config] 任务完成:`, { batchIndex, outputUrl, outputType, isVideoApp, fileType: output.fileType, status });
-                              
-                              // 根据输出类型更新节点
-                              if (outputType === 'video') {
-                                  // 视频输出：更新为video-output类型，并获取视频尺寸
-                                  updateNode(outputNode.id, {
-                                      type: 'video-output',
-                                      content: outputUrl,
-                                      status: 'completed'
-                                  });
-                                  // 获取视频尺寸并更新节点
-                                  const video = document.createElement('video');
-                                  video.onloadedmetadata = () => {
-                                      const aspectRatio = video.videoWidth / video.videoHeight;
-                                      const DEFAULT_NODE_WIDTH = 300;
-                                      const nodeWidth = DEFAULT_NODE_WIDTH;
-                                      const nodeHeight = nodeWidth / aspectRatio;
-                                      setNodes(prev => prev.map(n =>
-                                          n.id === outputNode.id ? { ...n, width: nodeWidth, height: nodeHeight } : n
-                                      ));
-                                  };
-                                  video.src = outputUrl;
-                              } else {
-                                  // 图片输出：先立即更新节点内容，然后获取尺寸
-                                  updateNodeWithImageSize(outputNode.id, outputUrl, 'completed');
-                              }
-                              
-                              // 异步获取 metadata（不阻塞）
-                              if (outputType === 'image') {
-                                  extractImageMetadata(outputUrl).then(metadata => {
-                                      updateNode(outputNode.id, {
-                                          data: { imageMetadata: metadata }
-                                      });
-                                  }).catch(err => {
-                                      console.warn(`[RH-Config] 获取图片元数据失败:`, err);
-                                  });
-                              }
-                              
-                              // 同步到桌面
-                              if (outputType === 'image' && onImageGenerated) {
-                                  onImageGenerated(outputUrl, `RunningHub: ${appName}`, currentCanvasId || undefined, canvasName);
-                              }
+                              // 🔧 处理所有输出（可能有多张图片）
+                              result.outputs.forEach((output, outputIndex) => {
+                                  const outputUrl = output.fileUrl;
+                                  if (!outputUrl) return;
+                                  
+                                  // 判断是否是视频
+                                  const fileTypeLower = output.fileType?.toLowerCase() || '';
+                                  const isImageFile = /^(png|jpg|jpeg|gif|webp|bmp|image)$/i.test(fileTypeLower);
+                                  const isVideoFile = /^(mp4|webm|mov|avi|mkv|video)$/i.test(fileTypeLower);
+                                  const isVideo = !isImageFile && (isVideoFile || isVideoApp || 
+                                                  output.fileType?.toLowerCase() === 'video' || 
+                                                  /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(outputUrl));
+                                  const outputType = isVideo ? 'video' : 'image';
+                                  
+                                  console.log(`[RH-Config] 任务完成:`, { batchIndex, outputIndex, outputUrl, outputType, isVideoApp, fileType: output.fileType, totalOutputs: result.outputs.length });
+                                  
+                                  if (outputIndex === 0) {
+                                      // 第一个输出：更新预创建的节点
+                                      if (outputType === 'video') {
+                                          updateNode(outputNode.id, {
+                                              type: 'video-output',
+                                              content: outputUrl,
+                                              status: 'completed'
+                                          });
+                                          const video = document.createElement('video');
+                                          video.onloadedmetadata = () => {
+                                              const aspectRatio = video.videoWidth / video.videoHeight;
+                                              const nodeWidth = 300;
+                                              const nodeHeight = nodeWidth / aspectRatio;
+                                              setNodes(prev => prev.map(n =>
+                                                  n.id === outputNode.id ? { ...n, width: nodeWidth, height: nodeHeight } : n
+                                              ));
+                                          };
+                                          video.src = outputUrl;
+                                      } else {
+                                          updateNodeWithImageSize(outputNode.id, outputUrl, 'completed');
+                                      }
+                                      
+                                      // 异步获取 metadata
+                                      if (outputType === 'image') {
+                                          extractImageMetadata(outputUrl).then(metadata => {
+                                              updateNode(outputNode.id, { data: { imageMetadata: metadata } });
+                                          }).catch(() => {});
+                                      }
+                                      
+                                      // 同步到桌面
+                                      if (outputType === 'image' && onImageGenerated) {
+                                          onImageGenerated(outputUrl, `RunningHub: ${appName}`, currentCanvasId || undefined, canvasName);
+                                      }
+                                  } else {
+                                      // 🌟 后续输出：动态创建新节点
+                                      const existingNode = nodesRef.current.find(n => n.id === outputNode.id);
+                                      if (!existingNode) return;
+                                      
+                                      const newNodeId = uuid();
+                                      const newNode: CanvasNode = {
+                                          id: newNodeId,
+                                          type: outputType === 'video' ? 'video-output' : 'image',
+                                          content: outputUrl,
+                                          x: existingNode.x,
+                                          y: existingNode.y + (outputIndex * 350), // 向下排列
+                                          width: 300, // 与 updateNodeWithImageSize 保持一致
+                                          height: 300,
+                                          data: {},
+                                          status: 'completed'
+                                      };
+                                      
+                                      const newConnection = {
+                                          id: uuid(),
+                                          fromNode: nodeId,
+                                          toNode: newNodeId
+                                      };
+                                      
+                                      nodesRef.current = [...nodesRef.current, newNode];
+                                      connectionsRef.current = [...connectionsRef.current, newConnection];
+                                      setNodes(prev => [...prev, newNode]);
+                                      setConnections(prev => [...prev, newConnection]);
+                                      
+                                      console.log(`[RH-Config] 创建额外输出节点:`, { newNodeId: newNodeId.slice(0,8), outputIndex });
+                                      
+                                      // 图片节点：使用统一的尺寸计算逻辑
+                                      if (outputType === 'image') {
+                                          const img = new Image();
+                                          img.onload = () => {
+                                              const aspectRatio = img.width / img.height;
+                                              const nodeWidth = 300; // 与 updateNodeWithImageSize 保持一致
+                                              const nodeHeight = nodeWidth / aspectRatio;
+                                              setNodes(prev => prev.map(n =>
+                                                  n.id === newNodeId ? { ...n, width: nodeWidth, height: nodeHeight } : n
+                                              ));
+                                              nodesRef.current = nodesRef.current.map(n =>
+                                                  n.id === newNodeId ? { ...n, width: nodeWidth, height: nodeHeight } : n
+                                              );
+                                          };
+                                          img.src = outputUrl;
+                                          
+                                          // 同步到桌面
+                                          if (onImageGenerated) {
+                                              onImageGenerated(outputUrl, `RunningHub: ${appName} (${outputIndex + 1})`, currentCanvasId || undefined, canvasName);
+                                          }
+                                      } else if (outputType === 'video') {
+                                          // 视频节点获取尺寸
+                                          const video = document.createElement('video');
+                                          video.onloadedmetadata = () => {
+                                              const aspectRatio = video.videoWidth / video.videoHeight;
+                                              const nodeWidth = 300;
+                                              const nodeHeight = nodeWidth / aspectRatio;
+                                              setNodes(prev => prev.map(n =>
+                                                  n.id === newNodeId ? { ...n, width: nodeWidth, height: nodeHeight } : n
+                                              ));
+                                          };
+                                          video.src = outputUrl;
+                                      }
+                                  }
+                              });
                           }
                       },
                       
@@ -7182,6 +7284,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     onCreateFrameExtractor={handleCreateFrameExtractor}
                     onExtractFrameFromExtractor={handleExtractFrameFromExtractor}
                     allVideosPaused={allVideosPaused}
+                    onOptimizeText={handleOptimizeText}
                     onRetryVideoDownload={async (id) => {
                         const n = nodesRef.current.find(x => x.id === id);
                         if (!n || !n.data?.videoUrl) {

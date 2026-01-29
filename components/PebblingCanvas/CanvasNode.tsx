@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import { createPortal } from 'react-dom';
 import { CanvasNode, NodeType, getNodeTypeColor } from '../../types/pebblingTypes';
 import { Icons } from './Icons';
 import { ChevronDown } from 'lucide-react';
@@ -21,7 +22,7 @@ const BananaIcon: React.FC<{ size?: number; className?: string }> = ({ size = 14
 // 动态导入 3D 组件以避免影响初始加载
 const MultiAngle3D = lazy(() => import('./MultiAngle3D'));
 
-// 自定义下拉选择器组件（替代原生 select，支持深色主题）
+// 自定义下拉选择器组件（替代原生 select，支持深色主题，使用 Portal 防止被截断）
 const CustomSelect: React.FC<{
   options: Array<{ name: string; index: string }>;
   value: string;
@@ -30,12 +31,15 @@ const CustomSelect: React.FC<{
   themeColors: { textSecondary: string };
 }> = ({ options, value, onChange, isLightCanvas, themeColors }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   
   // 点击外部关闭
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (triggerRef.current && !triggerRef.current.contains(e.target as Node) &&
+          dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -45,12 +49,25 @@ const CustomSelect: React.FC<{
     }
   }, [isOpen]);
   
+  // 更新下拉框位置
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 2,
+        left: rect.left,
+        width: rect.width
+      });
+    }
+  }, [isOpen]);
+  
   // 根据 value(即 index) 查找对应的显示名称
   const displayName = options.find(opt => opt.index === value)?.name || value;
   
   return (
-    <div ref={ref} className="relative w-full">
+    <div className="relative w-full">
       <div
+        ref={triggerRef}
         className="w-full rounded px-1.5 py-0.5 text-[8px] cursor-pointer flex items-center justify-between"
         style={{ backgroundColor: isLightCanvas ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.06)', color: themeColors.textSecondary }}
         onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
@@ -59,10 +76,18 @@ const CustomSelect: React.FC<{
         <span className="truncate">{displayName}</span>
         <ChevronDown size={10} className={`shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </div>
-      {isOpen && (
+      {isOpen && createPortal(
         <div 
-          className="absolute top-full left-0 right-0 mt-0.5 rounded shadow-lg z-50 max-h-40 overflow-y-auto"
-          style={{ backgroundColor: isLightCanvas ? '#ffffff' : '#1c1c1e', border: `1px solid ${isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}` }}
+          ref={dropdownRef}
+          className="fixed rounded shadow-lg z-[9999] max-h-40 overflow-y-auto"
+          style={{ 
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            width: dropdownPos.width,
+            backgroundColor: isLightCanvas ? '#ffffff' : '#1c1c1e', 
+            border: `1px solid ${isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}` 
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           {options.map((opt, i) => (
             <div
@@ -79,7 +104,8 @@ const CustomSelect: React.FC<{
               {opt.name}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -108,6 +134,7 @@ interface CanvasNodeProps {
   incomingConnections?: Array<{ fromNode: string; toPortKey?: string }>; // 连入当前节点的连接
   onRetryVideoDownload?: (nodeId: string) => void; // 重试视频下载
   allVideosPaused?: boolean; // 全局视频暂停状态
+  onOptimizeText?: (nodeId: string) => void; // LLM优化文本内容
 }
 
 const CanvasNodeItem: React.FC<CanvasNodeProps> = ({ 
@@ -132,7 +159,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   hasDownstream = false,
   incomingConnections = [],
   onRetryVideoDownload,
-  allVideosPaused = false
+  allVideosPaused = false,
+  onOptimizeText
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [localContent, setLocalContent] = useState(node.content);
@@ -491,10 +519,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                 onWheel={handleWheel}
             >
                 {/* Model Selection */}
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                     <label className="text-[9px] font-bold uppercase px-1" style={{ color: themeColors.textMuted }}>Model</label>
                     <select
-                        className={inputBaseClass + " h-7 text-xs"}
+                        className={inputBaseClass + " h-8 text-[11px]"}
                         value={localModel}
                         onChange={(e) => { setLocalModel(e.target.value); onUpdate(node.id, { data: { ...node.data, model: e.target.value } }); }}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -4646,6 +4674,24 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                     title="Edit Text (Enter)"
                  >
                     <Icons.Edit size={12} fill="currentColor" />
+                 </button>
+             )}
+
+             {/* LLM优化按钮 - 仅对文字节点显示（有内容时才可优化） */}
+             {['text'].includes(node.type) && !isRunning && onOptimizeText && (
+                 <button 
+                    onClick={(e) => { e.stopPropagation(); if (node.content) onOptimizeText(node.id); }}
+                    className={`h-8 px-2.5 rounded-lg border shadow-lg transition-colors flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider ${!node.content ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    style={{ 
+                      backgroundColor: isLightCanvas ? '#ffffff' : '#2c2c2e',
+                      borderColor: isLightCanvas ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)',
+                      color: '#a855f7'
+                    }}
+                    title={node.content ? "LLM优化文本" : "请先输入内容"}
+                    disabled={!node.content}
+                 >
+                    <Icons.Sparkles size={12} />
+                    AI优化
                  </button>
              )}
 
