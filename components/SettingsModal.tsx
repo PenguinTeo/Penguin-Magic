@@ -698,7 +698,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* RUNNINGHUB API */}
         <div>
-          <div className="section-title">RUNNINGHUB API</div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="section-title" style={{ marginBottom: 0 }}>RUNNINGHUB API</div>
+            <a 
+              href="https://www.runninghub.cn/?inviteCode=rh-v1110" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-xs flex items-center gap-1 px-2 py-1 rounded-md transition-all hover:bg-white/10"
+              style={{ color: styles.textSecondary }}
+            >
+              <span>前往官网获取</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </a>
+          </div>
           <div className="grid grid-cols-2 gap-4">
           {/* 会员消费 API (AI 应用) */}
           <div className="config-card">
