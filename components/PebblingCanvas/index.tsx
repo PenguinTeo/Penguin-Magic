@@ -5478,14 +5478,18 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                   const outputUrl = output.fileUrl;
                                   if (!outputUrl) return;
                                   
-                                  // 判断是否是视频
+                                  // 判断文件类型：图片、视频、音频
                                   const fileTypeLower = output.fileType?.toLowerCase() || '';
                                   const isImageFile = /^(png|jpg|jpeg|gif|webp|bmp|image)$/i.test(fileTypeLower);
                                   const isVideoFile = /^(mp4|webm|mov|avi|mkv|video)$/i.test(fileTypeLower);
-                                  const isVideo = !isImageFile && (isVideoFile || isVideoApp || 
+                                  const isAudioFile = /^(mp3|wav|flac|ogg|m4a|aac|wma|audio)$/i.test(fileTypeLower);
+                                  const isVideo = !isImageFile && !isAudioFile && (isVideoFile || isVideoApp || 
                                                   output.fileType?.toLowerCase() === 'video' || 
                                                   /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(outputUrl));
-                                  const outputType = isVideo ? 'video' : 'image';
+                                  const isAudio = !isImageFile && !isVideo && (isAudioFile ||
+                                                  output.fileType?.toLowerCase() === 'audio' ||
+                                                  /\.(mp3|wav|flac|ogg|m4a|aac|wma)(\?|$)/i.test(outputUrl));
+                                  const outputType = isVideo ? 'video' : (isAudio ? 'audio' : 'image');
                                   
                                   console.log(`[RH-Config] 任务完成:`, { batchIndex, outputIndex, outputUrl, outputType, isVideoApp, fileType: output.fileType, totalOutputs: result.outputs.length });
                                   
@@ -5507,6 +5511,23 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                               ));
                                           };
                                           video.src = outputUrl;
+                                      } else if (outputType === 'audio') {
+                                          // 音频输出：更新为音频节点
+                                          const fileName = outputUrl.split('/').pop()?.split('?')[0] || '音频文件';
+                                          const audioFormat = fileName.split('.').pop()?.toUpperCase() || 'MP3';
+                                          updateNode(outputNode.id, {
+                                              type: 'audio',
+                                              content: outputUrl,
+                                              title: fileName,
+                                              width: 320,
+                                              height: 220,
+                                              status: 'completed',
+                                              data: {
+                                                  audioUrl: outputUrl,
+                                                  audioFileName: fileName,
+                                                  audioFormat: audioFormat
+                                              }
+                                          });
                                       } else {
                                           updateNodeWithImageSize(outputNode.id, outputUrl, 'completed');
                                       }
@@ -5528,15 +5549,22 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                                       if (!existingNode) return;
                                       
                                       const newNodeId = uuid();
+                                      const fileName = outputUrl.split('/').pop()?.split('?')[0] || '音频文件';
+                                      const audioFormat = fileName.split('.').pop()?.toUpperCase() || 'MP3';
                                       const newNode: CanvasNode = {
                                           id: newNodeId,
-                                          type: outputType === 'video' ? 'video-output' : 'image',
+                                          type: outputType === 'video' ? 'video-output' : (outputType === 'audio' ? 'audio' : 'image'),
                                           content: outputUrl,
+                                          title: outputType === 'audio' ? fileName : undefined,
                                           x: existingNode.x,
                                           y: existingNode.y + (outputIndex * 350), // 向下排列
-                                          width: 300, // 与 updateNodeWithImageSize 保持一致
-                                          height: 300,
-                                          data: {},
+                                          width: outputType === 'audio' ? 320 : 300,
+                                          height: outputType === 'audio' ? 220 : 300,
+                                          data: outputType === 'audio' ? {
+                                              audioUrl: outputUrl,
+                                              audioFileName: fileName,
+                                              audioFormat: audioFormat
+                                          } : {},
                                           status: 'completed'
                                       };
                                       
