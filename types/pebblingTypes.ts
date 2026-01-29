@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-param' | 'rh-main' | 'rh-magic' | 'drawing-board' | 'browser' | 'image-compare';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-magic' | 'drawing-board' | 'browser' | 'image-compare';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -106,21 +106,6 @@ export interface NodeData {
   outputType?: string; // 输出文件类型
   coverUrl?: string; // 应用封面URL
   error?: string; // 错误信息
-  
-  // RH-Main 节点（封面主节点）
-  rhMainId?: string; // 关联的 RunningHub 节点 ID
-  
-  // RH-Param 节点（独立参数 Ticket）
-  rhParamInfo?: {
-    nodeId: string;       // API 参数的 nodeId
-    fieldName: string;    // API 参数的 fieldName
-    fieldType?: string;   // 参数类型：IMAGE/STRING/LIST 等
-    description?: string; // 参数描述
-    fieldValue?: string;  // 用户设置的值
-    options?: string[];   // LIST 类型的选项
-  };
-  rhParentNodeId?: string; // 所属的 rh-main 节点 ID
-  rhNextNodeId?: string;   // 下一个 rh-param 节点 ID（串联用）
   
   // Drawing Board Node Specifics
   boardElements?: Array<{

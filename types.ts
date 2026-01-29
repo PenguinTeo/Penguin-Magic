@@ -190,6 +190,15 @@ export interface RHAIAppInfo {
   };
 }
 
+// RH 应用创意包项目
+export interface RHAppPreset {
+  id: string;           // 自动生成的唯一ID
+  webappId: string;     // RunningHub AI应用ID
+  title: string;        // 应用标题
+  coverUrl?: string;    // 封面图URL
+  addedAt: number;      // 添加时间戳
+}
+
 export interface PromptPreset {
   id: number;
   title: string;

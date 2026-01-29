@@ -1,9 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icons } from './Icons';
 import { NodeType, NodeData, CanvasPreset } from '../../types/pebblingTypes';
 import { CanvasListItem } from '../../services/api/canvas';
-import { CreativeIdea } from '../../types';
+import { CreativeIdea, RHAppPreset } from '../../types';
+import { getRHAppPresets, addRHAppPreset, deleteRHAppPreset } from '../../services/api';
+import { getAIAppInfo } from '../../services/api/runninghub';
 
 // 香蕉SVG图标组件
 const BananaIcon: React.FC<{ size?: number; className?: string }> = ({ size = 14, className = '' }) => (
@@ -46,21 +48,102 @@ interface SidebarProps {
     // 画布主题
     canvasTheme?: 'dark' | 'light';
     onToggleTheme?: () => void;
+    // RH 应用节点组创建
+    onAddRHAppGroup?: (webappId: string, appInfo: any, coverUrl?: string) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   onDragStart, onAdd, userPresets, onAddPreset, onDeletePreset, onHome, onOpenSettings, isApiConfigured,
   canvasList, currentCanvasId, canvasName, isCanvasLoading, onCreateCanvas, onLoadCanvas, onDeleteCanvas, onRenameCanvas,
   creativeIdeas = [], onApplyCreativeIdea, onManualSave, autoSaveEnabled = false, hasUnsavedChanges = false,
-  canvasTheme = 'dark', onToggleTheme
+  canvasTheme = 'dark', onToggleTheme, onAddRHAppGroup
 }) => {
   const [activeLibrary, setActiveLibrary] = useState(false);
   const [showCanvasPanel, setShowCanvasPanel] = useState(false);
   const [showToolbox, setShowToolbox] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editingName, setEditingName] = useState('');
-  const [libraryFilter, setLibraryFilter] = useState<'all' | 'bp' | 'workflow' | 'favorite'>('all');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'bp' | 'workflow' | 'favorite' | 'rh'>('all');
   const [hoveredIdeaId, setHoveredIdeaId] = useState<number | null>(null);
+
+  // RH 应用创意包状态
+  const [rhApps, setRhApps] = useState<RHAppPreset[]>([]);
+  const [rhAppInput, setRhAppInput] = useState('');
+  const [rhAppLoading, setRhAppLoading] = useState(false);
+  const [rhAppError, setRhAppError] = useState('');
+  const [hoveredRhAppId, setHoveredRhAppId] = useState<string | null>(null);
+
+  // 加载 RH 应用列表
+  useEffect(() => {
+    const loadRHApps = async () => {
+      const result = await getRHAppPresets();
+      if (result.success && result.data) {
+        setRhApps(result.data);
+      }
+    };
+    loadRHApps();
+  }, []);
+
+  // 添加 RH 应用
+  const handleAddRHApp = async () => {
+    if (!rhAppInput.trim()) return;
+    
+    setRhAppLoading(true);
+    setRhAppError('');
+    
+    try {
+      // 获取应用信息
+      const appInfoResult = await getAIAppInfo(rhAppInput.trim());
+      if (!appInfoResult.success || !appInfoResult.data) {
+        setRhAppError(appInfoResult.error || '获取应用信息失败');
+        setRhAppLoading(false);
+        return;
+      }
+      
+      const appInfo = appInfoResult.data;
+      const coverUrl = appInfo.covers?.[0]?.thumbnailUri || appInfo.covers?.[0]?.url || undefined;
+      
+      // 保存到本地
+      const saveResult = await addRHAppPreset(rhAppInput.trim(), appInfo.webappName, coverUrl);
+      if (!saveResult.success) {
+        setRhAppError('error' in saveResult ? saveResult.error : '保存失败');
+        setRhAppLoading(false);
+        return;
+      }
+      
+      // 更新列表
+      if (saveResult.data) {
+        setRhApps(prev => [...prev, saveResult.data!]);
+      }
+      setRhAppInput('');
+    } catch (err) {
+      setRhAppError('添加失败');
+    }
+    
+    setRhAppLoading(false);
+  };
+
+  // 删除 RH 应用
+  const handleDeleteRHApp = async (id: string) => {
+    const result = await deleteRHAppPreset(id);
+    if (result.success) {
+      setRhApps(prev => prev.filter(app => app.id !== id));
+    }
+  };
+
+  // 应用 RH 应用（创建 runninghub + rh-config 节点组）
+  const handleApplyRHApp = async (app: RHAppPreset) => {
+    // 实时获取最新的应用信息
+    const appInfoResult = await getAIAppInfo(app.webappId);
+    if (appInfoResult.success && appInfoResult.data && onAddRHAppGroup) {
+      // 使用新的回调创建完整的节点组
+      onAddRHAppGroup(app.webappId, appInfoResult.data, app.coverUrl);
+    } else if (onAddRHAppGroup) {
+      // 即使获取失败也创建节点组
+      onAddRHAppGroup(app.webappId, null, app.coverUrl);
+    }
+    setActiveLibrary(false);
+  };
 
   // 根据主题设置颜色
   const isLight = canvasTheme === 'light';
@@ -411,13 +494,16 @@ const Sidebar: React.FC<SidebarProps> = ({
                         { key: 'favorite', label: '⭐' },
                         { key: 'bp', label: 'BP' },
                         { key: 'workflow', label: '📊' },
+                        { key: 'rh', label: 'RH' },
                     ].map(({ key, label }) => (
                         <button
                             key={key}
                             onClick={() => setLibraryFilter(key as typeof libraryFilter)}
                             className={`px-2 py-1 text-[10px] rounded-lg transition-all ${
                                 libraryFilter === key 
-                                    ? 'bg-purple-500/30 text-purple-200 border border-purple-500/50' 
+                                    ? key === 'rh' 
+                                        ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/50'
+                                        : 'bg-purple-500/30 text-purple-200 border border-purple-500/50' 
                                     : 'bg-white/5 text-zinc-400 hover:bg-white/10 border border-transparent'
                             }`}
                         >
@@ -428,7 +514,107 @@ const Sidebar: React.FC<SidebarProps> = ({
                 
                 {/* 创意列表 */}
                 <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide space-y-2" onWheel={(e) => e.stopPropagation()}>
-                    {filteredIdeas.length === 0 ? (
+                    {libraryFilter === 'rh' ? (
+                        /* RH 应用列表 */
+                        <>
+                            {rhApps.length === 0 ? (
+                                <div className="text-center py-8 text-zinc-500 text-xs">
+                                    暂无 RH 应用，请在下方添加
+                                </div>
+                            ) : (
+                                rhApps.map((app) => (
+                                    <div 
+                                        key={app.id} 
+                                        className="group relative"
+                                        onMouseEnter={() => setHoveredRhAppId(app.id)}
+                                        onMouseLeave={() => setHoveredRhAppId(null)}
+                                    >
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleApplyRHApp(app);
+                                            }}
+                                            className="w-full text-left p-2 rounded-xl border transition-all bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/40"
+                                        >
+                                            <div className="flex gap-2">
+                                                {/* 封面图 */}
+                                                {app.coverUrl ? (
+                                                    <div className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-black/20">
+                                                        <img src={app.coverUrl} alt="" className="w-full h-full object-cover" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-12 h-12 flex-shrink-0 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                                        <span className="text-lg font-black text-emerald-400">R</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between mb-0.5">
+                                                        <div className="font-bold text-xs text-white truncate flex-1 mr-2">
+                                                            {app.title}
+                                                        </div>
+                                                        <span className="text-[8px] bg-emerald-500/30 text-emerald-200 px-1 py-0.5 rounded">RH</span>
+                                                    </div>
+                                                    <div className="text-[9px] text-zinc-500 font-mono truncate">
+                                                        {app.webappId}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </button>
+                                        
+                                        {/* 删除按钮 */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteRHApp(app.id);
+                                            }}
+                                            className="absolute top-2 right-2 p-1 rounded-lg bg-red-500/20 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/30 transition-all"
+                                            title="删除应用"
+                                        >
+                                            <Icons.Close size={10} />
+                                        </button>
+                                        
+                                        {/* Hover 详情 */}
+                                        {hoveredRhAppId === app.id && (
+                                            <div className="absolute left-full top-0 ml-2 w-48 bg-[#1c1c1e] border border-white/10 rounded-xl p-3 shadow-2xl z-50 pointer-events-none animate-in fade-in slide-in-from-left-2 duration-150">
+                                                {app.coverUrl && (
+                                                    <div className="w-full h-24 rounded-lg overflow-hidden mb-2 bg-black/20">
+                                                        <img src={app.coverUrl} alt="" className="w-full h-full object-cover" />
+                                                    </div>
+                                                )}
+                                                <div className="text-xs font-bold text-white mb-1">{app.title}</div>
+                                                <div className="text-[10px] text-zinc-500 font-mono break-all">{app.webappId}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                            
+                            {/* 添加 RH 应用表单 */}
+                            <div className="pt-3 mt-3 border-t border-white/10">
+                                <div className="text-[10px] text-zinc-500 mb-2">添加新应用</div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={rhAppInput}
+                                        onChange={(e) => setRhAppInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddRHApp()}
+                                        placeholder="输入 AI 应用 ID"
+                                        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-zinc-600 outline-none focus:border-emerald-500/50"
+                                    />
+                                    <button
+                                        onClick={handleAddRHApp}
+                                        disabled={rhAppLoading || !rhAppInput.trim()}
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-medium hover:bg-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                    >
+                                        {rhAppLoading ? '...' : '添加'}
+                                    </button>
+                                </div>
+                                {rhAppError && (
+                                    <div className="text-[10px] text-red-400 mt-1">{rhAppError}</div>
+                                )}
+                            </div>
+                        </>
+                    ) : filteredIdeas.length === 0 ? (
                         <div className="text-center py-8 text-zinc-500 text-xs">
                             暂无创意
                         </div>

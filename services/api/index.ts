@@ -122,4 +122,21 @@ export const getServerStatus = async () => {
   }>('/status');
 };
 
+// =====================
+// RH 应用创意包 API
+// =====================
+import type { RHAppPreset } from '../../types';
+
+// 获取 RH 应用列表
+export const getRHAppPresets = (): Promise<ApiResponse<RHAppPreset[]>> => 
+  get<RHAppPreset[]>('/settings/rh-apps');
+
+// 添加 RH 应用
+export const addRHAppPreset = (webappId: string, title: string, coverUrl?: string): Promise<ApiResponse<RHAppPreset>> =>
+  post<RHAppPreset>('/settings/rh-apps', { webappId, title, coverUrl });
+
+// 删除 RH 应用
+export const deleteRHAppPreset = (id: string): Promise<ApiResponse<void>> =>
+  del<void>(`/settings/rh-apps/${id}`);
+
 export { API_BASE };

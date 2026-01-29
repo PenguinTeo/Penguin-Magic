@@ -2249,10 +2249,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       // RunningHub 节点（输入 ID 的节点）
       if (type === 'runninghub') { width = 280; height = 180; }
       // RH-Main 节点（封面主节点）
-      if (type === 'rh-main') { width = 280; height = 280; }
-      // RH-Param 节点（独立参数 Ticket）
-      if (type === 'rh-param') { width = 280; height = 56; }
-      // RH Magic 节点（香蕉 - 全能图片PRO）
+      // RH Magic 节点（香蕉 - 全能图PRO）
       if (type === 'rh-magic') { width = 280; height = 320; }
       // 画板节点需要更大的尺寸（约4个图片节点大小）
       if (type === 'drawing-board') { width = 800; height = 700; }
@@ -5496,135 +5493,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   });
               }
           }
-          // ============ rh-main 节点执行（从关联的 rh-param 节点收集参数） ============
-          else if (node.type === 'rh-main') {
-              const webappId = node.data?.webappId;
-              const appInfo = node.data?.appInfo;
-              const mainNodeId = node.id;
-              
-              console.log('[RH-Main] 节点执行:', { webappId, hasAppInfo: !!appInfo, batchCount });
-              
-              if (!webappId || !appInfo) {
-                  updateNode(nodeId, { status: 'error', data: { ...node.data, error: '缺少应用配置' } });
-                  return;
-              }
-              
-              try {
-                  const appName = (appInfo as any).webappName || appInfo.title || webappId;
-                  console.log('[RH-Main] 开始执行 AI 应用:', appName, '批次:', batchCount);
-                  
-                  // 从关联的 rh-param 节点收集参数值
-                  const currentNodes = nodesRef.current;
-                  const paramNodes = currentNodes.filter(n => 
-                      n.type === 'rh-param' && n.data?.rhParentNodeId === mainNodeId
-                  );
-                  
-                  console.log('[RH-Main] 找到参数节点:', paramNodes.length);
-                  
-                  // 构建 nodeInfoList
-                  const nodeInfoList = appInfo.nodeInfoList?.map((info: any) => {
-                      const key = `${info.nodeId}_${info.fieldName}`;
-                      
-                      // 在参数节点中查找对应的值
-                      const paramNode = paramNodes.find(pn => 
-                          pn.data?.rhParamInfo?.nodeId === info.nodeId && 
-                          pn.data?.rhParamInfo?.fieldName === info.fieldName
-                      );
-                      
-                      const nodeInputs = paramNode?.data?.nodeInputs || {};
-                      const userValue = nodeInputs[key];
-                      
-                      return {
-                          nodeId: info.nodeId,
-                          fieldName: info.fieldName,
-                          fieldValue: userValue !== undefined ? (userValue || '') : (info.fieldValue || '')
-                      };
-                  }) || [];
-                  
-                  console.log('[RH-Main] nodeInfoList:', nodeInfoList);
-                  
-                  // 找到最后一个参数节点（用于定位输出节点）
-                  let lastParamNode = paramNodes[paramNodes.length - 1];
-                  const outputBaseY = lastParamNode ? (lastParamNode.y + lastParamNode.height + 50) : (node.y + node.height + 50);
-                  
-                  // 根据批次数多次执行任务
-                  for (let batchIdx = 0; batchIdx < batchCount; batchIdx++) {
-                      if (signal.aborted) return;
-                      
-                      console.log(`[RH-Main] 执行第 ${batchIdx + 1}/${batchCount} 次任务`);
-                      
-                      // 为每个任务创建输出节点
-                      const outputNodeId = uuid();
-                      const outputNode: CanvasNode = {
-                          id: outputNodeId,
-                          type: 'image',
-                          content: '',
-                          x: node.x,
-                          y: outputBaseY + (batchIdx * 420),
-                          width: 300,
-                          height: 300,
-                          data: {},
-                          status: 'running'
-                      };
-                      
-                      // 从最后一个参数节点连线到输出节点
-                      const fromNodeId = lastParamNode ? lastParamNode.id : nodeId;
-                      const newConnection = {
-                          id: uuid(),
-                          fromNode: fromNodeId,
-                          toNode: outputNodeId
-                      };
-                      
-                      nodesRef.current = [...nodesRef.current, outputNode];
-                      connectionsRef.current = [...connectionsRef.current, newConnection];
-                      setNodes(prev => [...prev, outputNode]);
-                      setConnections(prev => [...prev, newConnection]);
-                      setHasUnsavedChanges(true);
-                      console.log(`[RH-Main] 已创建输出节点 ${batchIdx + 1}:`, outputNodeId.slice(0, 8));
-                      
-                      // 调用 API
-                      const result = await runAIApp(webappId, nodeInfoList);
-                      
-                      if (signal.aborted) return;
-                      
-                      if (result.success && result.data?.outputs?.length) {
-                          const output = result.data.outputs[0];
-                          const outputUrl = output.fileUrl;
-                          const outputType = output.fileType === 'video' ? 'video' : 'image';
-                          
-                          console.log(`[RH-Main] 任务 ${batchIdx + 1} 执行成功:`, { outputUrl, outputType });
-                          
-                          // 更新输出节点
-                          const metadata = await extractImageMetadata(outputUrl);
-                          updateNode(outputNodeId, {
-                              content: outputUrl,
-                              data: { imageMetadata: metadata },
-                              status: 'completed'
-                          });
-                          
-                          // 同步到桌面
-                          if (outputType === 'image' && onImageGenerated) {
-                              onImageGenerated(outputUrl, `RunningHub: ${appName}`, currentCanvasId || undefined, canvasName);
-                          }
-                      } else {
-                          const errorMsg = result.error || '执行失败';
-                          console.error(`[RH-Main] 任务 ${batchIdx + 1} 执行失败:`, errorMsg);
-                          updateNode(outputNodeId, { status: 'error' });
-                      }
-                  }
-                  
-                  // 所有任务完成后更新主节点状态
-                  updateNode(nodeId, { status: 'completed' });
-                  saveCurrentCanvas();
-                  
-              } catch (err: any) {
-                  console.error('[RH-Main] 执行异常:', err);
-                  updateNode(nodeId, {
-                      status: 'error',
-                      data: { ...node.data, error: err.message || '执行异常' }
-                  });
-              }
-          }
 
       } catch (e) {
           if ((e as Error).name !== 'AbortError') {
@@ -6563,6 +6431,61 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               // 不创建Image节点，不创建连接
             }
           }}
+          onAddRHAppGroup={(webappId, appInfo, coverUrl) => {
+            // 创建完整的 RH 应用节点组（runninghub + rh-config）
+            const baseX = -canvasOffset.x / scale + 200;
+            const baseY = -canvasOffset.y / scale + 100;
+            const timestamp = Date.now();
+            
+            // 创建 runninghub 主控节点（左侧）
+            const rhNodeId = `runninghub_${timestamp}`;
+            const rhNode: CanvasNode = {
+              id: rhNodeId,
+              type: 'runninghub' as NodeType,
+              title: 'RunningHub',
+              content: '',
+              x: baseX,
+              y: baseY,
+              width: 280,
+              height: 180,
+              data: {
+                webappId,
+                appInfo,
+              },
+            };
+            
+            // 创建 rh-config 节点（右侧，封面图 + 参数集成在一个节点里）
+            const configNodeId = `rh_config_${timestamp}`;
+            const configNode: CanvasNode = {
+              id: configNodeId,
+              type: 'rh-config' as NodeType,
+              title: appInfo?.webappName || appInfo?.title || 'RH 应用',
+              content: '',
+              x: baseX + 320,  // 右侧偏移
+              y: baseY,
+              width: 280,
+              height: 400,  // 高度足够容纳封面和参数
+              data: {
+                webappId,
+                appInfo,
+                coverUrl,
+              },
+            };
+            
+            const newNodes: CanvasNode[] = [rhNode, configNode];
+            const newConnections: Connection[] = [];
+            
+            // runninghub 连接到 rh-config
+            newConnections.push({
+              id: `conn_rh_config_${timestamp}`,
+              fromNode: rhNodeId,
+              toNode: configNodeId,
+            });
+            
+            setNodes(prev => [...prev, ...newNodes]);
+            setConnections(prev => [...prev, ...newConnections]);
+            setHasUnsavedChanges(true);
+          }}
       />
       
       {/* 画布名称标识 - 独立模块 */}
@@ -6947,22 +6870,6 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                             const targetFieldType = (portInfo?.fieldType || '').toUpperCase();
                             isImageToImagePort = isSourceImageNode && ['IMAGE', 'VIDEO', 'AUDIO'].includes(targetFieldType);
                         }
-                    }
-                    // ============ rh-param 节点（独立 Ticket）============
-                    else if (to.type === 'rh-param') {
-                        // 独立参数节点：直接连到左侧中心
-                        endX = to.x - 8;
-                        endY = to.y + to.height / 2;
-                        
-                        // 检查是否是图片类型参数
-                        const paramFieldType = to.data?.rhParamInfo?.fieldType?.toUpperCase() || '';
-                        isImageToImagePort = isSourceImageNode && ['IMAGE', 'VIDEO', 'AUDIO'].includes(paramFieldType);
-                    }
-                    // ============ rh-main 节点（封面主节点）============
-                    else if (to.type === 'rh-main') {
-                        // 主节点：连到左侧中心
-                        endX = to.x - 8;
-                        endY = to.y + to.height / 2;
                     }
                     // ============ 旧 runninghub 节点的兼容处理 ============
                     else if (conn.toPortKey && to.type === 'runninghub' && to.data?.appInfo?.nodeInfoList) {

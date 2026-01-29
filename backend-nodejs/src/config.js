@@ -52,6 +52,7 @@ const config = {
   SETTINGS_FILE: path.join(BASE_DIR, 'data', 'settings.json'),
   DESKTOP_ITEMS_FILE: path.join(BASE_DIR, 'data', 'desktop_items.json'),
   CANVAS_FILE: path.join(BASE_DIR, 'data', 'canvas_list.json'), // 画布列表
+  RH_APPS_FILE: path.join(BASE_DIR, 'data', 'rh_apps.json'), // RH 应用创意包
   
   // 业务配置
   MAX_HISTORY_COUNT: 500,
