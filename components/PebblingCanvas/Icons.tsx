@@ -43,7 +43,8 @@ import {
   ExternalLink,
   Globe,
   Columns,
-  Package
+  Package,
+  Music
 } from 'lucide-react';
 
 export const Icons = {
@@ -89,5 +90,6 @@ export const Icons = {
   ExternalLink,
   Globe,
   Columns,
-  Package
+  Package,
+  Music
 };

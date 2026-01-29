@@ -142,6 +142,79 @@ class FileHandler {
   }
 
   /**
+   * 保存base64音频到文件
+   * @param {string} audioData - base64编码的音频数据
+   * @param {string} targetDir - 目标目录
+   * @param {string} filename - 文件名(可选)
+   * @returns {object} 保存结果 {success, data: {filename, path, url}}
+   */
+  static saveAudio(audioData, targetDir, filename = null) {
+    try {
+      // 确保目录存在
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      // 解析音频格式
+      let ext = '.mp3';
+      let base64Data = audioData;
+      
+      if (audioData.startsWith('data:')) {
+        // 支持多种音频格式: audio/mpeg, audio/flac, audio/wav, audio/ogg, audio/mp4, audio/x-m4a
+        const matches = audioData.match(/^data:audio\/([\w-]+);base64,(.+)$/);
+        if (matches) {
+          const format = matches[1].toLowerCase();
+          base64Data = matches[2];
+          
+          if (format === 'mpeg' || format === 'mp3') {
+            ext = '.mp3';
+          } else if (format === 'flac' || format === 'x-flac') {
+            ext = '.flac';
+          } else if (format === 'wav' || format === 'x-wav' || format === 'wave') {
+            ext = '.wav';
+          } else if (format === 'ogg') {
+            ext = '.ogg';
+          } else if (format === 'mp4' || format === 'x-m4a' || format === 'm4a') {
+            ext = '.m4a';
+          } else if (format === 'aac') {
+            ext = '.aac';
+          }
+        }
+      }
+
+      // 生成文件名
+      if (!filename) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' + 
+                         new Date().toTimeString().split(' ')[0].replace(/:/g, '');
+        const randomStr = crypto.randomBytes(4).toString('hex');
+        filename = `audio_${timestamp}_${randomStr}${ext}`;
+      }
+
+      // 保存文件
+      const filePath = path.join(targetDir, filename);
+      const buffer = Buffer.from(base64Data, 'base64');
+      fs.writeFileSync(filePath, buffer);
+
+      // 返回相对URL路径
+      const dirName = path.basename(targetDir);
+      return {
+        success: true,
+        data: {
+          filename: filename,
+          path: filePath,
+          url: `/files/${dirName}/${filename}`
+        }
+      };
+    } catch (error) {
+      console.error('保存音频失败:', error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * 列出目录中的文件
    * @param {string} directory - 目录路径
    * @param {array} extensions - 文件扩展名过滤(可选)

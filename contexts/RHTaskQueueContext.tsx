@@ -51,6 +51,11 @@ export interface RHQueuedTask {
     portKey: string;
     videoUrl: string;
   }>;
+  // 音频上传相关
+  pendingAudioUploads?: Array<{
+    portKey: string;
+    audioUrl: string;
+  }>;
 }
 
 export interface EnqueueParams {
@@ -67,6 +72,10 @@ export interface EnqueueParams {
   pendingVideoUploads?: Array<{
     portKey: string;
     videoUrl: string;
+  }>;
+  pendingAudioUploads?: Array<{
+    portKey: string;
+    audioUrl: string;
   }>;
   // 回调
   onOutputNodeCreated?: (taskId: string, batchIndex: number, outputNodeId: string) => void;
@@ -255,8 +264,47 @@ export const RHTaskQueueProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       }
       
+      // 1.6 处理音频上传
+      if (task.pendingAudioUploads && task.pendingAudioUploads.length > 0) {
+        setTasks(prev => prev.map(t => 
+          t.id === task.id ? { ...t, status: 'uploading' as const, progress: '上传音频...' } : t
+        ));
+        
+        for (const upload of task.pendingAudioUploads) {
+          try {
+            console.log('[RHQueue] 上传音频:', upload.portKey, upload.audioUrl.slice(0, 100));
+            // 从 URL 获取音频文件
+            const response = await fetch(upload.audioUrl);
+            const blob = await response.blob();
+            const fileName = upload.audioUrl.split('/').pop() || 'audio.mp3';
+            const file = new File([blob], fileName, { type: blob.type || 'audio/mpeg' });
+            
+            // 上传到 RH
+            const result = await uploadToRunningHub(file);
+            if (result.success && result.fileName) {
+              console.log('[RHQueue] 音频上传成功:', upload.portKey, result.fileName);
+              uploadedFiles[upload.portKey] = result.fileName;
+              
+              // 保存到缓存
+              const existing = uploadedFilesRef.current.get(task.nodeId) || {};
+              existing[upload.portKey] = result.fileName;
+              uploadedFilesRef.current.set(task.nodeId, existing);
+              
+              // 通知更新
+              if (callbacks?.onNodeInputsUpdate) {
+                callbacks.onNodeInputsUpdate(task.nodeId, { [upload.portKey]: result.fileName });
+              }
+            } else {
+              console.error('[RHQueue] 音频上传失败:', upload.portKey, result.error);
+            }
+          } catch (err) {
+            console.error('[RHQueue] 音频上传异常:', upload.portKey, err);
+          }
+        }
+      }
+      
       // 不需要上传的任务，检查是否需要等待上传完成
-      if (!task.pendingImageUploads && !task.pendingVideoUploads) {
+      if (!task.pendingImageUploads && !task.pendingVideoUploads && !task.pendingAudioUploads) {
         // 不需要上传的任务，检查是否需要等待上传完成
         const existingPromise = uploadPromisesRef.current.get(task.nodeId);
         if (existingPromise) {
@@ -505,7 +553,8 @@ export const RHTaskQueueProvider: React.FC<{ children: ReactNode }> = ({ childre
         startTime: now + i, // 确保顺序
         progress: '排队中...',
         pendingImageUploads: i === 0 ? params.pendingImageUploads : undefined, // 只有第一个任务需要上传
-        pendingVideoUploads: i === 0 ? params.pendingVideoUploads : undefined
+        pendingVideoUploads: i === 0 ? params.pendingVideoUploads : undefined,
+        pendingAudioUploads: i === 0 ? params.pendingAudioUploads : undefined
       });
     }
     

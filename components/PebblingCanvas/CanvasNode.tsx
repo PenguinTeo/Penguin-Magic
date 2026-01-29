@@ -130,6 +130,8 @@ interface CanvasNodeProps {
   onExtractFrame?: (nodeId: string, position: 'first' | 'last' | number) => void; // 提取视频帧（首帧/尾帧/任意秒数）
   onCreateFrameExtractor?: (sourceVideoNodeId: string) => void; // 创建帧提取器节点
   onExtractFrameFromExtractor?: (nodeId: string, time: number) => void; // 从帧提取器提取帧
+  onExtractAudio?: (nodeId: string) => void; // 从视频剥离音频
+  onExportClippedAudio?: (nodeId: string, clipStart: number, clipEnd: number) => void; // 导出裁剪的音频片段
   hasDownstream?: boolean; // 是否有下游连接
   incomingConnections?: Array<{ fromNode: string; toPortKey?: string }>; // 连入当前节点的连接
   onRetryVideoDownload?: (nodeId: string) => void; // 重试视频下载
@@ -156,6 +158,8 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
   onExtractFrame,
   onCreateFrameExtractor,
   onExtractFrameFromExtractor,
+  onExtractAudio,
+  onExportClippedAudio,
   hasDownstream = false,
   incomingConnections = [],
   onRetryVideoDownload,
@@ -1403,12 +1407,27 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                             title="连接: 封面图"
                         />
                         {coverUrl ? (
-                            <img 
-                                src={coverUrl} 
-                                alt="Cover" 
-                                className="w-full h-full object-cover pointer-events-none" 
-                                draggable={false}
-                            />
+                            (() => {
+                                const isVideo = /\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(coverUrl) || coverUrl.includes('video');
+                                return isVideo ? (
+                                    <video 
+                                        src={coverUrl} 
+                                        className="w-full h-full object-cover pointer-events-none" 
+                                        muted
+                                        loop
+                                        autoPlay
+                                        playsInline
+                                        draggable={false}
+                                    />
+                                ) : (
+                                    <img 
+                                        src={coverUrl} 
+                                        alt="Cover" 
+                                        className="w-full h-full object-cover pointer-events-none" 
+                                        draggable={false}
+                                    />
+                                );
+                            })()
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center" style={{ backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.05)' : 'rgba(16,185,129,0.08)' }}>
                                 <svg className="w-10 h-10 mb-1" fill="none" stroke={isLightCanvas ? '#059669' : '#34d399'} viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -3785,8 +3804,25 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                           </button>
                           
                           {/* 工具球 - 向上弹出 */}
-                          {showToolbox && (onExtractFrame || onCreateFrameExtractor) && (
+                          {showToolbox && (onExtractFrame || onCreateFrameExtractor || onExtractAudio) && (
                             <div className="absolute bottom-full right-0 mb-2 flex flex-col gap-2">
+                              {/* 剥离音频 */}
+                              {onExtractAudio && (
+                                <button
+                                  className="w-8 h-8 rounded-full bg-pink-500/30 hover:bg-pink-500/50 backdrop-blur-md flex items-center justify-center transition-all transform hover:scale-110"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onExtractAudio(node.id);
+                                    setShowToolbox(false);
+                                  }}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  title="剥离音频"
+                                  style={{ filter: `drop-shadow(0 0 4px rgb(236, 72, 153))` }}
+                                >
+                                  <Icons.Music size={14} className="text-pink-300" />
+                                </button>
+                              )}
+                              
                               {/* 帧提取器 - 新增 */}
                               {onCreateFrameExtractor && (
                                 <button
@@ -3958,6 +3994,424 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         <div className="w-8 h-8 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
                     </div>
                 )}
+            </div>
+        );
+    }
+
+    // Audio 节点 - 音频播放与波形展示
+    if (node.type === 'audio') {
+        const audioUrl = node.data?.audioUrl || node.content || '';
+        const fileName = node.data?.audioFileName || node.title || '音频文件';
+        const audioFormat = node.data?.audioFormat || 'MP3';
+        const audioSize = node.data?.audioSize || '未知';
+        const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+        const [currentTime, setCurrentTime] = useState(0);
+        const [audioDuration, setAudioDuration] = useState(node.data?.audioDuration || 0);
+        const [audioVolume, setAudioVolume] = useState(0.8);
+        const [waveformData, setWaveformData] = useState<number[]>(node.data?.audioWaveform || []);
+        const [peakIndices, setPeakIndices] = useState<number[]>(node.data?.audioPeaks || []);
+        const [isAnalyzing, setIsAnalyzing] = useState(false);
+        const audioElRef = useRef<HTMLAudioElement>(null);
+        const waveCanvasRef = useRef<HTMLCanvasElement>(null);
+        
+        // 裁剪区间状态
+        const [clipStart, setClipStart] = useState(0);
+        const [clipEnd, setClipEnd] = useState(0);
+        const [showClipTool, setShowClipTool] = useState(false);
+        const [isDraggingClip, setIsDraggingClip] = useState<'start' | 'end' | null>(null);
+        
+        // 根据节点宽度动态计算采样点数（缩放细化）
+        const canvasWidth = Math.max(200, Math.floor(node.width - 24)); // 减去 padding
+        const canvasHeight = Math.max(40, Math.floor((node.height - 120) * 0.6)); // 根据高度调整
+        const sampleCount = Math.min(500, Math.max(100, Math.floor(canvasWidth / 2))); // 每2px一个采样点
+        
+        // 处理音频 URL
+        let fullAudioUrl = audioUrl;
+        if (audioUrl.startsWith('/files/')) {
+            fullAudioUrl = `http://localhost:8765${audioUrl}`;
+        }
+        
+        // 分析音频波形 - 根据节点宽度动态采样
+        const analyzeAudio = async () => {
+            if (waveformData.length > 0 || !fullAudioUrl || isAnalyzing) return;
+            setIsAnalyzing(true);
+            
+            try {
+                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const response = await fetch(fullAudioUrl);
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                
+                // 采样波形数据 - 使用更多采样点获取精细数据
+                const rawData = audioBuffer.getChannelData(0);
+                const samples = 500; // 保存较多采样点用于不同缩放级别
+                const waveform: number[] = [];
+                const blockSize = Math.floor(rawData.length / samples);
+                
+                for (let i = 0; i < samples; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < blockSize; j++) {
+                        sum += Math.abs(rawData[i * blockSize + j]);
+                    }
+                    waveform.push(sum / blockSize);
+                }
+                
+                // 归一化
+                const maxVal = Math.max(...waveform);
+                const normalized = waveform.map(v => v / maxVal);
+                
+                // 简易峰值检测
+                const peaks: number[] = [];
+                const threshold = 0.6;
+                for (let i = 2; i < normalized.length - 2; i++) {
+                    if (normalized[i] > threshold &&
+                        normalized[i] > normalized[i-1] &&
+                        normalized[i] > normalized[i+1] &&
+                        normalized[i] > normalized[i-2] &&
+                        normalized[i] > normalized[i+2]) {
+                        peaks.push(i);
+                    }
+                }
+                
+                setWaveformData(normalized);
+                setPeakIndices(peaks);
+                setAudioDuration(audioBuffer.duration);
+                setClipEnd(audioBuffer.duration); // 初始化裁剪结束点
+                
+                // 保存到节点数据
+                onUpdate(node.id, {
+                    data: {
+                        ...node.data,
+                        audioWaveform: normalized,
+                        audioPeaks: peaks,
+                        audioDuration: audioBuffer.duration
+                    }
+                });
+                
+                audioContext.close();
+            } catch (err) {
+                console.error('音频分析失败:', err);
+            } finally {
+                setIsAnalyzing(false);
+            }
+        };
+        
+        // 初始化裁剪结束点
+        useEffect(() => {
+            if (audioDuration > 0 && clipEnd === 0) {
+                setClipEnd(audioDuration);
+            }
+        }, [audioDuration]);
+        
+        // 绘制波形 - 支持动态缩放
+        const drawWaveform = () => {
+            const canvas = waveCanvasRef.current;
+            if (!canvas || waveformData.length === 0) return;
+            
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            
+            // 更新 canvas 尺寸
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // 根据显示宽度重采样波形数据
+            const displaySamples = Math.min(waveformData.length, Math.floor(width / 2));
+            const resampleRatio = waveformData.length / displaySamples;
+            
+            const barWidth = width / displaySamples;
+            const progress = audioDuration > 0 ? currentTime / audioDuration : 0;
+            const progressX = progress * width;
+            
+            // 裁剪区间位置
+            const clipStartX = audioDuration > 0 ? (clipStart / audioDuration) * width : 0;
+            const clipEndX = audioDuration > 0 ? (clipEnd / audioDuration) * width : width;
+            
+            ctx.clearRect(0, 0, width, height);
+            
+            // 绘制裁剪区域背景（如果启用裁剪工具）
+            if (showClipTool) {
+                // 裁剪区域外的遮罩
+                ctx.fillStyle = isLightCanvas ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.4)';
+                ctx.fillRect(0, 0, clipStartX, height);
+                ctx.fillRect(clipEndX, 0, width - clipEndX, height);
+            }
+            
+            // 绘制波形条
+            for (let i = 0; i < displaySamples; i++) {
+                // 重采样：取对应区间的最大值
+                const srcStart = Math.floor(i * resampleRatio);
+                const srcEnd = Math.min(Math.floor((i + 1) * resampleRatio), waveformData.length);
+                let val = 0;
+                for (let j = srcStart; j < srcEnd; j++) {
+                    val = Math.max(val, waveformData[j]);
+                }
+                
+                const x = i * barWidth;
+                const barHeight = val * height * 0.85;
+                const y = (height - barHeight) / 2;
+                
+                // 颜色逻辑
+                const isInClipRange = !showClipTool || (x >= clipStartX && x <= clipEndX);
+                if (x < progressX) {
+                    // 已播放部分
+                    ctx.fillStyle = isLightCanvas ? 'rgba(219, 39, 119, 0.85)' : 'rgba(236, 72, 153, 0.95)';
+                } else if (isInClipRange) {
+                    ctx.fillStyle = isLightCanvas ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.3)';
+                } else {
+                    ctx.fillStyle = isLightCanvas ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)';
+                }
+                
+                ctx.fillRect(x, y, Math.max(1, barWidth - 1), barHeight);
+            }
+            
+            // 绘制峰值标记
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.6)';
+            peakIndices.forEach(idx => {
+                const x = (idx / waveformData.length) * width;
+                ctx.fillRect(x - 0.5, 0, 1, height);
+            });
+            
+            // 绘制裁剪手柄
+            if (showClipTool) {
+                // 起点手柄
+                ctx.fillStyle = '#22c55e';
+                ctx.fillRect(clipStartX - 2, 0, 4, height);
+                ctx.beginPath();
+                ctx.moveTo(clipStartX, 0);
+                ctx.lineTo(clipStartX + 8, 0);
+                ctx.lineTo(clipStartX, 8);
+                ctx.fill();
+                
+                // 终点手柄
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(clipEndX - 2, 0, 4, height);
+                ctx.beginPath();
+                ctx.moveTo(clipEndX, 0);
+                ctx.lineTo(clipEndX - 8, 0);
+                ctx.lineTo(clipEndX, 8);
+                ctx.fill();
+            }
+        };
+        
+        // 加载时分析
+        useEffect(() => {
+            if (audioUrl && waveformData.length === 0) {
+                analyzeAudio();
+            }
+        }, [audioUrl]);
+        
+        // 绘制波形
+        useEffect(() => {
+            drawWaveform();
+        }, [waveformData, currentTime, peakIndices, canvasWidth, canvasHeight, showClipTool, clipStart, clipEnd]);
+        
+        // 播放控制
+        const toggleAudioPlay = () => {
+            if (!audioElRef.current) return;
+            if (isAudioPlaying) {
+                audioElRef.current.pause();
+            } else {
+                audioElRef.current.play();
+            }
+            setIsAudioPlaying(!isAudioPlaying);
+        };
+        
+        // 点击波形跳转/拖动裁剪手柄
+        const handleWaveformMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+            e.stopPropagation();
+            const canvas = waveCanvasRef.current;
+            if (!canvas || audioDuration === 0) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const clickTime = (x / rect.width) * audioDuration;
+            
+            if (showClipTool) {
+                // 检查是否点击了裁剪手柄
+                const tolerance = 10; // 像素容差
+                const clipStartX = (clipStart / audioDuration) * rect.width;
+                const clipEndX = (clipEnd / audioDuration) * rect.width;
+                
+                if (Math.abs(x - clipStartX) < tolerance) {
+                    setIsDraggingClip('start');
+                    return;
+                }
+                if (Math.abs(x - clipEndX) < tolerance) {
+                    setIsDraggingClip('end');
+                    return;
+                }
+            }
+            
+            // 普通点击 - 跳转播放位置
+            if (audioElRef.current) {
+                audioElRef.current.currentTime = clickTime;
+                setCurrentTime(clickTime);
+            }
+        };
+        
+        // 拖动裁剪手柄
+        const handleWaveformMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+            if (!isDraggingClip) return;
+            e.stopPropagation();
+            
+            const canvas = waveCanvasRef.current;
+            if (!canvas || audioDuration === 0) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+            const newTime = (x / rect.width) * audioDuration;
+            
+            if (isDraggingClip === 'start') {
+                setClipStart(Math.min(newTime, clipEnd - 0.1));
+            } else {
+                setClipEnd(Math.max(newTime, clipStart + 0.1));
+            }
+        };
+        
+        const handleWaveformMouseUp = () => {
+            setIsDraggingClip(null);
+        };
+        
+        // 导出裁剪后的音频 - 创建新节点
+        const exportClippedAudio = () => {
+            if (clipStart >= clipEnd) return;
+            if (onExportClippedAudio) {
+                onExportClippedAudio(node.id, clipStart, clipEnd);
+            }
+        };
+        
+        // 格式化时间
+        const formatAudioTime = (t: number) => {
+            const mins = Math.floor(t / 60);
+            const secs = Math.floor(t % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        };
+        
+        return (
+            <div className="w-full h-full rounded-xl overflow-hidden relative flex flex-col shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid ${isLightCanvas ? 'rgba(219,39,119,0.3)' : 'rgba(236,72,153,0.3)'}` }}>
+                {/* 头部 */}
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid ${isLightCanvas ? 'rgba(219,39,119,0.2)' : 'rgba(236,72,153,0.2)'}`, backgroundColor: isLightCanvas ? 'rgba(219,39,119,0.08)' : 'rgba(236,72,153,0.1)' }}>
+                    <div className="flex items-center gap-2">
+                        <Icons.Music size={14} style={{ color: isLightCanvas ? '#db2777' : '#f472b6' }} />
+                        <span className="text-[10px] font-bold truncate max-w-[180px]" style={{ color: isLightCanvas ? '#be185d' : '#fbcfe8' }}>{fileName}</span>
+                    </div>
+                    <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: isLightCanvas ? '#9d174d' : 'rgba(251,207,232,0.6)', backgroundColor: isLightCanvas ? 'rgba(219,39,119,0.15)' : 'rgba(236,72,153,0.2)' }}>{audioFormat}</span>
+                </div>
+                
+                {/* 波形区域 */}
+                <div className="flex-1 relative p-3 min-h-[60px]">
+                    {isAnalyzing ? (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-6 h-6 border-2 border-pink-400/50 border-t-pink-400 rounded-full animate-spin"></div>
+                            <span className="ml-2 text-[10px]" style={{ color: themeColors.textMuted }}>分析中...</span>
+                        </div>
+                    ) : (
+                        <canvas
+                            ref={waveCanvasRef}
+                            width={canvasWidth}
+                            height={canvasHeight}
+                            className="w-full h-full cursor-pointer"
+                            style={{ cursor: showClipTool ? 'ew-resize' : 'pointer' }}
+                            onMouseDown={handleWaveformMouseDown}
+                            onMouseMove={handleWaveformMouseMove}
+                            onMouseUp={handleWaveformMouseUp}
+                            onMouseLeave={handleWaveformMouseUp}
+                        />
+                    )}
+                </div>
+                
+                {/* 裁剪工具栏 */}
+                {showClipTool && (
+                    <div className="px-3 py-1.5 flex items-center gap-2 text-[9px]" style={{ backgroundColor: isLightCanvas ? 'rgba(219,39,119,0.05)' : 'rgba(236,72,153,0.08)', borderTop: `1px solid ${isLightCanvas ? 'rgba(219,39,119,0.15)' : 'rgba(236,72,153,0.15)'}` }}>
+                        <span style={{ color: '#22c55e' }}>起:</span>
+                        <span className="font-mono" style={{ color: themeColors.textSecondary }}>{formatAudioTime(clipStart)}</span>
+                        <span style={{ color: '#ef4444' }}>止:</span>
+                        <span className="font-mono" style={{ color: themeColors.textSecondary }}>{formatAudioTime(clipEnd)}</span>
+                        <span className="mx-1" style={{ color: themeColors.textMuted }}>|</span>
+                        <span style={{ color: themeColors.textMuted }}>时长: {formatAudioTime(clipEnd - clipStart)}</span>
+                        <button
+                            className="ml-auto px-2 py-0.5 rounded text-[9px] font-medium transition-all"
+                            style={{ backgroundColor: isLightCanvas ? 'rgba(219,39,119,0.2)' : 'rgba(236,72,153,0.25)', color: isLightCanvas ? '#db2777' : '#f472b6' }}
+                            onClick={(e) => { e.stopPropagation(); exportClippedAudio(); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            导出
+                        </button>
+                    </div>
+                )}
+                
+                {/* 播放控制 */}
+                <div className="px-3 pb-2 flex items-center gap-2">
+                    <button
+                        className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                        style={{ backgroundColor: isLightCanvas ? 'rgba(219,39,119,0.15)' : 'rgba(236,72,153,0.2)' }}
+                        onClick={(e) => { e.stopPropagation(); toggleAudioPlay(); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        {isAudioPlaying ? (
+                            <Icons.Pause size={16} style={{ color: isLightCanvas ? '#db2777' : '#f472b6' }} />
+                        ) : (
+                            <Icons.Play size={16} style={{ color: isLightCanvas ? '#db2777' : '#f472b6' }} />
+                        )}
+                    </button>
+                    
+                    <div className="flex-1 text-[10px] font-mono" style={{ color: themeColors.textSecondary }}>
+                        {formatAudioTime(currentTime)} / {formatAudioTime(audioDuration)}
+                    </div>
+                    
+                    {/* 裁剪工具按钮 */}
+                    <button
+                        className="w-7 h-7 rounded-full flex items-center justify-center transition-all"
+                        style={{ 
+                            backgroundColor: showClipTool 
+                                ? (isLightCanvas ? 'rgba(34,197,94,0.25)' : 'rgba(34,197,94,0.3)') 
+                                : (isLightCanvas ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'),
+                            border: showClipTool ? '1px solid rgba(34,197,94,0.5)' : 'none'
+                        }}
+                        onClick={(e) => { e.stopPropagation(); setShowClipTool(!showClipTool); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        title="音频裁剪"
+                    >
+                        <Icons.Scissors size={12} style={{ color: showClipTool ? '#22c55e' : (isLightCanvas ? '#666' : '#999') }} />
+                    </button>
+                    
+                    {/* 音量 */}
+                    <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={audioVolume}
+                        onChange={(e) => {
+                            const vol = parseFloat(e.target.value);
+                            setAudioVolume(vol);
+                            if (audioElRef.current) audioElRef.current.volume = vol;
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="w-14 h-1 accent-pink-500"
+                    />
+                </div>
+                
+                {/* 信息栏 */}
+                <div className="h-6 px-3 flex items-center justify-between text-[9px] font-mono" style={{ backgroundColor: themeColors.footerBg, borderTop: `1px solid ${themeColors.headerBorder}`, color: themeColors.textMuted }}>
+                    <span>{audioSize}</span>
+                    <span>峰值: {peakIndices.length}</span>
+                </div>
+                
+                {/* 隐藏的 audio 元素 */}
+                <audio
+                    ref={audioElRef}
+                    src={fullAudioUrl}
+                    onTimeUpdate={() => setCurrentTime(audioElRef.current?.currentTime || 0)}
+                    onLoadedMetadata={() => setAudioDuration(audioElRef.current?.duration || 0)}
+                    onEnded={() => setIsAudioPlaying(false)}
+                    onPlay={() => setIsAudioPlaying(true)}
+                    onPause={() => setIsAudioPlaying(false)}
+                />
             </div>
         );
     }

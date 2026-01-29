@@ -99,6 +99,23 @@ router.post('/save-video', async (req, res) => {
   res.json(result);
 });
 
+// 保存音频到output目录
+router.post('/save-audio', async (req, res) => {
+  const { audioData, filename } = req.body;
+  
+  if (!audioData) {
+    return res.status(400).json({ success: false, error: '缺少音频数据' });
+  }
+  
+  const result = FileHandler.saveAudio(audioData, config.OUTPUT_DIR, filename);
+  
+  if (result.success) {
+    console.log(`[Audio] 音频已保存: ${result.data.filename}`);
+  }
+  
+  res.json(result);
+});
+
 // 保存图片到input目录（并生成缩略图）
 router.post('/save-input', async (req, res) => {
   const { imageData, filename } = req.body;

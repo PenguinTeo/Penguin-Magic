@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-magic' | 'drawing-board' | 'browser' | 'image-compare';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-magic' | 'drawing-board' | 'browser' | 'image-compare' | 'audio';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -147,6 +147,15 @@ export interface NodeData {
   compareImage1?: string; // 图1（上方连接的图片）
   compareImage2?: string; // 图2（下方连接的图片）
   comparePosition?: number; // 滑块位置（0-100）
+  
+  // Audio Node Specifics
+  audioUrl?: string;           // 音频文件URL
+  audioDuration?: number;      // 时长（秒）
+  audioWaveform?: number[];    // 波形数据（0-1范围，约200个采样点）
+  audioPeaks?: number[];       // 峰值时间点索引
+  audioFileName?: string;      // 文件名
+  audioFormat?: string;        // 格式（MP3/FLAC/WAV等）
+  audioSize?: string;          // 文件大小（格式化后）
 }
 
 export interface CanvasNode {
@@ -244,6 +253,10 @@ export const ARCTIC_COLORS = {
   // 对比紫 - ImageCompare节点
   comparePurple: 'rgb(168, 85, 247)',
   comparePurpleLight: 'rgb(192, 132, 252)',
+  
+  // 音频紫红 - Audio节点
+  audioMagenta: 'rgb(219, 39, 119)',
+  audioMagentaLight: 'rgb(236, 72, 153)',
 } as const;
 
 // 节点类型颜色映射
@@ -284,6 +297,9 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
     
     case 'image-compare':
       return { primary: ARCTIC_COLORS.comparePurple, light: ARCTIC_COLORS.comparePurpleLight };
+    
+    case 'audio':
+      return { primary: ARCTIC_COLORS.audioMagenta, light: ARCTIC_COLORS.audioMagentaLight };
     
     default:
       return { primary: ARCTIC_COLORS.arcticGray, light: ARCTIC_COLORS.arcticGrayLight };

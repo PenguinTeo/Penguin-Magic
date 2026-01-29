@@ -2242,7 +2242,12 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               }
           }
       }
-      if (type === 'video') { width = 400; height = 225; }
+      // 视频节点 - 更大的尺寸便于预览
+      if (type === 'video' || type === 'video-output') { width = 480; height = 270; }
+      // 帧提取器 - 2倍视频节点大小
+      if (type === 'frame-extractor') { width = 800; height = 500; }
+      // 音频节点
+      if (type === 'audio') { width = 320; height = 220; }
       if (type === 'relay') { width = 40; height = 40; }
       if (['edit', 'remove-bg', 'upscale', 'llm', 'resize'].includes(type)) { width = 280; height = 300; }
       if (type === 'llm') { width = 320; height = 300; }
@@ -2552,8 +2557,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
   // Helper: Recursive Input Resolution - 向上追溯获取输入
   // 就近原则：收集沿途的文本，一旦找到图片就停止这条路径的回溯
   // 例如：图1→文1→图2→文2→图3(RUN) → 结果: images=[图2], texts=[文2]
-  const resolveInputs = (nodeId: string, visited = new Set<string>()): { images: string[], texts: string[], videos: string[] } => {
-      if (visited.has(nodeId)) return { images: [], texts: [], videos: [] };
+  const resolveInputs = (nodeId: string, visited = new Set<string>()): { images: string[], texts: string[], videos: string[], audios: string[] } => {
+      if (visited.has(nodeId)) return { images: [], texts: [], videos: [], audios: [] };
       visited.add(nodeId);
 
       // Find connections pointing to this node
@@ -2569,6 +2574,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       let images: string[] = [];
       let texts: string[] = [];
       let videos: string[] = [];
+      let audios: string[] = [];
 
       for (const node of inputNodes) {
           let foundImageInThisPath = false;
@@ -2631,6 +2637,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   videos.push(node.content);
               }
               foundImageInThisPath = true;
+          } else if (node.type === 'audio') {
+              // 音频节点：输入=音频，输出=音频
+              // 收集音频内容供RH AI应用使用
+              if (node.content) {
+                  console.log('[resolveInputs] 音频节点 content:', node.content.slice(0, 100));
+                  audios.push(node.content);
+              }
+              foundImageInThisPath = true;
           } else if (node.type === 'edit') {
               // Magic节点：输入=图片或文字，输出=图片
               // Magic 的输出在下游创建的 Image 节点中，不在自身
@@ -2680,9 +2694,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
               images.push(...child.images);
               texts.push(...child.texts);
               videos.push(...child.videos);
+              audios.push(...child.audios);
           }
       }
-      return { images, texts, videos };
+      return { images, texts, videos, audios };
   };
 
   // 🔧 通用级联执行函数：确保上游节点先执行完成
@@ -5286,6 +5301,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                   
                   const pendingImageUploads: Array<{ portKey: string; imageData: string }> = [];
                   const pendingVideoUploads: Array<{ portKey: string; videoUrl: string }> = [];
+                  const pendingAudioUploads: Array<{ portKey: string; audioUrl: string }> = [];
                   const textInputs: Record<string, string> = {}; // 文字输入
                   
                   for (const conn of incomingMediaConns) {
@@ -5322,8 +5338,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       const content = sourceNode.content;
                       const isVideo = sourceNode.type === 'video' || sourceNode.type === 'video-output' ||
                           content.startsWith('data:video') || /\.(mp4|webm|mov|avi)($|\?)/i.test(content);
+                      const isAudio = sourceNode.type === 'audio' ||
+                          content.startsWith('data:audio') || /\.(mp3|flac|wav|ogg|m4a|aac)($|\?)/i.test(content);
                       const isImage = content.startsWith('data:image') ||
-                          (!isVideo && (content.startsWith('http') || content.startsWith('/files/')));
+                          (!isVideo && !isAudio && (content.startsWith('http') || content.startsWith('/files/')));
                       
                       if (isVideo) {
                           // 视频：转换为完整URL后上传
@@ -5333,6 +5351,14 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                           }
                           console.log('[RH-Config] 收集视频上传:', portKey, videoUrl.slice(0, 100));
                           pendingVideoUploads.push({ portKey, videoUrl });
+                      } else if (isAudio) {
+                          // 音频：转换为完整URL后上传
+                          let audioUrl = content;
+                          if (content.startsWith('/files/')) {
+                              audioUrl = `http://localhost:8765${content}`;
+                          }
+                          console.log('[RH-Config] 收集音频上传:', portKey, audioUrl.slice(0, 100));
+                          pendingAudioUploads.push({ portKey, audioUrl });
                       } else if (isImage) {
                           // 图片：转换为 base64
                           let imageData = content;
@@ -5422,6 +5448,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                       batchCount,
                       pendingImageUploads: pendingImageUploads.length > 0 ? pendingImageUploads : undefined,
                       pendingVideoUploads: pendingVideoUploads.length > 0 ? pendingVideoUploads : undefined,
+                      pendingAudioUploads: pendingAudioUploads.length > 0 ? pendingAudioUploads : undefined,
                       
                       onNodeInputsUpdate: (nid, updates) => {
                           // 更新节点的 nodeInputs
@@ -5672,6 +5699,11 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
         const allFiles = Array.from(e.dataTransfer.files) as File[];
         const imageFiles = allFiles.filter((f: File) => f.type.startsWith('image/'));
         const videoFiles = allFiles.filter((f: File) => f.type.startsWith('video/'));
+        // 音频文件过滤：支持 MP3/FLAC/WAV/OGG/M4A/AAC
+        const audioFiles = allFiles.filter((f: File) => 
+            f.type.startsWith('audio/') || 
+            /\.(mp3|flac|wav|ogg|m4a|aac)$/i.test(f.name)
+        );
         
         // 处理多图拖拽 - 水平铺开排列
         const NODE_GAP = 30; // 节点间距
@@ -5736,6 +5768,49 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     } catch (err) {
                         // 保存失败，直接使用 base64
                         addNode('video-output', base64Data, { x: offsetX, y: offsetY }, file.name);
+                    }
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        // 处理音频文件
+        audioFiles.forEach((file: File, index: number) => {
+            const offsetX = x + (imageFiles.length + videoFiles.length + index) * (350 + NODE_GAP);
+            const offsetY = y;
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                if (ev.target?.result) {
+                    const base64Data = ev.target.result as string;
+                    // 获取文件格式
+                    const ext = file.name.split('.').pop()?.toUpperCase() || 'MP3';
+                    // 计算文件大小
+                    const sizeBytes = file.size;
+                    const sizeStr = sizeBytes > 1024 * 1024 
+                        ? `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`
+                        : `${(sizeBytes / 1024).toFixed(1)} KB`;
+                    
+                    try {
+                        // 保存音频到本地
+                        const { saveAudioToOutput } = await import('@/services/api/files');
+                        const result = await saveAudioToOutput(base64Data, `audio_${Date.now()}.${ext.toLowerCase()}`);
+                        const audioUrl = result.success && result.data?.url ? result.data.url : base64Data;
+                        
+                        // 创建音频节点
+                        addNode('audio', audioUrl, { x: offsetX, y: offsetY }, file.name, {
+                            audioUrl: audioUrl,
+                            audioFileName: file.name,
+                            audioFormat: ext,
+                            audioSize: sizeStr,
+                        });
+                    } catch (err) {
+                        // 保存失败，直接使用 base64
+                        addNode('audio', base64Data, { x: offsetX, y: offsetY }, file.name, {
+                            audioUrl: base64Data,
+                            audioFileName: file.name,
+                            audioFormat: ext,
+                            audioSize: sizeStr,
+                        });
                     }
                 }
             };
@@ -6363,6 +6438,278 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           console.log('[FrameExtractor] 提取完成:', newNode.id);
       } catch (error) {
           console.error('[FrameExtractor] 提取帧失败:', error);
+      }
+  };
+
+  // 从视频剥离音频
+  const handleExtractAudio = async (videoNodeId: string) => {
+      const videoNode = nodes.find(n => n.id === videoNodeId);
+      if (!videoNode || !videoNode.content) {
+          console.warn('[ExtractAudio] 视频节点无内容');
+          return;
+      }
+      
+      console.log('[ExtractAudio] 开始剥离音频:', videoNode.content.slice(0, 100));
+      
+      try {
+          let fullVideoUrl = videoNode.content;
+          if (fullVideoUrl.startsWith('/files/')) {
+              fullVideoUrl = `http://localhost:8765${fullVideoUrl}`;
+          }
+          
+          // 使用 AudioContext 提取音频
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const response = await fetch(fullVideoUrl);
+          const arrayBuffer = await response.arrayBuffer();
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          
+          // 转换为 WAV
+          const numChannels = audioBuffer.numberOfChannels;
+          const sampleRate = audioBuffer.sampleRate;
+          const format = 1; // PCM
+          const bitDepth = 16;
+          
+          const bytesPerSample = bitDepth / 8;
+          const blockAlign = numChannels * bytesPerSample;
+          const byteRate = sampleRate * blockAlign;
+          const dataSize = audioBuffer.length * blockAlign;
+          const headerSize = 44;
+          const totalSize = headerSize + dataSize;
+          
+          const wavBuffer = new ArrayBuffer(totalSize);
+          const view = new DataView(wavBuffer);
+          
+          // WAV Header
+          const writeString = (offset: number, str: string) => {
+              for (let i = 0; i < str.length; i++) {
+                  view.setUint8(offset + i, str.charCodeAt(i));
+              }
+          };
+          
+          writeString(0, 'RIFF');
+          view.setUint32(4, totalSize - 8, true);
+          writeString(8, 'WAVE');
+          writeString(12, 'fmt ');
+          view.setUint32(16, 16, true);
+          view.setUint16(20, format, true);
+          view.setUint16(22, numChannels, true);
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, byteRate, true);
+          view.setUint16(32, blockAlign, true);
+          view.setUint16(34, bitDepth, true);
+          writeString(36, 'data');
+          view.setUint32(40, dataSize, true);
+          
+          // Audio data
+          let offset = 44;
+          const channels: Float32Array[] = [];
+          for (let ch = 0; ch < numChannels; ch++) {
+              channels.push(audioBuffer.getChannelData(ch));
+          }
+          
+          for (let i = 0; i < audioBuffer.length; i++) {
+              for (let ch = 0; ch < numChannels; ch++) {
+                  const sample = Math.max(-1, Math.min(1, channels[ch][i]));
+                  const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+                  view.setInt16(offset, intSample, true);
+                  offset += 2;
+              }
+          }
+          
+          // 转为 base64
+          const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+          const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(wavBlob);
+          });
+          
+          // 保存音频文件
+          const { saveAudioToOutput } = await import('@/services/api/files');
+          const filename = `audio_${Date.now()}.wav`;
+          const result = await saveAudioToOutput(base64, filename);
+          const audioUrl = result.success && result.data?.url ? result.data.url : base64;
+          
+          // 计算文件大小
+          const sizeBytes = wavBuffer.byteLength;
+          const sizeStr = sizeBytes > 1024 * 1024 
+              ? `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`
+              : `${(sizeBytes / 1024).toFixed(1)} KB`;
+          
+          // 创建音频节点
+          const newX = videoNode.x + videoNode.width + 50;
+          const newY = videoNode.y;
+          const newNode = addNode('audio', audioUrl, { x: newX, y: newY }, '剥离音频', {
+              audioUrl: audioUrl,
+              audioFileName: filename,
+              audioFormat: 'WAV',
+              audioSize: sizeStr,
+              audioDuration: audioBuffer.duration
+          });
+          
+          // 创建连接
+          setConnections(prev => [...prev, {
+              id: uuid(),
+              fromNode: videoNodeId,
+              toNode: newNode.id
+          }]);
+          setHasUnsavedChanges(true);
+          
+          audioContext.close();
+          console.log('[ExtractAudio] 剥离完成:', newNode.id);
+      } catch (error) {
+          console.error('[ExtractAudio] 剥离音频失败:', error);
+      }
+  };
+
+  // 导出裁剪的音频片段（创建新节点）
+  const handleExportClippedAudio = async (audioNodeId: string, clipStart: number, clipEnd: number) => {
+      const audioNode = nodes.find(n => n.id === audioNodeId);
+      if (!audioNode) {
+          console.warn('[ExportClippedAudio] 音频节点不存在');
+          return;
+      }
+      
+      const audioUrl = audioNode.data?.audioUrl || audioNode.content;
+      if (!audioUrl) {
+          console.warn('[ExportClippedAudio] 无音频源');
+          return;
+      }
+      
+      const fileName = audioNode.data?.audioFileName || audioNode.title || '音频';
+      console.log('[ExportClippedAudio] 导出裁剪:', { audioNodeId, clipStart, clipEnd, audioUrl: audioUrl.slice(0, 100) });
+      
+      try {
+          let fullAudioUrl = audioUrl;
+          if (audioUrl.startsWith('/files/')) {
+              fullAudioUrl = `http://localhost:8765${audioUrl}`;
+          }
+          
+          // 解码音频
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const response = await fetch(fullAudioUrl);
+          const arrayBuffer = await response.arrayBuffer();
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+          
+          // 裁剪
+          const sampleRate = audioBuffer.sampleRate;
+          const startSample = Math.floor(clipStart * sampleRate);
+          const endSample = Math.floor(clipEnd * sampleRate);
+          const length = endSample - startSample;
+          
+          const numChannels = audioBuffer.numberOfChannels;
+          const clippedBuffer = audioContext.createBuffer(numChannels, length, sampleRate);
+          
+          for (let ch = 0; ch < numChannels; ch++) {
+              const sourceData = audioBuffer.getChannelData(ch);
+              const targetData = clippedBuffer.getChannelData(ch);
+              for (let i = 0; i < length; i++) {
+                  targetData[i] = sourceData[startSample + i];
+              }
+          }
+          
+          // 转换为 WAV
+          const format = 1;
+          const bitDepth = 16;
+          const bytesPerSample = bitDepth / 8;
+          const blockAlign = numChannels * bytesPerSample;
+          const byteRate = sampleRate * blockAlign;
+          const dataSize = length * blockAlign;
+          const headerSize = 44;
+          const totalSize = headerSize + dataSize;
+          
+          const wavBuffer = new ArrayBuffer(totalSize);
+          const view = new DataView(wavBuffer);
+          
+          const writeString = (offset: number, str: string) => {
+              for (let i = 0; i < str.length; i++) {
+                  view.setUint8(offset + i, str.charCodeAt(i));
+              }
+          };
+          
+          writeString(0, 'RIFF');
+          view.setUint32(4, totalSize - 8, true);
+          writeString(8, 'WAVE');
+          writeString(12, 'fmt ');
+          view.setUint32(16, 16, true);
+          view.setUint16(20, format, true);
+          view.setUint16(22, numChannels, true);
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, byteRate, true);
+          view.setUint16(32, blockAlign, true);
+          view.setUint16(34, bitDepth, true);
+          writeString(36, 'data');
+          view.setUint32(40, dataSize, true);
+          
+          let offset = 44;
+          const channels: Float32Array[] = [];
+          for (let ch = 0; ch < numChannels; ch++) {
+              channels.push(clippedBuffer.getChannelData(ch));
+          }
+          
+          for (let i = 0; i < length; i++) {
+              for (let ch = 0; ch < numChannels; ch++) {
+                  const sample = Math.max(-1, Math.min(1, channels[ch][i]));
+                  const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+                  view.setInt16(offset, intSample, true);
+                  offset += 2;
+              }
+          }
+          
+          // 转为 base64
+          const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+          const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(wavBlob);
+          });
+          
+          // 格式化时间用于文件名
+          const formatTime = (t: number) => {
+              const mins = Math.floor(t / 60);
+              const secs = Math.floor(t % 60);
+              return `${mins}_${secs.toString().padStart(2, '0')}`;
+          };
+          
+          // 保存音频文件
+          const { saveAudioToOutput } = await import('@/services/api/files');
+          const baseName = fileName.replace(/\.[^/.]+$/, '');
+          const newFilename = `${baseName}_${formatTime(clipStart)}-${formatTime(clipEnd)}.wav`;
+          const result = await saveAudioToOutput(base64, newFilename);
+          const newAudioUrl = result.success && result.data?.url ? result.data.url : base64;
+          
+          // 计算文件大小
+          const sizeBytes = wavBuffer.byteLength;
+          const sizeStr = sizeBytes > 1024 * 1024 
+              ? `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`
+              : `${(sizeBytes / 1024).toFixed(1)} KB`;
+          
+          // 创建新音频节点
+          const newX = audioNode.x + audioNode.width + 50;
+          const newY = audioNode.y;
+          const clipDuration = clipEnd - clipStart;
+          const displayTime = `${formatTime(clipStart).replace('_', ':')}-${formatTime(clipEnd).replace('_', ':')}`;
+          
+          const newNode = addNode('audio', newAudioUrl, { x: newX, y: newY }, `${baseName} [${displayTime}]`, {
+              audioUrl: newAudioUrl,
+              audioFileName: newFilename,
+              audioFormat: 'WAV',
+              audioSize: sizeStr,
+              audioDuration: clipDuration
+          });
+          
+          // 创建连接
+          setConnections(prev => [...prev, {
+              id: uuid(),
+              fromNode: audioNodeId,
+              toNode: newNode.id
+          }]);
+          setHasUnsavedChanges(true);
+          
+          audioContext.close();
+          console.log('[ExportClippedAudio] 导出完成:', newNode.id);
+      } catch (error) {
+          console.error('[ExportClippedAudio] 导出失败:', error);
       }
   };
 
@@ -7283,6 +7630,8 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                     onExtractFrame={handleExtractFrame}
                     onCreateFrameExtractor={handleCreateFrameExtractor}
                     onExtractFrameFromExtractor={handleExtractFrameFromExtractor}
+                    onExtractAudio={handleExtractAudio}
+                    onExportClippedAudio={handleExportClippedAudio}
                     allVideosPaused={allVideosPaused}
                     onOptimizeText={handleOptimizeText}
                     onRetryVideoDownload={async (id) => {
