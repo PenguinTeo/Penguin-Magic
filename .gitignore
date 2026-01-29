@@ -54,6 +54,9 @@ penguin-backend.exe
 *.dmg
 release/
 
+# 独立下载页面项目
+download-page/
+
 # 构建生成的图标文件
 resources/icon.ico
 

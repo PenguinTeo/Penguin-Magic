@@ -1392,7 +1392,13 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           setSelectedConnectionId(null);
           setHasUnsavedChanges(true); // 标记未保存
       }
-  }, [selectedNodeIds, selectedConnectionId]);
+      // 3. 解散选中的组（Delete键解散组，不删除组内节点）
+      if (selectedGroupId) {
+          setGroups(prev => prev.filter(g => g.id !== selectedGroupId));
+          setSelectedGroupId(null);
+          setHasUnsavedChanges(true);
+      }
+  }, [selectedNodeIds, selectedConnectionId, selectedGroupId]);
 
   // === 节点编组操作 ===
   
@@ -1433,8 +1439,32 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
     setHasUnsavedChanges(true);
   }, []);
   
-  // 导出组 - 包含组信息、组内节点和连接
-  const exportGroup = useCallback((groupId: string) => {
+  // 将本地文件路径转换为 Base64
+  const convertLocalPathToBase64 = async (url: string): Promise<string> => {
+    if (!url || url.startsWith('data:')) return url; // 已经是 Base64
+    
+    if (url.startsWith('/files/') || url.startsWith('http://localhost:8765')) {
+      try {
+        const fetchUrl = url.startsWith('/files/') ? `http://localhost:8765${url}` : url;
+        const response = await fetch(fetchUrl);
+        if (!response.ok) throw new Error('Fetch failed');
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch (err) {
+        console.warn('[Export] 转换本地文件失败:', url, err);
+        return url; // 返回原始 URL
+      }
+    }
+    return url;
+  };
+  
+  // 导出组 - 包含组信息、组内节点和连接（异步转换图片/视频为 Base64）
+  const exportGroup = useCallback(async (groupId: string) => {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
     
@@ -1459,11 +1489,79 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       nodeIds.has(c.fromNode) && nodeIds.has(c.toNode)
     );
     
-    // 计算节点相对于组的位置（方便导入时重新定位）
-    const exportNodes = nodesInGroup.map(node => ({
-      ...node,
-      x: node.x - group.x,
-      y: node.y - group.y,
+    // 计算节点相对于组的位置（方便导入时重新定位），并转换本地文件为 Base64
+    const exportNodes = await Promise.all(nodesInGroup.map(async (node) => {
+      const clonedNode = JSON.parse(JSON.stringify(node)) as CanvasNode;
+      
+      // 转换节点主内容（图片/视频）
+      if (clonedNode.content && (clonedNode.type === 'image' || clonedNode.type === 'video' || clonedNode.type === 'video-output')) {
+        clonedNode.content = await convertLocalPathToBase64(clonedNode.content);
+      }
+      
+      // 转换 data 中可能包含本地文件路径的字段
+      if (clonedNode.data) {
+        // 视频输出 URL
+        if (clonedNode.data.videoUrl) {
+          clonedNode.data.videoUrl = await convertLocalPathToBase64(clonedNode.data.videoUrl);
+        }
+        // RunningHub 输出 URL
+        if (clonedNode.data.outputUrl) {
+          clonedNode.data.outputUrl = await convertLocalPathToBase64(clonedNode.data.outputUrl);
+        }
+        // 应用封面 URL
+        if (clonedNode.data.coverUrl) {
+          clonedNode.data.coverUrl = await convertLocalPathToBase64(clonedNode.data.coverUrl);
+        }
+        // 画板输出图片
+        if (clonedNode.data.outputImageUrl) {
+          clonedNode.data.outputImageUrl = await convertLocalPathToBase64(clonedNode.data.outputImageUrl);
+        }
+        // 多角度预览图
+        if (clonedNode.data.previewImage) {
+          clonedNode.data.previewImage = await convertLocalPathToBase64(clonedNode.data.previewImage);
+        }
+        // 多角度输入图
+        if (clonedNode.data.inputImageUrl) {
+          clonedNode.data.inputImageUrl = await convertLocalPathToBase64(clonedNode.data.inputImageUrl);
+        }
+        // 画板元素中的图片
+        if (clonedNode.data.boardElements) {
+          for (const elem of clonedNode.data.boardElements) {
+            if (elem.imageUrl) {
+              elem.imageUrl = await convertLocalPathToBase64(elem.imageUrl);
+            }
+          }
+        }
+        // 接收的上游图片
+        if (clonedNode.data.receivedImages) {
+          clonedNode.data.receivedImages = await Promise.all(
+            clonedNode.data.receivedImages.map((img: string) => convertLocalPathToBase64(img))
+          );
+        }
+        // 对比图片
+        if (clonedNode.data.compareImage1) {
+          clonedNode.data.compareImage1 = await convertLocalPathToBase64(clonedNode.data.compareImage1);
+        }
+        if (clonedNode.data.compareImage2) {
+          clonedNode.data.compareImage2 = await convertLocalPathToBase64(clonedNode.data.compareImage2);
+        }
+        // 帧提取器源视频
+        if (clonedNode.data.sourceVideoUrl) {
+          clonedNode.data.sourceVideoUrl = await convertLocalPathToBase64(clonedNode.data.sourceVideoUrl);
+        }
+        // 帧缩略图
+        if (clonedNode.data.frameThumbnails) {
+          clonedNode.data.frameThumbnails = await Promise.all(
+            clonedNode.data.frameThumbnails.map((thumb: string) => convertLocalPathToBase64(thumb))
+          );
+        }
+      }
+      
+      return {
+        ...clonedNode,
+        x: node.x - group.x,
+        y: node.y - group.y,
+      };
     }));
     
     // 获取组颜色（如果未设置则使用默认计算的颜色）
