@@ -821,4 +821,191 @@ router.post('/banana/query', async (req, res) => {
     }
 });
 
+// ============================================
+// 全能视频S API 代理
+// 使用企业共享 API Key (RH Magic)
+// ============================================
+
+/**
+ * 根据配置组合获取全能视频S的API端点
+ * @param {string} source - 'official' | 'community'
+ * @param {string} mode - 't2v' | 'i2v'
+ * @param {string} version - 'standard' | 'pro'
+ * @param {boolean} realistic - 真人模式（仅官方+图生视频）
+ */
+function getRhVideoSEndpoint(source, mode, version, realistic) {
+    const isOfficial = source === 'official';
+    const basePath = isOfficial ? '/openapi/v2/rhart-video-s-official' : '/openapi/v2/rhart-video-s';
+    
+    if (mode === 'i2v') {
+        // 图生视频
+        if (isOfficial && realistic) {
+            return `${basePath}/image-to-video-realistic`;
+        }
+        return version === 'pro' ? `${basePath}/image-to-video-pro` : `${basePath}/image-to-video`;
+    } else {
+        // 文生视频
+        return version === 'pro' ? `${basePath}/text-to-video-pro` : `${basePath}/text-to-video`;
+    }
+}
+
+/**
+ * POST /rh-video-s/generate - 全能视频S统一生成入口
+ * 使用企业共享 API Key
+ */
+router.post('/rh-video-s/generate', async (req, res) => {
+    try {
+        const apiKey = getMagicApiKey();
+        if (!apiKey) {
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 企业共享 API Key' });
+        }
+        
+        const {
+            source = 'official',     // 'official' | 'community'
+            mode = 'i2v',            // 't2v' | 'i2v'
+            version = 'standard',    // 'standard' | 'pro'
+            realistic = false,       // 真人模式
+            prompt,                  // 提示词
+            imageUrl,                // 图片URL（图生视频必须）
+            duration,                // 时长
+            aspectRatio,             // 宽高比
+            resolution,              // 分辨率
+            size                     // 视频尺寸（官方文生视频用）
+        } = req.body;
+        
+        if (!prompt) {
+            return res.status(400).json({ success: false, error: '缺少 prompt 参数' });
+        }
+        
+        if (mode === 'i2v' && !imageUrl) {
+            return res.status(400).json({ success: false, error: '图生视频模式缺少 imageUrl 参数' });
+        }
+        
+        // 获取API端点
+        const endpoint = getRhVideoSEndpoint(source, mode, version, realistic);
+        console.log('[RH-Video-S] API端点:', endpoint);
+        
+        // 构建请求体
+        const body = { prompt };
+        
+        if (mode === 'i2v') {
+            // 图生视频
+            body.imageUrl = imageUrl;
+            if (duration) body.duration = duration;
+            if (aspectRatio) body.aspectRatio = aspectRatio;
+            
+            // 非官方普通版需要resolution参数
+            if (source === 'community' && version === 'standard' && resolution) {
+                body.resolution = resolution;
+            }
+            // 官方PRO版需要resolution参数
+            if (source === 'official' && version === 'pro' && resolution) {
+                body.resolution = resolution;
+            }
+        } else {
+            // 文生视频
+            if (duration) body.duration = duration;
+            if (aspectRatio) body.aspectRatio = aspectRatio;
+            
+            // 非官方文生视频需要resolution和aspectRatio
+            if (source === 'community') {
+                if (resolution) body.resolution = resolution;
+            }
+            // 官方文生视频需要size参数
+            if (source === 'official') {
+                if (size) body.size = size;
+            }
+        }
+        
+        console.log('[RH-Video-S] 请求体:', JSON.stringify(body));
+        
+        const response = await fetch(`${RH_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(body)
+        });
+        
+        const result = await response.json();
+        console.log('[RH-Video-S] 响应:', JSON.stringify(result));
+        res.json(result);
+    } catch (error) {
+        console.error('[RH-Video-S] 生成失败:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /rh-video-s/character-extract - 角色提取
+ * 使用企业共享 API Key
+ */
+router.post('/rh-video-s/character-extract', async (req, res) => {
+    try {
+        const apiKey = getMagicApiKey();
+        if (!apiKey) {
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 企业共享 API Key' });
+        }
+        
+        const { videoUrl } = req.body;
+        if (!videoUrl) {
+            return res.status(400).json({ success: false, error: '缺少 videoUrl 参数' });
+        }
+        
+        console.log('[RH-Video-S] 角色提取, videoUrl:', videoUrl);
+        
+        const response = await fetch(`${RH_BASE_URL}/openapi/v2/rhart-video-s/sora-upload-character`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({ videoUrl })
+        });
+        
+        const result = await response.json();
+        console.log('[RH-Video-S] 角色提取响应:', JSON.stringify(result));
+        res.json(result);
+    } catch (error) {
+        console.error('[RH-Video-S] 角色提取失败:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * POST /rh-video-s/query - 查询任务状态
+ * 使用企业共享 API Key
+ * 复用标准模型API的查询接口
+ */
+router.post('/rh-video-s/query', async (req, res) => {
+    try {
+        const apiKey = getMagicApiKey();
+        if (!apiKey) {
+            return res.status(400).json({ success: false, error: '未配置 RunningHub 企业共享 API Key' });
+        }
+        
+        const { taskId } = req.body;
+        if (!taskId) {
+            return res.status(400).json({ success: false, error: '缺少 taskId 参数' });
+        }
+        
+        const response = await fetch(`${RH_BASE_URL}/openapi/v2/query`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({ taskId })
+        });
+        
+        const result = await response.json();
+        console.log('[RH-Video-S] 查询响应:', JSON.stringify(result));
+        res.json(result);
+    } catch (error) {
+        console.error('[RH-Video-S] 查询任务失败:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

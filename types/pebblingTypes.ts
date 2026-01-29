@@ -1,5 +1,5 @@
 
-export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-magic' | 'drawing-board' | 'browser' | 'image-compare' | 'audio';
+export type NodeType = 'text' | 'image' | 'idea' | 'edit' | 'video' | 'video-output' | 'frame-extractor' | 'combine' | 'llm' | 'resize' | 'relay' | 'remove-bg' | 'upscale' | 'bp' | 'runninghub' | 'rh-config' | 'rh-magic' | 'rh-video-s' | 'rh-character-extract' | 'drawing-board' | 'browser' | 'image-compare' | 'audio';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -156,6 +156,26 @@ export interface NodeData {
   audioFileName?: string;      // 文件名
   audioFormat?: string;        // 格式（MP3/FLAC/WAV等）
   audioSize?: string;          // 文件大小（格式化后）
+  
+  // RH全能视频S节点配置
+  rhVideoSSource?: 'official' | 'community';  // 来源：官方/非官方
+  rhVideoSMode?: 't2v' | 'i2v';               // 模式：文生视频/图生视频
+  rhVideoSVersion?: 'standard' | 'pro';       // 版本：普通/PRO
+  rhVideoSRealistic?: boolean;                // 真人模式（仅官方+图生视频）
+  rhVideoSDuration?: string;                  // 时长：根据组合动态变化
+  rhVideoSAspectRatio?: '16:9' | '9:16';      // 宽高比
+  rhVideoSResolution?: 'small' | 'large' | '720p' | '1080p';  // 分辨率
+  rhVideoSSize?: '720x1280' | '1280x720' | '1024x1792' | '1792x1024';  // 视频尺寸（官方文生视频）
+  rhVideoSTaskId?: string;                    // 任务ID
+  rhVideoSTaskStatus?: string;                // 任务状态
+  rhVideoSProgress?: string;                  // 进度信息
+  rhVideoSError?: string;                     // 错误信息
+  
+  // RH角色提取节点配置
+  rhCharacterVideoUrl?: string;               // 输入的视频URL
+  rhCharacterId?: string;                     // 提取出的角色ID
+  rhCharacterTaskId?: string;                 // 任务ID
+  rhCharacterTaskStatus?: string;             // 任务状态
 }
 
 export interface CanvasNode {
@@ -287,6 +307,8 @@ export const getNodeTypeColor = (type: NodeType): { primary: string; light: stri
     case 'runninghub':
     case 'rh-config':
     case 'rh-magic':
+    case 'rh-video-s':
+    case 'rh-character-extract':
       return { primary: ARCTIC_COLORS.rhGreen, light: ARCTIC_COLORS.rhGreenLight };
     
     case 'drawing-board':

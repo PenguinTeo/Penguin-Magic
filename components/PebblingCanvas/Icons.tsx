@@ -44,8 +44,42 @@ import {
   Globe,
   Columns,
   Package,
-  Music
+  Music,
+  UserRoundPlus
 } from 'lucide-react';
+
+// 自定义SVG图标: 全能视频S (Video with S badge)
+const VideoS: React.FC<{ size?: number; color?: string; className?: string }> = ({ 
+  size = 24, 
+  color = 'currentColor',
+  className 
+}) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke={color} 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round"
+    className={className}
+  >
+    {/* 视频播放器主体 */}
+    <rect x="2" y="4" width="15" height="14" rx="2" />
+    {/* 播放三角 */}
+    <polygon points="8,8 8,14 13,11" fill={color} stroke="none" />
+    {/* S 徽章背景 */}
+    <circle cx="19" cy="17" r="4.5" fill={color} stroke="none" />
+    {/* S 字母 */}
+    <path 
+      d="M17.5 15.5c0.8-0.5 1.8-0.3 2.2 0.3s0.2 1.5-0.5 1.8c-1 0.4-1.7 0.6-1.7 1.2 0 0.4 0.4 0.7 1 0.7 0.5 0 1-0.2 1.2-0.4" 
+      stroke="#1a1a1a" 
+      strokeWidth="1.2" 
+      fill="none"
+    />
+  </svg>
+);
 
 export const Icons = {
   Plus,
@@ -65,6 +99,7 @@ export const Icons = {
   Upload,
   Relay: GitCommit,
   Video,
+  VideoS,
   Layers,
   Scissors,
   Upscale: MonitorUp,
@@ -91,5 +126,6 @@ export const Icons = {
   Globe,
   Columns,
   Package,
-  Music
+  Music,
+  CharacterExtract: UserRoundPlus
 };

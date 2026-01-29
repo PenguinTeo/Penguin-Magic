@@ -31,6 +31,22 @@ const RADIAL_TOOLS: ToolItem[] = [
     description: '视频生成'
   },
   {
+    id: 'rh-video-s',
+    label: 'VideoS',
+    icon: <Icons.VideoS />,
+    nodeType: 'rh-video-s',
+    color: '#06B6D4', // 青色
+    description: '全能视频S'
+  },
+  {
+    id: 'rh-character-extract',
+    label: 'Extract',
+    icon: <Icons.CharacterExtract />,
+    nodeType: 'rh-character-extract',
+    color: '#F472B6', // 粉色
+    description: '角色提取'
+  },
+  {
     id: 'llm',
     label: 'LLM',
     icon: <Icons.Magic />,

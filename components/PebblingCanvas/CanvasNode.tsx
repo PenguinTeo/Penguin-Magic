@@ -3310,6 +3310,412 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
       );
     }
 
+    // RH全能视频S节点 - 支持官方/非官方、文生视频/图生视频、普通/PRO
+    if (node.type === 'rh-video-s') {
+        // 配置参数
+        const rhSource = node.data?.rhVideoSSource || 'official';  // 'official' | 'community'
+        const rhMode = node.data?.rhVideoSMode || 'i2v';           // 't2v' | 'i2v'
+        const rhVersion = node.data?.rhVideoSVersion || 'standard'; // 'standard' | 'pro'
+        const rhRealistic = node.data?.rhVideoSRealistic || false;  // 真人模式
+        const rhDuration = node.data?.rhVideoSDuration || (rhSource === 'official' ? '4' : '10');
+        const rhAspectRatio = node.data?.rhVideoSAspectRatio || '16:9';
+        const rhResolution = node.data?.rhVideoSResolution || (rhSource === 'community' ? 'small' : '720p');
+        const rhSize = node.data?.rhVideoSSize || '1280x720';
+        const rhTaskStatus = node.data?.rhVideoSTaskStatus;
+        const rhProgress = node.data?.rhVideoSProgress;
+        const rhError = node.data?.rhVideoSError;
+        
+        // 根据配置组合获取可用时长选项
+        const getDurationOptions = () => {
+            if (rhSource === 'official') {
+                // 官方：4/8/12秒
+                return ['4', '8', '12'];
+            } else {
+                // 非官方：普通 10/15秒，PRO 15/25秒
+                return rhVersion === 'pro' ? ['15', '25'] : ['10', '15'];
+            }
+        };
+        
+        const durationOptions = getDurationOptions();
+        
+        // 当配置切换时，如果当前时长不在可用选项中，自动选择第一个
+        const effectiveDuration = durationOptions.includes(rhDuration) ? rhDuration : durationOptions[0];
+        
+        const handleRhSettingChange = (key: string, value: any) => {
+            const updates: Record<string, any> = { [key]: value };
+            
+            // 切换来源或版本时，自动调整时长
+            if (key === 'rhVideoSSource' || key === 'rhVideoSVersion') {
+                const newSource = key === 'rhVideoSSource' ? value : rhSource;
+                const newVersion = key === 'rhVideoSVersion' ? value : rhVersion;
+                const newOptions = newSource === 'official' ? ['4', '8', '12'] : (newVersion === 'pro' ? ['15', '25'] : ['10', '15']);
+                if (!newOptions.includes(rhDuration)) {
+                    updates.rhVideoSDuration = newOptions[0];
+                }
+                // 切换到非官方时关闭真人模式
+                if (key === 'rhVideoSSource' && value === 'community') {
+                    updates.rhVideoSRealistic = false;
+                }
+            }
+            
+            onUpdate(node.id, { data: { ...node.data, ...updates } });
+        };
+        
+        // 是否显示真人模式开关：仅官方+图生视频+普通版
+        const showRealisticOption = rhSource === 'official' && rhMode === 'i2v' && rhVersion === 'standard';
+        
+        // 是否显示分辨率选项
+        const showResolution = (rhSource === 'community' && rhVersion === 'standard') || (rhSource === 'official' && rhVersion === 'pro' && rhMode === 'i2v');
+        
+        // 是否显示视频尺寸选项（官方文生视频）
+        const showSize = rhSource === 'official' && rhMode === 't2v';
+        
+        return (
+            <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid rgba(16,185,129,0.3)` }}>
+                {/* Header */}
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid rgba(16,185,129,0.2)`, backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.1)' }}>
+                    <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center">
+                            <span className="text-white font-black text-[10px]">S</span>
+                        </div>
+                        <span className="text-[10px] font-bold" style={{ color: isLightCanvas ? '#059669' : '#a7f3d0' }}>
+                            全能视频S
+                        </span>
+                    </div>
+                    {/* 官方/非官方切换 */}
+                    <div className={`flex ${controlBg} rounded p-0.5`}>
+                        <button
+                            className={`px-2 py-0.5 text-[8px] font-bold rounded transition-all ${rhSource === 'official' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                            onClick={() => handleRhSettingChange('rhVideoSSource', 'official')}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            官方
+                        </button>
+                        <button
+                            className={`px-2 py-0.5 text-[8px] font-bold rounded transition-all ${rhSource === 'community' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                            onClick={() => handleRhSettingChange('rhVideoSSource', 'community')}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            非官方
+                        </button>
+                    </div>
+                </div>
+                
+                {/* 模式和版本选择 */}
+                <div className="px-2 pt-2 flex gap-1.5">
+                    {/* 文生视频/图生视频 */}
+                    <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
+                        <button
+                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhMode === 't2v' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                            onClick={() => handleRhSettingChange('rhVideoSMode', 't2v')}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            文生视频
+                        </button>
+                        <button
+                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhMode === 'i2v' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                            onClick={() => handleRhSettingChange('rhVideoSMode', 'i2v')}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            图生视频
+                        </button>
+                    </div>
+                    {/* 普通/PRO */}
+                    <div className={`flex ${controlBg} rounded p-0.5`}>
+                        <button
+                            className={`px-2 py-1 text-[9px] font-medium rounded transition-all ${rhVersion === 'standard' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                            onClick={() => handleRhSettingChange('rhVideoSVersion', 'standard')}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            普通
+                        </button>
+                        <button
+                            className={`px-2 py-1 text-[9px] font-medium rounded transition-all ${rhVersion === 'pro' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                            onClick={() => handleRhSettingChange('rhVideoSVersion', 'pro')}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
+                            PRO
+                        </button>
+                    </div>
+                    {/* 真人模式开关 */}
+                    {showRealisticOption && (
+                        <button
+                            className={`px-2 py-1 text-[8px] font-medium rounded transition-all ${rhRealistic ? 'bg-pink-500/30 text-pink-200' : `${controlBg} text-zinc-400 hover:text-zinc-200`}`}
+                            onClick={() => handleRhSettingChange('rhVideoSRealistic', !rhRealistic)}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            title="支持真人形象"
+                        >
+                            {rhRealistic ? '✓ 真人' : '真人'}
+                        </button>
+                    )}
+                </div>
+                
+                {/* 提示词输入 */}
+                <div className="flex-1 px-2 py-2 min-h-0">
+                    <textarea 
+                        className={`w-full h-full min-h-[60px] ${controlBg} border rounded p-2 text-[11px] outline-none resize-none transition-colors ${isLightCanvas ? 'border-gray-200 text-gray-800 focus:border-emerald-500 placeholder-gray-400' : 'border-white/10 text-zinc-200 focus:border-emerald-500/50 placeholder-zinc-600'}`}
+                        placeholder="描述视频场景..."
+                        value={localPrompt}
+                        onChange={(e) => setLocalPrompt(e.target.value)}
+                        onBlur={handleUpdate}
+                        onMouseDown={(e) => e.stopPropagation()}
+                    />
+                </div>
+                
+                {/* 参数配置 */}
+                <div className="px-2 pb-2 flex flex-col gap-1.5 shrink-0">
+                    {/* 时长选择 */}
+                    <div className="flex items-center gap-2">
+                        <span className={`text-[8px] ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'} w-8`}>时长</span>
+                        <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
+                            {durationOptions.map(d => (
+                                <button
+                                    key={d}
+                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${effectiveDuration === d ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    onClick={() => handleRhSettingChange('rhVideoSDuration', d)}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    {d}s
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* 宽高比选择 - 仅非官方模式（官方模式：文生视频用size，图生视频跟随图片） */}
+                    {rhSource === 'community' && (
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[8px] ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'} w-8`}>比例</span>
+                            <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
+                                <button
+                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhAspectRatio === '16:9' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    onClick={() => handleRhSettingChange('rhVideoSAspectRatio', '16:9')}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    16:9
+                                </button>
+                                <button
+                                    className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhAspectRatio === '9:16' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                    onClick={() => handleRhSettingChange('rhVideoSAspectRatio', '9:16')}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                    9:16
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* 官方图生视频提示 - 比例跟随图片 */}
+                    {rhSource === 'official' && rhMode === 'i2v' && (
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[8px] ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'} w-8`}>比例</span>
+                            <span className={`text-[9px] ${isLightCanvas ? 'text-gray-400' : 'text-zinc-500'} italic`}>跟随输入图片</span>
+                        </div>
+                    )}
+                    
+                    {/* 分辨率选择 - 非官方普通版 or 官方PRO图生视频 */}
+                    {showResolution && (
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[8px] ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'} w-8`}>分辨率</span>
+                            <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
+                                {rhSource === 'community' ? (
+                                    // 非官方: small/large
+                                    <>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhResolution === 'small' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSResolution', 'small')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            标准
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhResolution === 'large' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSResolution', 'large')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            高清
+                                        </button>
+                                    </>
+                                ) : (
+                                    // 官方PRO: 720p/1080p
+                                    <>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhResolution === '720p' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSResolution', '720p')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            720p
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhResolution === '1080p' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSResolution', '1080p')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            1080p
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* 视频尺寸选择 - 官方文生视频 */}
+                    {showSize && (
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[8px] ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'} w-8`}>尺寸</span>
+                            <div className={`flex ${controlBg} rounded p-0.5 flex-1`}>
+                                {rhVersion === 'pro' ? (
+                                    // PRO版本: 4个尺寸选项
+                                    <>
+                                        <button
+                                            className={`flex-1 px-1 py-1 text-[8px] font-medium rounded transition-all ${rhSize === '1280x720' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSSize', '1280x720')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            16:9
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-1 py-1 text-[8px] font-medium rounded transition-all ${rhSize === '720x1280' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSSize', '720x1280')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            9:16
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-1 py-1 text-[8px] font-medium rounded transition-all ${rhSize === '1792x1024' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSSize', '1792x1024')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            1792
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-1 py-1 text-[8px] font-medium rounded transition-all ${rhSize === '1024x1792' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSSize', '1024x1792')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            1024
+                                        </button>
+                                    </>
+                                ) : (
+                                    // 普通版本: 2个尺寸选项
+                                    <>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhSize === '1280x720' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSSize', '1280x720')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            16:9
+                                        </button>
+                                        <button
+                                            className={`flex-1 px-2 py-1 text-[9px] font-medium rounded transition-all ${rhSize === '720x1280' ? 'bg-emerald-500/30 text-emerald-200' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                            onClick={() => handleRhSettingChange('rhVideoSSize', '720x1280')}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            9:16
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                {/* 底部状态栏 */}
+                <div className={`h-6 ${footerBarBg} border-t px-3 flex items-center justify-between text-[10px]`} style={{ borderColor: 'rgba(16,185,129,0.2)', color: themeColors.textMuted }}>
+                    <span>{rhMode === 't2v' ? 'TXT → VIDEO' : 'IMG+TXT → VIDEO'}</span>
+                    <span>{rhSource === 'official' ? '官方' : '非官方'} · {rhVersion === 'pro' ? 'PRO' : '普通'}{rhRealistic ? ' · 真人' : ''}</span>
+                </div>
+                
+                {/* 运行状态 */}
+                {(isRunning || rhTaskStatus === 'QUEUED' || rhTaskStatus === 'RUNNING') && (
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] flex flex-col items-center justify-center z-30 gap-2">
+                        <div className="w-8 h-8 border-2 border-emerald-400/50 border-t-emerald-400 rounded-full animate-spin"></div>
+                        <span className="text-[10px] text-emerald-300">
+                            {rhTaskStatus === 'QUEUED' ? '排队中...' : rhProgress || '生成中...'}
+                        </span>
+                    </div>
+                )}
+                
+                {/* 错误状态 */}
+                {rhError && (
+                    <div className="absolute bottom-8 left-2 right-2 bg-red-500/20 border border-red-500/30 rounded px-2 py-1">
+                        <span className="text-[9px] text-red-300">{rhError}</span>
+                    </div>
+                )}
+            </div>
+        );
+    }
+    
+    // RH角色提取节点
+    if (node.type === 'rh-character-extract') {
+        const videoUrl = node.data?.rhCharacterVideoUrl || '';
+        const characterId = node.data?.rhCharacterId;
+        const taskStatus = node.data?.rhCharacterTaskStatus;
+        
+        return (
+            <div className="w-full h-full flex flex-col rounded-xl overflow-hidden relative shadow-lg" style={{ backgroundColor: themeColors.nodeBg, border: `1px solid rgba(16,185,129,0.3)` }}>
+                {/* Header */}
+                <div className="h-8 flex items-center justify-between px-3 shrink-0" style={{ borderBottom: `1px solid rgba(16,185,129,0.2)`, backgroundColor: isLightCanvas ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.1)' }}>
+                    <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded bg-emerald-500 flex items-center justify-center">
+                            <span className="text-white font-black text-[10px]">↑</span>
+                        </div>
+                        <span className="text-[10px] font-bold" style={{ color: isLightCanvas ? '#059669' : '#a7f3d0' }}>
+                            角色提取
+                        </span>
+                    </div>
+                    <span className="text-[7px] uppercase" style={{ color: isLightCanvas ? '#047857' : 'rgba(52,211,153,0.6)' }}>VIDEO → ID</span>
+                </div>
+                
+                {/* 内容区 */}
+                <div className="flex-1 p-3 flex flex-col gap-3">
+                    {/* 视频URL输入 */}
+                    <div className="flex flex-col gap-1">
+                        <span className={`text-[9px] ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'}`}>视频URL</span>
+                        <input
+                            type="text"
+                            className={`w-full ${controlBg} border rounded px-2 py-1.5 text-[11px] outline-none transition-colors ${isLightCanvas ? 'border-gray-200 text-gray-800 focus:border-emerald-500 placeholder-gray-400' : 'border-white/10 text-zinc-200 focus:border-emerald-500/50 placeholder-zinc-600'}`}
+                            placeholder="输入视频URL或连接视频节点..."
+                            value={videoUrl}
+                            onChange={(e) => onUpdate(node.id, { data: { ...node.data, rhCharacterVideoUrl: e.target.value } })}
+                            onMouseDown={(e) => e.stopPropagation()}
+                        />
+                    </div>
+                    
+                    {/* 提取结果 */}
+                    {characterId && (
+                        <div className="flex flex-col gap-1">
+                            <span className={`text-[9px] ${isLightCanvas ? 'text-gray-500' : 'text-zinc-500'}`}>角色ID</span>
+                            <div className={`${controlBg} border rounded px-2 py-2 ${isLightCanvas ? 'border-gray-200' : 'border-white/10'}`}>
+                                <span className="text-[11px] font-mono text-emerald-400 break-all">{characterId}</span>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* 说明 */}
+                    <div className="flex-1 flex items-center justify-center">
+                        <span className={`text-[9px] text-center ${isLightCanvas ? 'text-gray-400' : 'text-zinc-600'}`}>
+                            从视频中提取角色ID，<br/>用于全能视频S生成
+                        </span>
+                    </div>
+                </div>
+                
+                {/* 底部状态 */}
+                <div className={`h-6 ${footerBarBg} border-t px-3 flex items-center justify-between text-[10px]`} style={{ borderColor: 'rgba(16,185,129,0.2)', color: themeColors.textMuted }}>
+                    <span>RunningHub</span>
+                    <span>{characterId ? '✓ 已提取' : '待提取'}</span>
+                </div>
+                
+                {/* 运行状态 */}
+                {(isRunning || taskStatus === 'QUEUED' || taskStatus === 'RUNNING') && (
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] flex flex-col items-center justify-center z-30 gap-2">
+                        <div className="w-8 h-8 border-2 border-emerald-400/50 border-t-emerald-400 rounded-full animate-spin"></div>
+                        <span className="text-[10px] text-emerald-300">提取中...</span>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
     if (node.type === 'video') {
         // 视频配置节点 - 始终显示配置界面，视频输出到独立的 video-output 节点
         
@@ -3982,8 +4388,9 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                         <span className="text-[10px] text-zinc-500">等待视频生成...</span>
                         {node.data?.videoTaskStatus && (
                             <span className="text-[9px] text-zinc-600">
-                                {node.data.videoTaskStatus === 'PENDING' && '任务排队中...'}
-                                {node.data.videoTaskStatus === 'RUNNING' && `生成中 ${node.data.videoProgress || 0}%`}
+                                {(node.data.videoTaskStatus === 'PENDING' || node.data.videoTaskStatus === 'QUEUED') && '任务排队中...'}
+                                {node.data.videoTaskStatus === 'RUNNING' && `生成中 ${node.data.videoProgress || ''}`}
+                                {node.data.videoTaskStatus === 'SUCCESS' && '下载视频中...'}
                             </span>
                         )}
                     </div>
@@ -5150,10 +5557,10 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
              )}
 
              {/* Execute Button with Batch Count */}
-             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config', 'rh-magic', 'image-compare'].includes(node.type) && (
+             {['image', 'text', 'idea', 'edit', 'video', 'llm', 'remove-bg', 'upscale', 'resize', 'bp', 'runninghub', 'rh-config', 'rh-magic', 'rh-video-s', 'rh-character-extract', 'image-compare'].includes(node.type) && (
                  <div className="flex items-center gap-0.5">
                    {/* 批量数量选择器 - 对图片生成类型节点显示 */}
-                   {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config', 'rh-magic'].includes(node.type) && !isRunning && (
+                   {['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config', 'rh-magic', 'rh-video-s'].includes(node.type) && !isRunning && (
                      <div 
                        className="flex items-center h-8 rounded-l-lg border border-r-0 overflow-hidden"
                        style={{ 
@@ -5191,7 +5598,7 @@ const CanvasNodeItem: React.FC<CanvasNodeProps> = ({
                       }}
                       disabled={!isRunning && node.status === 'running'}
                       className={`h-8 px-2.5 border shadow-lg transition-colors flex items-center gap-1.5 font-bold text-[10px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed
-                          ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config', 'rh-magic'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
+                          ${['image', 'edit', 'bp', 'idea', 'remove-bg', 'upscale', 'video', 'rh-config', 'rh-magic', 'rh-video-s'].includes(node.type) && !isRunning ? 'rounded-r-lg' : 'rounded-lg'}
                           ${isRunning ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' : ''}
                       `}
                       style={!isRunning ? {

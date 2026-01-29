@@ -2243,7 +2243,7 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
           }
       }
       // 视频节点 - 更大的尺寸便于预览
-      if (type === 'video' || type === 'video-output') { width = 480; height = 270; }
+      if (type === 'video' || type === 'video-output') { width = 533; height = 300; }
       // 帧提取器 - 2倍视频节点大小
       if (type === 'frame-extractor') { width = 800; height = 500; }
       // 音频节点
@@ -2256,6 +2256,10 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
       // RH-Main 节点（封面主节点）
       // RH Magic 节点（香蕉 - 全能图PRO）
       if (type === 'rh-magic') { width = 280; height = 320; }
+      // RH全能视频S节点 - 参考video节点尺寸
+      if (type === 'rh-video-s') { width = 480; height = 320; }
+      // RH角色提取节点
+      if (type === 'rh-character-extract') { width = 300; height = 200; }
       // 画板节点需要更大的尺寸（约4个图片节点大小）
       if (type === 'drawing-board') { width = 800; height = 700; }
       // 浏览器节点 - 需要足够的空间显示网页
@@ -4453,6 +4457,247 @@ const PebblingCanvas: React.FC<PebblingCanvasProps> = ({
                        });
                    }
                }
+          }
+          // RH全能视频S节点执行逻辑
+          else if (node.type === 'rh-video-s') {
+              const { rhVideoSGenerateAndWait } = await import('../../services/api/runninghub');
+              const { uploadImageForBanana } = await import('../../services/rhBananaService');  // 使用和RH Magic一样的上传接口
+              
+              const rhSource = node.data?.rhVideoSSource || 'official';
+              const rhMode = node.data?.rhVideoSMode || 'i2v';
+              const rhVersion = node.data?.rhVideoSVersion || 'standard';
+              const rhRealistic = node.data?.rhVideoSRealistic || false;
+              const rhDuration = node.data?.rhVideoSDuration || (rhSource === 'official' ? '4' : '10');
+              const rhAspectRatio = node.data?.rhVideoSAspectRatio || '16:9';
+              const rhResolution = node.data?.rhVideoSResolution || (rhSource === 'community' ? 'small' : '720p');
+              const rhSize = node.data?.rhVideoSSize || '1280x720';
+              // 使用传入的batchCount参数（从悬浮控制条传入）
+              const rhBatchCount = batchCount || 1;
+              
+              const nodePrompt = node.data?.prompt || '';
+              const inputTexts = inputs.texts.join('\n');
+              const combinedPrompt = inputTexts || nodePrompt;
+              
+              // 根据模式处理图片输入：
+              // - 文生视频(t2v): 忽略连接的图片
+              // - 图生视频(i2v): 向前追溯获取图片
+              const inputImages = rhMode === 'i2v' ? inputs.images : [];
+              
+              console.log('[RH-Video-S] ========== 开始处理 ==========');
+              console.log('[RH-Video-S] 配置:', { rhSource, rhMode, rhVersion, rhRealistic, rhDuration, rhBatchCount });
+              console.log('[RH-Video-S] 模式:', rhMode === 't2v' ? '文生视频(忽略图片输入)' : '图生视频(追溯图片)');
+              console.log('[RH-Video-S] 输入图片数:', inputImages.length);
+              
+              // 验证参数
+              if (!combinedPrompt) {
+                  updateNode(nodeId, { status: 'error', data: { ...node.data, rhVideoSError: '缺少提示词' } });
+                  console.warn('[RH-Video-S] 执行失败：无提示词');
+                  return;
+              }
+              
+              if (rhMode === 'i2v' && inputImages.length === 0) {
+                  updateNode(nodeId, { status: 'error', data: { ...node.data, rhVideoSError: '图生视频模式需要连接图片节点' } });
+                  console.warn('[RH-Video-S] 执行失败：图生视频无图片输入');
+                  return;
+              }
+              
+              try {
+                  // 决定输出视频的实际比例
+                  // - 非官方模式：使用用户选择的 rhAspectRatio
+                  // - 官方文生视频：使用 rhSize (1280x720=16:9, 720x1280=9:16)
+                  // - 官方图生视频：跟随输入图片比例
+                  let effectiveAspectRatio = rhAspectRatio; // 默认使用用户选择
+                  
+                  if (rhSource === 'official') {
+                      if (rhMode === 't2v') {
+                          // 官方文生视频用size参数
+                          effectiveAspectRatio = rhSize === '720x1280' ? '9:16' : '16:9';
+                      } else if (rhMode === 'i2v' && inputImages.length > 0) {
+                          // 官方图生视频：检测输入图片比例
+                          try {
+                              const firstImage = inputImages[0];
+                              const img = new Image();
+                              await new Promise<void>((resolve) => {
+                                  img.onload = () => {
+                                      const imgRatio = img.width / img.height;
+                                      // 判断横竖屏：比例>1为横屏，<1为竖屏
+                                      effectiveAspectRatio = imgRatio >= 1 ? '16:9' : '9:16';
+                                      console.log('[RH-Video-S] 输入图片比例:', imgRatio.toFixed(2), '->', effectiveAspectRatio);
+                                      resolve();
+                                  };
+                                  img.onerror = () => {
+                                      console.warn('[RH-Video-S] 图片加载失败，使用默认比例');
+                                      resolve();
+                                  };
+                                  img.src = firstImage;
+                              });
+                          } catch (e) {
+                              console.warn('[RH-Video-S] 检测图片比例失败:', e);
+                          }
+                      }
+                  }
+                  
+                  // 计算输出节点尺寸：基准高度400，宽度按比例
+                  const OUTPUT_BASE_HEIGHT = 400;
+                  const outputNodeWidth = effectiveAspectRatio === '9:16' 
+                      ? Math.round(OUTPUT_BASE_HEIGHT * 9 / 16)  // 9:16竖屏: 225
+                      : Math.round(OUTPUT_BASE_HEIGHT * 16 / 9); // 16:9横屏: 711
+                  const outputNodeHeight = OUTPUT_BASE_HEIGHT;
+                  
+                  // 先创建视频输出节点（和RH Magic一样，先创建输出容器）
+                  console.log('[RH-Video-S] 创建视频输出节点...', { effectiveAspectRatio, outputNodeWidth, outputNodeHeight });
+                  const outputNodes: string[] = [];
+                  for (let i = 0; i < rhBatchCount; i++) {
+                      const outputNodeId = uuid();
+                      const outputNode: CanvasNode = {
+                          id: outputNodeId,
+                          type: 'video-output',
+                          content: '',
+                          x: node.x + node.width + 100 + i * (outputNodeWidth + 50),
+                          y: node.y,
+                          width: outputNodeWidth,
+                          height: outputNodeHeight,
+                          data: { videoTaskStatus: 'QUEUED' },
+                          status: 'running'
+                      };
+                      
+                      const newConnection = { id: uuid(), fromNode: nodeId, toNode: outputNodeId };
+                      nodesRef.current = [...nodesRef.current, outputNode];
+                      connectionsRef.current = [...connectionsRef.current, newConnection];
+                      setNodes(prev => [...prev, outputNode]);
+                      setConnections(prev => [...prev, newConnection]);
+                      outputNodes.push(outputNodeId);
+                      console.log(`[RH-Video-S] 已创建视频输出节点 ${outputNodeId.slice(0,8)} (批次${i + 1})`);
+                  }
+                  setHasUnsavedChanges(true);
+                  
+                  // 处理图片上传（图生视频模式）- 使用和RH Magic一样的上传接口
+                  let imageUrl: string | undefined;
+                  if (rhMode === 'i2v' && inputImages.length > 0) {
+                      const img = inputImages[0];
+                      console.log('[RH-Video-S] 开始上传图片...', img.slice(0, 80));
+                      updateNode(nodeId, { data: { ...node.data, rhVideoSProgress: '上传图片中...' } });
+                      
+                      try {
+                          imageUrl = await uploadImageForBanana(img);
+                          console.log('[RH-Video-S] 图片上传成功:', imageUrl);
+                      } catch (uploadErr) {
+                          console.error('[RH-Video-S] 图片上传失败:', uploadErr);
+                          throw new Error('图片上传失败: ' + (uploadErr instanceof Error ? uploadErr.message : '未知错误'));
+                      }
+                  }
+                  
+                  // 构建请求参数
+                  const params: any = {
+                      source: rhSource,
+                      mode: rhMode,
+                      version: rhVersion,
+                      realistic: rhRealistic,
+                      prompt: combinedPrompt,
+                      duration: rhDuration
+                  };
+                  
+                  // 只有非官方模式才传aspectRatio（官方模式：文生视频用size，图生视频跟随图片）
+                  if (rhSource === 'community') {
+                      params.aspectRatio = rhAspectRatio;
+                  }
+                  
+                  if (imageUrl) params.imageUrl = imageUrl;
+                  
+                  // 根据配置添加分辨率/尺寸参数
+                  if (rhSource === 'community' && rhVersion === 'standard') {
+                      params.resolution = rhResolution;
+                  } else if (rhSource === 'official' && rhVersion === 'pro' && rhMode === 'i2v') {
+                      params.resolution = rhResolution;
+                  }
+                  if (rhSource === 'official' && rhMode === 't2v') {
+                      params.size = rhSize;
+                  }
+                  
+                  console.log('[RH-Video-S] 调用API，参数:', params, '批次数:', rhBatchCount);
+                  
+                  // 多批次循环执行
+                  for (let batchIndex = 0; batchIndex < rhBatchCount; batchIndex++) {
+                      if (signal.aborted) return;
+                      
+                      const outputNodeId = outputNodes[batchIndex];
+                      console.log(`[RH-Video-S] 批次 ${batchIndex + 1}/${rhBatchCount} 开始，输出节点: ${outputNodeId.slice(0,8)}`);
+                      
+                      // 调用生成并等待结果
+                      const result = await rhVideoSGenerateAndWait(params, (status, progress) => {
+                          const progressText = rhBatchCount > 1 ? `[批次${batchIndex + 1}/${rhBatchCount}] ${progress || status}` : progress;
+                          updateNode(nodeId, { data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, rhVideoSTaskStatus: status, rhVideoSProgress: progressText } });
+                          updateNode(outputNodeId, { data: { ...nodesRef.current.find(n => n.id === outputNodeId)?.data, videoTaskStatus: status } });
+                      });
+                      
+                      if (signal.aborted) return;
+                      
+                      if (result.success && result.data?.results?.[0]?.url) {
+                          const videoUrl = result.data.results[0].url;
+                          console.log(`[RH-Video-S] 批次${batchIndex + 1} 生成成功，视频URL:`, videoUrl);
+                          
+                          // 下载视频并保存到本地
+                          await downloadAndSaveVideo(videoUrl, outputNodeId, signal);
+                      } else {
+                          console.error(`[RH-Video-S] 批次${batchIndex + 1} 失败:`, result.error);
+                          updateNode(outputNodeId, { 
+                              status: 'error',
+                              data: { ...nodesRef.current.find(n => n.id === outputNodeId)?.data, videoTaskStatus: 'FAILED' }
+                          });
+                      }
+                  }
+                  
+                  updateNode(nodeId, { 
+                      status: 'completed',
+                      data: { ...node.data, rhVideoSTaskStatus: 'SUCCESS', rhVideoSProgress: undefined, rhVideoSError: undefined }
+                  });
+              } catch (err) {
+                  console.error('[RH-Video-S] 执行失败:', err);
+                  updateNode(nodeId, { 
+                      status: 'error',
+                      data: { ...node.data, rhVideoSTaskStatus: 'FAILED', rhVideoSError: err instanceof Error ? err.message : String(err) }
+                  });
+              }
+          }
+          // RH角色提取节点执行逻辑
+          else if (node.type === 'rh-character-extract') {
+              const { rhVideoSExtractCharacterAndWait } = await import('../../services/api/runninghub');
+              
+              // 优先使用上游视频输入
+              const inputVideos = inputs.videos;
+              const videoUrl = inputVideos.length > 0 ? inputVideos[0] : node.data?.rhCharacterVideoUrl;
+              
+              if (!videoUrl) {
+                  updateNode(nodeId, { status: 'error', data: { ...node.data, rhCharacterTaskStatus: 'FAILED' } });
+                  console.warn('[RH-Character] 执行失败：无视频URL');
+                  return;
+              }
+              
+              console.log('[RH-Character] 开始提取角色，视频URL:', videoUrl);
+              
+              try {
+                  const result = await rhVideoSExtractCharacterAndWait(videoUrl, (status, progress) => {
+                      updateNode(nodeId, { data: { ...nodesRef.current.find(n => n.id === nodeId)?.data, rhCharacterTaskStatus: status } });
+                  });
+                  
+                  if (signal.aborted) return;
+                  
+                  if (result.success && result.characterId) {
+                      console.log('[RH-Character] 提取成功，角色ID:', result.characterId);
+                      updateNode(nodeId, { 
+                          status: 'completed',
+                          data: { ...node.data, rhCharacterId: result.characterId, rhCharacterTaskStatus: 'SUCCESS' }
+                      });
+                  } else {
+                      throw new Error(result.error || '角色提取失败');
+                  }
+              } catch (err) {
+                  console.error('[RH-Character] 执行失败:', err);
+                  updateNode(nodeId, { 
+                      status: 'error',
+                      data: { ...node.data, rhCharacterTaskStatus: 'FAILED' }
+                  });
+              }
           }
           else if (node.type === 'idea' || node.type === 'text') {
                // Text/Idea节点：容器模式 - 接收上游文本内容
