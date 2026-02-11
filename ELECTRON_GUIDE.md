@@ -1,4 +1,4 @@
-# PenguinMagic Electron 打包使用说明
+# FlowCanvas Electron 打包使用说明
 
 ## 已完成的工作
 
@@ -55,7 +55,7 @@ npm run package:all
 ## 项目结构
 
 ```
-PenguinMagic/
+FlowCanvas/
 ├── electron/
 │   ├── main.cjs          # Electron 主进程
 │   └── preload.cjs       # 预加载脚本
@@ -84,7 +84,7 @@ PenguinMagic/
 - `NODE_ENV=production`
 - `IS_ELECTRON=true`
 - `USER_DATA_PATH`: 用户数据目录（由 Electron 提供）
-- 数据存储在：`%APPDATA%/penguin-magic` (Windows)
+- 数据存储在：`%APPDATA%/flowcanvas` (Windows)
 
 ## 路径处理
 
@@ -130,8 +130,8 @@ PenguinMagic/
 ### package.json - build 配置
 ```json
 {
-  "appId": "com.penguin.magic",
-  "productName": "PenguinMagic",
+  "appId": "com.flowcanvas.app",
+  "productName": "FlowCanvas",
   "directories": {
     "output": "release"
   },
@@ -227,7 +227,7 @@ taskkill /F /IM node.exe
 2. 检查 DevTools (F12)
 3. 查看后端日志（后台服务输出）
 4. 参考设计文档：.qoder/quests/electron-packaging.md
-# PenguinMagic Electron 打包使用说明
+# FlowCanvas Electron 打包使用说明
 
 ## 已完成的工作
 
@@ -284,7 +284,7 @@ npm run package:all
 ## 项目结构
 
 ```
-PenguinMagic/
+FlowCanvas/
 ├── electron/
 │   ├── main.cjs          # Electron 主进程
 │   └── preload.cjs       # 预加载脚本
@@ -313,7 +313,7 @@ PenguinMagic/
 - `NODE_ENV=production`
 - `IS_ELECTRON=true`
 - `USER_DATA_PATH`: 用户数据目录（由 Electron 提供）
-- 数据存储在：`%APPDATA%/penguin-magic` (Windows)
+- 数据存储在：`%APPDATA%/flowcanvas` (Windows)
 
 ## 路径处理
 
@@ -359,8 +359,8 @@ PenguinMagic/
 ### package.json - build 配置
 ```json
 {
-  "appId": "com.penguin.magic",
-  "productName": "PenguinMagic",
+  "appId": "com.flowcanvas.app",
+  "productName": "FlowCanvas",
   "directories": {
     "output": "release"
   },

@@ -2049,17 +2049,7 @@ export const Desktop: React.FC<DesktopProps> = ({
           </div>
         </div>
       )}
-      {/* 技术支持信息 - 右上角 */}
-      <div 
-        className="absolute top-3 right-6 z-20 flex items-center gap-3 text-[10px]"
-        style={{ color: isLight ? '#94a3b8' : '#52525b' }}
-      >
-        <span>Q群：854266067</span>
-        <span>·</span>
-        <span>微信：Lovexy_0222</span>
-        <span>·</span>
-        <span className="text-blue-400/60">特别鸣谢 T8、无我、大熊</span>
-      </div>
+
       {/* 搜索框 + 自动叠放 + 隐藏文件名按钮 - 右上角，留出中间标签空间 */}
       <div className="absolute top-14 right-6 z-20 flex items-center gap-2">
         {/* 搜索框 */}

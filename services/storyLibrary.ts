@@ -41,13 +41,13 @@ export const storyLibrary: StoryLibrary = {
       keywords: [
         '魔法', '巫师', '魔杖', '咒语', '精灵', '龙', '骑士', '城堡', '仙女', '独角兽',
         'magic', 'wizard', 'witch', 'dragon', 'fairy', 'castle', 'knight', 'unicorn',
-        '企鹅', '艾洛', 'penguin', '奇幻', 'fantasy'
+        'FlowCanvas', '创意', 'flowcanvas', '奇幻', 'fantasy'
       ],
       variants: [
         {
           id: 'magic-1',
           messages: [
-            "🐧 企鹅艾洛在魔法图书馆深处发现了一本泛着金光的古老魔法书，封面的符文正在微微跳动...",
+            "🎨 FlowCanvas在创意图书馆深处发现了一本泛着金光的古老魔法书，封面的符文正在微微跳动...",
             "✨ 当艾洛的翅膀轻触书页，数百年沉睡的咒语如烟花般绽放，整个房间被七彩光芒填满！",
             "🔮 水晶球突然剧烈震动，里面开始显现出模糊的画面，仿佛在预示着即将诞生的杰作...",
             "⚡ 魔力从四面八方汇聚而来，在艾洛的指尖形成一个璀璨的能量漩涡，空气中弥漫着魔法的气息",

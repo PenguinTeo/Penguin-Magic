@@ -277,8 +277,8 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             />
           </div>
           <div>
-            <h1 className="text-sm font-bold" style={{ color: theme.colors.textPrimary }}>Penguin UI</h1>
-            <p className="text-[9px] font-medium tracking-wide" style={{ color: theme.colors.textMuted }}>PenguinPebbling</p>
+            <h1 className="text-sm font-bold" style={{ color: theme.colors.textPrimary }}>FlowCanvas UI</h1>
+            <p className="text-[9px] font-medium tracking-wide" style={{ color: theme.colors.textMuted }}>FlowCanvas</p>
           </div>
         </div>
         
@@ -677,20 +677,6 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             </div>
           )}
         </div>
-      </div>
-      
-      {/* 底部免责声明 - 更简洁 */}
-      <div 
-        className="mx-3 mb-3 px-3 py-2 rounded-lg text-center"
-        style={{ 
-          background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'}`,
-        }}
-      >
-        <p className="text-[9px] font-medium flex items-center justify-center gap-1" style={{ color: isDark ? '#4b5563' : '#9ca3af' }}>
-          <WarningIcon className="w-3 h-3" />
-          AI 内容仅供学习测试
-        </p>
       </div>
       
       {/* 提示词放大弹窗 */}
@@ -1812,6 +1798,7 @@ const App: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false); // 导入状态
   const [isImportingById, setIsImportingById] = useState(false); // 按ID导入状态
   const [backendStatus, setBackendStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking'); // 后端连接状态
+  const [showAnnouncement, setShowAnnouncement] = useState(false); // 公告弹窗状态
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importIdeasInputRef = useRef<HTMLInputElement>(null);
@@ -1994,6 +1981,12 @@ const App: React.FC = () => {
       setDesktopItems([]);
     } finally {
       setIsLoading(false);
+      // 检查是否需要显示公告（基于版本号）
+      const ANNOUNCEMENT_VERSION = '1.7.8';
+      const dismissedVersion = localStorage.getItem('announcement_dismissed_version');
+      if (dismissedVersion !== ANNOUNCEMENT_VERSION) {
+        setShowAnnouncement(true);
+      }
     }
   };
 
@@ -4013,6 +4006,8 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+      
+
     </div>
   );
 };

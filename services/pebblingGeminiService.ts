@@ -236,7 +236,89 @@ export const generateAdvancedLLM = async (
   }
 };
 
-// ===================== 图像生成（文生图）=====================
+// ===================== 图像生成（文生图）- 异步模式 =====================
+
+// 查询异步画图任务状态
+interface ImageTaskStatus {
+  code: string;
+  message: string;
+  data: {
+    task_id: string;
+    platform: string;
+    action: string;
+    status: 'IN_PROGRESS' | 'FAILURE' | 'SUCCESS';
+    fail_reason: string;
+    submit_time: number;
+    start_time: number;
+    finish_time: number;
+    progress: string;
+    data: {
+      data: Array<{
+        url?: string;
+        b64_json?: string;
+        revised_prompt?: string;
+      }>;
+      model: string;
+      created: number;
+      usage: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+      };
+    };
+  };
+}
+
+// 轮询查询画图任务状态
+const pollImageTaskStatus = async (
+  config: ThirdPartyApiConfig,
+  taskId: string,
+  maxAttempts: number = 60,
+  intervalMs: number = 5000,
+  signal?: AbortSignal
+): Promise<ImageTaskStatus> => {
+  const baseUrl = config.baseUrl.replace(/\/$/, '');
+  const queryUrl = `${baseUrl}/v1/images/tasks/${taskId}`;
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // Check if aborted
+    if (signal?.aborted) {
+      throw new DOMException('Request was aborted', 'AbortError');
+    }
+    
+    console.log(`[贞贞API] 查询任务状态 (${attempt + 1}/${maxAttempts}): ${taskId}`);
+    
+    const response = await fetch(queryUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      signal
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`查询任务状态失败 (${response.status}): ${errorText}`);
+    }
+    
+    const result: ImageTaskStatus = await response.json();
+    console.log(`[贞贞API] 任务状态: ${result.data.status}, 进度: ${result.data.progress}`);
+    
+    if (result.data.status === 'SUCCESS') {
+      return result;
+    }
+    
+    if (result.data.status === 'FAILURE') {
+      throw new Error(`任务失败: ${result.data.fail_reason || '未知错误'}`);
+    }
+    
+    // 继续等待
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  
+  throw new Error('任务查询超时，请稍后手动查询结果');
+};
 
 export const generateCreativeImage = async (prompt: string, genConfig?: GenerationConfig, signal?: AbortSignal): Promise<string | null> => {
   const config = getApiConfig();
@@ -267,15 +349,16 @@ export const generateCreativeImage = async (prompt: string, genConfig?: Generati
       image_size: imageSize
     };
 
-    const response = await withRetry(async () => {
-      const res = await fetch(`${config.baseUrl}/v1/images/generations`, {
+    // 异步模式：创建任务
+    const createResponse = await withRetry(async () => {
+      const res = await fetch(`${config.baseUrl}/v1/images/generations?async=true`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.apiKey}`
         },
         body: JSON.stringify(requestBody),
-        signal // Pass abort signal
+        signal
       });
 
       if (!res.ok) {
@@ -283,17 +366,39 @@ export const generateCreativeImage = async (prompt: string, genConfig?: Generati
         throw new Error(`API 请求失败 (${res.status}): ${errorText}`);
       }
 
-      return res;
+      return res.json();
     }, 3, 1000, signal);
 
-    const data = await response.json();
+    console.log('[贞贞API] 创建任务响应:', createResponse);
 
-    if (data.error) {
-      throw new Error(data.error.message);
+    // 处理两种可能的响应格式：{task_id: string} 或 {code: 'success', data: 'task_id'}
+    let taskId: string;
+    if (createResponse.task_id) {
+      taskId = createResponse.task_id;
+    } else if (createResponse.code === 'success' && createResponse.data) {
+      taskId = createResponse.data;
+    } else {
+      throw new Error(`API 错误: ${createResponse.message || createResponse.code || '未知错误'}`);
     }
 
-    if (data.data && data.data.length > 0) {
-      return data.data[0].url || `data:image/png;base64,${data.data[0].b64_json}`;
+    console.log('[贞贞API] 异步任务创建成功，task_id:', taskId);
+
+    // 轮询查询任务状态
+    const taskResult = await pollImageTaskStatus(config, taskId, 60, 5000, signal);
+    console.log('[贞贞API] 任务查询结果:', JSON.stringify(taskResult, null, 2));
+
+    if (taskResult.data?.data?.data && taskResult.data.data.data.length > 0) {
+      const imageData = taskResult.data.data.data[0];
+      console.log('[贞贞API] 任务完成，返回图片数据:', {
+        hasUrl: !!imageData.url,
+        hasB64: !!imageData.b64_json,
+        url: imageData.url?.substring(0, 100) + '...'
+      });
+      const result = imageData.url || (imageData.b64_json ? `data:image/png;base64,${imageData.b64_json}` : null);
+      if (!result) {
+        throw new Error('API 返回的图片数据为空');
+      }
+      return result;
     }
 
     throw new Error('API 未返回图片');
@@ -307,7 +412,7 @@ export const generateCreativeImage = async (prompt: string, genConfig?: Generati
   }
 };
 
-// ===================== 图像编辑（图生图）=====================
+// ===================== 图像编辑（图生图）- 异步模式 =====================
 
 export const editCreativeImage = async (base64Images: string[], prompt: string, genConfig?: GenerationConfig, signal?: AbortSignal): Promise<string | null> => {
   const config = getApiConfig();
@@ -357,15 +462,16 @@ export const editCreativeImage = async (base64Images: string[], prompt: string, 
       requestBody.image_size = genConfig.resolution;
     }
 
-    const response = await withRetry(async () => {
-      const res = await fetch(`${config.baseUrl}/v1/images/generations`, {
+    // 异步模式：创建任务
+    const createResponse = await withRetry(async () => {
+      const res = await fetch(`${config.baseUrl}/v1/images/generations?async=true`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.apiKey}`
         },
         body: JSON.stringify(requestBody),
-        signal // Pass abort signal
+        signal
       });
 
       if (!res.ok) {
@@ -373,17 +479,38 @@ export const editCreativeImage = async (base64Images: string[], prompt: string, 
         throw new Error(`API 请求失败 (${res.status}): ${errorText}`);
       }
 
-      return res;
+      return res.json();
     }, 3, 1000, signal);
 
-    const data = await response.json();
+    console.log('[贞贞API] 图生图创建任务响应:', createResponse);
 
-    if (data.error) {
-      throw new Error(data.error.message);
+    // 处理两种可能的响应格式：{task_id: string} 或 {code: 'success', data: 'task_id'}
+    let taskId: string;
+    if (createResponse.task_id) {
+      taskId = createResponse.task_id;
+    } else if (createResponse.code === 'success' && createResponse.data) {
+      taskId = createResponse.data;
+    } else {
+      throw new Error(`API 错误: ${createResponse.message || createResponse.code || '未知错误'}`);
     }
 
-    if (data.data && data.data.length > 0) {
-      return data.data[0].url || `data:image/png;base64,${data.data[0].b64_json}`;
+    console.log('[贞贞API] 异步任务创建成功，task_id:', taskId);
+
+    // 轮询查询任务状态
+    const taskResult = await pollImageTaskStatus(config, taskId, 60, 5000, signal);
+
+    if (taskResult.data?.data?.data && taskResult.data.data.data.length > 0) {
+      const imageData = taskResult.data.data.data[0];
+      console.log('[贞贞API] 图生图任务完成，返回图片数据:', {
+        hasUrl: !!imageData.url,
+        hasB64: !!imageData.b64_json,
+        url: imageData.url?.substring(0, 100) + '...'
+      });
+      const result = imageData.url || (imageData.b64_json ? `data:image/png;base64,${imageData.b64_json}` : null);
+      if (!result) {
+        throw new Error('API 返回的图片数据为空');
+      }
+      return result;
     }
 
     throw new Error('API 未返回图片');

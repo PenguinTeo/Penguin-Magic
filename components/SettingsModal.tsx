@@ -797,8 +797,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </svg>
               </div>
               <div>
-                <h5 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>企鹅魔法</h5>
-                <span className="text-xs" style={{ color: styles.textSecondary }}>Penguin Magic Creative</span>
+                <h5 className="text-sm font-semibold" style={{ color: styles.textPrimary }}>FlowCanvas</h5>
+                <span className="text-xs" style={{ color: styles.textSecondary }}>FlowCanvas Creative</span>
               </div>
             </div>
             <div className="flex items-center gap-2">

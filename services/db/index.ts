@@ -4,7 +4,7 @@
  */
 
 // 数据库配置
-export const DB_NAME = 'PenguinElloDB';
+export const DB_NAME = 'FlowCanvasDB';
 export const DB_VERSION = 3;
 
 // Store 名称

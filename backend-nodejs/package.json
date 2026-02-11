@@ -1,17 +1,16 @@
 {
-  "name": "penguin-magic-backend",
+  "name": "flowcanvas-backend",
   "version": "0.3.0",
-  "description": "企鹅艾洛魔法世界 - Node.js后端服务",
+  "description": "FlowCanvas - Node.js后端服务",
   "main": "src/server.js",
   "bin": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "build": "npx pkg . --target node18-win-x64 --output penguin-backend.exe"
+    "build": "npx pkg . --target node18-win-x64 --output flowcanvas-backend.exe"
   },
   "keywords": [
-    "penguin",
-    "magic",
+    "flowcanvas",
     "backend"
   ],
   "author": "",

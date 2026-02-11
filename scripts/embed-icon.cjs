@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 const rceditPath = path.join(__dirname, '../node_modules/rcedit/bin/rcedit-x64.exe');
-const exePath = path.join(__dirname, '../release/win-unpacked/PenguinMagic.exe');
+const exePath = path.join(__dirname, '../release/win-unpacked/FlowCanvas.exe');
 const iconPath = path.join(__dirname, '../resources/icon.ico');
 
 console.log('rcedit路径:', rceditPath);

@@ -53,7 +53,7 @@ app.use((req, res, next) => {
 // ============== 初始化目录和数据文件 ==============
 function initializeApp() {
   console.log('=' .repeat(50));
-  console.log('🐧 企鹅艾洛魔法世界 - Node.js后端服务');
+  console.log('🎨 FlowCanvas创意世界 - Node.js后端服务');
   console.log('=' .repeat(50));
   console.log();
   

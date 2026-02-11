@@ -1,7 +1,7 @@
 <img width="915" height="915" alt="image" src="https://github.com/user-attachments/assets/4195dd2a-a70b-49b9-bd47-7fa503822cb3" />
 
 
-# 🐧 企鹅工坊 Penguin Magic
+# 🎨 FlowCanvas
 
 ### 全球首款 AI 图像桌面管理工具
 
@@ -24,14 +24,14 @@ V0.2.3 最新分支支持多并发
 
 
 
-## 🌟 为什么选择企鹅工坊？
+## 🌟 为什么选择 FlowCanvas？
 
 传统 AI 生图工具的痛点：
 - ❌ 生成的图片散落各处，找不到
 - ❌ 没有管理功能，越用越乱
 - ❌ 无法快速对比和整理作品
 
-**企鹅工坊** 重新定义 AI 创作体验：
+**FlowCanvas** 重新定义 AI 创作体验：
 
 > 🎯 **生成即管理** — 不只是生图，更是一个可视化创意工作台
 
@@ -132,7 +132,7 @@ http://127.0.0.1:8765
 
 - **Q群** — 854266067
 - **微信** — Lovexy_0222
-- **技术支持** — 企鹅 · 无我
+- **技术支持** — FlowCanvas · 无我
 
 ---
 
@@ -145,8 +145,8 @@ http://127.0.0.1:8765
 
 <div align="center">
 
-**企鹅工坊** — 让 AI 创作不再凌乱
+**FlowCanvas** — 让 AI 创作不再凌乱
 
-Made with ❤️ by Penguin Team
+Made with ❤️ by FlowCanvas Team
 
 </div>

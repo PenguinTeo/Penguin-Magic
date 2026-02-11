@@ -1,7 +1,8 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { RHTaskQueueProvider } from './contexts/RHTaskQueueContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -11,6 +12,10 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider>
+      <RHTaskQueueProvider>
+        <App />
+      </RHTaskQueueProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );

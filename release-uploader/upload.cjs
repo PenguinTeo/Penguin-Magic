@@ -1,5 +1,5 @@
 /**
- * 🐧 PenguinMagic 发布上传工具
+ * 🎨 FlowCanvas 发布上传工具
  * 用于将构建产物上传到服务器
  * 
  * 使用方法:
@@ -104,8 +104,8 @@ function getFilesToUpload(config, version) {
     }
     
     // 匹配 dmg 和 dmg.blockmap (支持 arm64/x64 架构)
-    const dmgPattern = new RegExp(`^PenguinMagic-${version}(-arm64|-x64)?\\.dmg$`);
-    const blockmapPattern = new RegExp(`^PenguinMagic-${version}(-arm64|-x64)?\\.dmg\\.blockmap$`);
+    const dmgPattern = new RegExp(`^FlowCanvas-${version}(-arm64|-x64)?\\.dmg$`);
+    const blockmapPattern = new RegExp(`^FlowCanvas-${version}(-arm64|-x64)?\\.dmg\\.blockmap$`);
     
     for (const file of allFiles) {
       if (dmgPattern.test(file) || blockmapPattern.test(file)) {
@@ -122,8 +122,8 @@ function getFilesToUpload(config, version) {
     logInfo('检测到 Windows 平台，上传 Windows 版本文件');
     targetFiles = [
       'latest.yml',
-      `PenguinMagic Setup ${version}.exe`,
-      `PenguinMagic Setup ${version}.exe.blockmap`
+      `FlowCanvas Setup ${version}.exe`,
+      `FlowCanvas Setup ${version}.exe.blockmap`
     ];
   }
 
@@ -281,7 +281,7 @@ async function uploadViaFTP(files, config) {
 async function main() {
   console.log('');
   log('═══════════════════════════════════════════════════', colors.bright);
-  log('      🐧 PenguinMagic 发布上传工具', colors.bright + colors.cyan);
+  log('      🎨 FlowCanvas 发布上传工具', colors.bright + colors.cyan);
   log('═══════════════════════════════════════════════════', colors.bright);
 
   // 加载配置

@@ -28,34 +28,34 @@ const Intro: React.FC<IntroProps> = ({ onEnter }) => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col md:flex-row items-center justify-center p-8 md:p-24 gap-12 md:gap-32 relative z-10">
          
-         {/* Left: Penguin */}
+         {/* Left: FlowCanvas */}
          <div className="text-center md:text-right space-y-4 group">
             <h1 className="text-6xl md:text-8xl font-thin tracking-tighter text-white group-hover:text-blue-200 transition-colors duration-700 cursor-default">
-              Penguin
+              FlowCanvas
             </h1>
             <div className="flex flex-col md:items-end gap-1 text-zinc-500 font-light tracking-widest uppercase text-xs md:text-sm">
-                <span className="opacity-50">Manchot</span>
-                <span className="opacity-50">企鹅</span>
+                <span className="opacity-50">Creative</span>
+                <span className="opacity-50">创意</span>
             </div>
             <p className="text-zinc-400 max-w-xs md:ml-auto text-sm leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform translate-y-2 group-hover:translate-y-0">
-               Searching the entire beach for the perfect pebble. A symbol of awkward, yet sincere devotion.
+               Creating without boundaries. A symbol of unlimited creativity and artistic expression.
             </p>
          </div>
 
          {/* Center Divider */}
          <div className="w-px h-32 md:h-64 bg-gradient-to-b from-transparent via-white/20 to-transparent" />
 
-         {/* Right: Pebbling */}
+         {/* Right: Canvas */}
          <div className="text-center md:text-left space-y-4 group">
             <h1 className="text-6xl md:text-8xl font-thin tracking-tighter text-white group-hover:text-purple-200 transition-colors duration-700 cursor-default">
-              Pebbling
+              Canvas
             </h1>
             <div className="flex flex-col md:items-start gap-1 text-zinc-500 font-light tracking-widest uppercase text-xs md:text-sm">
-                <span className="opacity-50">L'acte d'offrir</span>
-                <span className="opacity-50">送石行为</span>
+                <span className="opacity-50">Toile</span>
+                <span className="opacity-50">画布</span>
             </div>
             <p className="text-zinc-400 max-w-xs text-sm leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-700 transform translate-y-2 group-hover:translate-y-0">
-               "I saw this, and I thought of you." The modern act of sharing small digital treasures.
+               "Create without limits." The modern canvas for digital creativity and expression.
             </p>
          </div>
       </div>

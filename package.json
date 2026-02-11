@@ -1,9 +1,9 @@
 {
-  "name": "penguin-magic",
+  "name": "flowcanvas",
   "private": true,
   "version": "1.6.0",
-  "description": "企鹅工坊 - AI 图像创意管理应用",
-  "author": "PenguinCreative",
+  "description": "FlowCanvas - AI 图像创意管理应用",
+  "author": "FlowCanvas Team",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -50,8 +50,8 @@
     "wait-on": "^9.0.3"
   },
   "build": {
-    "appId": "com.penguin.magic",
-    "productName": "PenguinMagic",
+    "appId": "com.flowcanvas.app",
+    "productName": "FlowCanvas",
     "afterPack": "./scripts/afterPack.cjs",
     "publish": {
       "provider": "generic",
